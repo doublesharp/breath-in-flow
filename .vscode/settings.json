@@ -1,0 +1,17 @@
+{
+  "css.customData": [],
+  "css.validate": true,
+  "scss.validate": true,
+  "less.validate": true,
+  "tailwindCSS.includeLanguages": {
+    "vue": "html",
+    "vue-html": "html"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "css.lint.unknownAtRules": "ignore"
+}

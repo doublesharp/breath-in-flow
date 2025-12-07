@@ -1,0 +1,48 @@
+{
+  "name": "breath-in-flow",
+  "version": "0.0.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "description": "A breathing exercise app for guided breathwork sessions",
+  "scripts": {
+    "dev": "pnpm --filter @breath-in-flow/web dev",
+    "build": "pnpm --filter @breath-in-flow/web build",
+    "preview": "pnpm --filter @breath-in-flow/web preview",
+    "test": "pnpm --filter @breath-in-flow/shared test && pnpm --filter @breath-in-flow/database test && pnpm --filter @breath-in-flow/web test",
+    "test:coverage": "pnpm -r test:coverage",
+    "db:generate": "pnpm --filter @breath-in-flow/database generate",
+    "db:push": "pnpm --filter @breath-in-flow/database push",
+    "db:studio": "pnpm --filter @breath-in-flow/database studio",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "build:all": "./scripts/build.sh all",
+    "build:mac": "./scripts/build.sh mac",
+    "build:win": "./scripts/build.sh win",
+    "build:linux": "./scripts/build.sh linux",
+    "build:desktop": "./scripts/build.sh desktop",
+    "build:android": "./scripts/build.sh android",
+    "build:ios": "./scripts/build.sh ios",
+    "build:mobile": "./scripts/build.sh mobile",
+    "build:web": "./scripts/build.sh web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@vue/eslint-config-prettier": "^10.2.0",
+    "@vue/eslint-config-typescript": "^14.6.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-vue": "^10.6.2",
+    "globals": "^16.5.0",
+    "prettier": "^3.7.4",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.48.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

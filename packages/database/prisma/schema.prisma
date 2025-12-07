@@ -1,0 +1,116 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Saved breathing exercise configurations
+model ExerciseConfig {
+  id                        String   @id @default(uuid())
+  name                      String
+  
+  // Core breathing times (in seconds)
+  inhaleTime                Float    @default(4)
+  inhaleHoldTime            Float    @default(0)
+  exhaleTime                Float    @default(4)
+  exhaleHoldTime            Float    @default(0)
+  
+  // Repetitions before extended hold
+  repetitions               Int      @default(4)
+  
+  // Extended hold configuration
+  extendedHoldEnabled       Boolean  @default(false)
+  extendedHoldType          String   @default("EXHALE") // INHALE or EXHALE
+  extendedHoldMode          String   @default("TOLERANCE") // TIMED or TOLERANCE
+  extendedHoldDuration      Float    @default(0) // For TIMED mode
+  
+  // Second extended hold (repeat segment)
+  secondExtendedHoldEnabled Boolean  @default(false)
+  secondExtendedHoldType    String   @default("INHALE")
+  
+  // Set configuration
+  targetSets                Int      @default(0) // 0 means record as you go
+  
+  // Metadata
+  isDefault                 Boolean  @default(false)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  // Relations
+  sessions                  Session[]
+}
+
+// Individual exercise sessions
+model Session {
+  id              String        @id @default(uuid())
+  
+  // Link to config (optional - config might be deleted)
+  config          ExerciseConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
+  configId        String?
+  
+  // Snapshot of config at session start (stored as JSON)
+  configSnapshot  String // JSON string of the config
+  
+  // Session state
+  status          String   @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, CANCELLED
+  targetSets      Int      @default(0)
+  completedSets   Int      @default(0)
+  
+  // Timestamps
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  
+  // Notes
+  notes           String?
+
+  // Relations
+  sets            SessionSet[]
+}
+
+// Individual sets within a session
+model SessionSet {
+  id                   String   @id @default(uuid())
+  
+  // Parent session
+  session              Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId            String
+  
+  // Set data
+  setNumber            Int
+  completedRepetitions Int      @default(0)
+  
+  // Timestamps
+  startedAt            DateTime @default(now())
+  completedAt          DateTime?
+  
+  // Notes
+  notes                String?
+
+  // Relations
+  extendedHolds        ExtendedHold[]
+}
+
+// Extended hold records within a set
+model ExtendedHold {
+  id             String     @id @default(uuid())
+  
+  // Parent set
+  set            SessionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  setId          String
+  
+  // Hold data
+  holdNumber     Int        @default(1) // 1 for first, 2 for second
+  type           String     // INHALE or EXHALE
+  mode           String     // TIMED or TOLERANCE
+  targetDuration Float?     // For TIMED mode
+  actualDuration Float      // Actual time held
+  
+  // Timestamp
+  completedAt    DateTime   @default(now())
+}

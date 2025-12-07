@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-electron
+.turbo
+coverage
+pnpm-lock.yaml
+*.min.js
+*.min.css
+prisma/client
+release
+
+# Capacitor native projects
+ios
+android

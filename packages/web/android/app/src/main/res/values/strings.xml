@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Breath in Flow</string>
+    <string name="title_activity_main">Breath in Flow</string>
+    <string name="package_name">com.breathinflow.app</string>
+    <string name="custom_url_scheme">com.breathinflow.app</string>
+</resources>

@@ -1,0 +1,91 @@
+appId: com.breathinflow.app
+productName: Breath in Flow
+copyright: Copyright © 2024 Breath in Flow
+
+directories:
+  output: release/${version}
+  buildResources: build
+
+# Bundle everything into asar
+asar: true
+
+# Since we bundle with Vite, we don't need node_modules
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+
+# Don't try to collect node_modules (everything is bundled by Vite)
+nodeGypRebuild: false
+npmRebuild: false
+
+mac:
+  category: public.app-category.healthcare-fitness
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  title: Breath in Flow
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Breath in Flow
+
+linux:
+  icon: build/icons
+  target:
+    - target: AppImage
+    - target: deb
+  category: Utility
+  maintainer: Breath in Flow <hello@breathinflow.app>
+  executableName: breath-in-flow
+  artifactName: breath-in-flow-${version}-${arch}.${ext}
+
+deb:
+  packageName: breath-in-flow
+
+appImage:
+  artifactName: breath-in-flow-${version}-${arch}.${ext}
+
+# Auto-updater configuration
+# Update owner/repo to match your GitHub repository
+publish:
+  provider: github
+  owner: breathinflow
+  repo: breath-in-flow
+  releaseType: release

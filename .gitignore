@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+packages/web/dist/
+packages/web/dist-electron/
+packages/web/release/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Database
+*.db
+*.db-journal
+packages/database/prisma/*.db
+
+# Test coverage
+coverage/
+
+# Capacitor
+packages/web/android/app/build/
+packages/web/ios/App/Pods/
