@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-6">
-    <!-- Quick Start / Exercise View - Always at Top -->
-    <div class="card-solid">
+  <div class="space-y-4 sm:space-y-6">
+    <!-- Quick Start / Practice View - Always at Top -->
+    <div class="card-solid !p-4 sm:!p-6">
       <BreathingVisualizer
         :phase="timer.phase.value"
         :current-time="timer.currentTime.value"
@@ -11,7 +11,7 @@
       />
 
       <!-- Current Pattern Display (when not running) -->
-      <div v-if="!isRunning" class="mt-6 text-center">
+      <div v-if="!isRunning" class="mt-4 sm:mt-6 text-center">
         <div class="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/50 rounded-xl text-slate-300">
           <span class="text-blue-400 font-semibold">{{ config.inhaleTime }}s</span>
           <span class="text-slate-500">→</span>
@@ -26,7 +26,7 @@
       </div>
 
       <!-- Progress Stats (when running) -->
-      <div v-if="isRunning" class="mt-8 grid grid-cols-3 gap-4">
+      <div v-if="isRunning" class="mt-4 sm:mt-8 grid grid-cols-3 gap-4">
         <div class="stat-card">
           <div class="text-3xl font-bold text-white">
             {{ timer.currentRepetition.value }}
@@ -39,7 +39,7 @@
             {{ timer.currentSet.value }}
             <span class="text-slate-500 text-lg">/ {{ config.targetSets || '∞' }}</span>
           </div>
-          <div class="text-sm text-slate-400 mt-1">Current Set</div>
+          <div class="text-sm text-slate-400 mt-1">Set</div>
         </div>
         <div class="stat-card">
           <div class="text-3xl font-bold text-emerald-400">
@@ -70,12 +70,6 @@
 
       <!-- Set Complete Controls -->
       <div v-if="timer.phase.value === 'SET_COMPLETE'" class="mt-8 text-center p-8 glass rounded-2xl animate-scale-in">
-        <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/30">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-          </svg>
-        </div>
-        <p class="text-2xl text-emerald-400 font-bold mb-6">Set Complete!</p>
         <div class="flex flex-col sm:flex-row justify-center gap-4">
           <button @click="startNextSet" class="btn-success btn-action">
             <span class="flex items-center gap-2 justify-center">
@@ -105,7 +99,7 @@
           </svg>
         </div>
         <p class="text-3xl text-emerald-400 font-bold mb-2">Session Complete!</p>
-        <p class="text-slate-400 mb-6">Great job on completing your breathing exercise!</p>
+        <p class="text-slate-400 mb-6">Great job on completing your breathing practice!</p>
         <button @click="resetExercise" class="btn-primary btn-action">
           <span class="flex items-center gap-2 justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -119,7 +113,7 @@
       <!-- Main Controls - Prominently at Top -->
       <div
         v-if="timer.phase.value !== 'SESSION_COMPLETE' && timer.phase.value !== 'SET_COMPLETE'"
-        class="mt-8 flex flex-col sm:flex-row justify-center gap-4"
+        class="mt-4 sm:mt-8 flex flex-col sm:flex-row justify-center gap-4"
       >
         <button v-if="!timer.isRunning.value" @click="startExercise" class="btn-success btn-action">
           <span class="flex items-center gap-2 justify-center">
@@ -127,7 +121,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Start Exercise
+            Start Practice
           </span>
         </button>
 
@@ -174,7 +168,7 @@
             </svg>
           </div>
           <div class="text-left">
-            <h2 class="text-xl font-bold text-white">Configure Exercise</h2>
+            <h2 class="text-xl font-bold text-white">Configure Practice</h2>
             <p class="text-sm text-slate-400">Customize your breathing pattern</p>
           </div>
         </div>
@@ -358,7 +352,7 @@ const showConfig = ref(false);
 // Configuration - start with defaults, will be overwritten by saved config
 const config = reactive<BreathingConfig>({
   ...DEFAULT_BREATHING_CONFIG,
-  name: 'Quick Exercise',
+  name: 'Quick Practice',
 });
 const configName = ref('');
 
@@ -443,7 +437,7 @@ watch(
   { immediate: true }
 );
 
-// Check if exercise is running
+// Check if practice is running
 const isRunning = ref(false);
 watch(
   () => timer.isRunning.value,

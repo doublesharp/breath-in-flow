@@ -85,7 +85,7 @@
           </svg>
         </div>
         <p class="text-slate-400">No sessions recorded yet.</p>
-        <p class="text-slate-500 text-sm mt-1">Start your first breathing exercise!</p>
+        <p class="text-slate-500 text-sm mt-1">Start your first breathing practice!</p>
       </div>
 
       <div v-else class="space-y-4">

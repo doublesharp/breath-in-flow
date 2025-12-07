@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A breathing exercise app for guided breathwork sessions with customizable breathing exercises, hold times, repetitions, and sets.
+A breathing practice app for guided breathwork sessions with customizable breathing exercises, hold times, repetitions, and sets.
 
 ## Core Features
 
@@ -25,7 +25,7 @@ A breathing exercise app for guided breathwork sessions with customizable breath
    - Track progress across sets
 
 4. **Data Persistence**
-   - Save exercise configurations
+   - Save practice configurations
    - Record session results
    - Track patient progress over time
 
@@ -62,7 +62,7 @@ breath-in-flow/
 ### Database Schema
 
 - **ExerciseConfig**: Saved breathing configurations
-- **Session**: Individual exercise sessions
+- **Session**: Individual practice sessions
 - **SessionSet**: Sets within a session
 - **ExtendedHold**: Extended hold records
 

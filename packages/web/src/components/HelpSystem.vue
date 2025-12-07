@@ -14,7 +14,7 @@
 
     <!-- Help Modal -->
     <Teleport to="body">
-      <Transition name="modal">
+      <Transition name="help-fade">
         <div v-if="showHelp" class="help-modal-overlay" @click.self="showHelp = false">
           <div class="help-modal">
             <!-- Header -->
@@ -66,8 +66,8 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Quick Start</h4>
                   <ol class="help-list">
-                    <li>Go to the <strong>Exercise</strong> tab</li>
-                    <li>The default pattern is ready to use - just tap <strong>Start Exercise</strong></li>
+                    <li>Go to the <strong>Practice</strong> tab</li>
+                    <li>The default pattern is ready to use - just tap <strong>Start Practice</strong></li>
                     <li>Follow the visual breathing guide - the circle expands and contracts</li>
                     <li>The color indicates the current phase (blue = inhale, green = exhale)</li>
                   </ol>
@@ -76,30 +76,23 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Navigation</h4>
                   <ul class="help-list">
-                    <li><strong>Exercise</strong> - Main breathing practice area</li>
+                    <li><strong>Practice</strong> - Main breathing practice area</li>
                     <li><strong>History</strong> - View your past sessions</li>
                     <li><strong>Presets</strong> - Save and load breathing patterns</li>
                     <li><strong>Analytics</strong> - Track your progress with charts</li>
                   </ul>
                 </div>
-
-                <div class="help-tip">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p>On mobile, navigation is at the bottom of the screen. On desktop, it's in the header.</p>
-                </div>
               </div>
 
-              <!-- Exercise Guide -->
-              <div v-if="activeSection === 'exercise'" class="help-section">
+              <!-- Practice Guide -->
+              <div v-if="activeSection === 'practice'" class="help-section">
                 <h3 class="help-section-title">
                   <span class="help-section-icon bg-blue-500/20 text-blue-400">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </span>
-                  Exercise Guide
+                  Practice Guide
                 </h3>
 
                 <div class="help-card">
@@ -127,7 +120,7 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Controls</h4>
                   <ul class="help-list">
-                    <li><strong>Start</strong> - Begin the breathing exercise</li>
+                    <li><strong>Start</strong> - Begin the breathing practice</li>
                     <li><strong>Pause/Resume</strong> - Temporarily stop or continue</li>
                     <li><strong>Stop</strong> - End the current session</li>
                     <li><strong>Release Hold</strong> - End an extended breath hold early</li>
@@ -276,7 +269,7 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Saving Presets</h4>
                   <ol class="help-list">
-                    <li>Configure your breathing pattern in the Exercise tab</li>
+                    <li>Configure your breathing pattern in the Practice tab</li>
                     <li>Enter a name in the "Configuration name" field</li>
                     <li>Tap <strong>Save Configuration</strong></li>
                     <li>Access your saved presets in the Presets tab</li>
@@ -286,7 +279,7 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Using Presets</h4>
                   <ul class="help-list">
-                    <li><strong>Load</strong> - Apply the preset to the Exercise tab</li>
+                    <li><strong>Load</strong> - Apply the preset to the Practice tab</li>
                     <li><strong>Edit</strong> - Modify the preset settings</li>
                     <li><strong>Delete</strong> - Remove the preset</li>
                   </ul>
@@ -405,8 +398,8 @@ const tabs = [
     }
   },
   { 
-    id: 'exercise', 
-    label: 'Exercise',
+    id: 'practice', 
+    label: 'Practice',
     icon: {
       render: () => h('svg', { xmlns: 'http://www.w3.org/2000/svg', class: 'w-4 h-4', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
         h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' })
@@ -560,26 +553,28 @@ ol.help-list li::before {
 .help-footer {
   @apply p-4 border-t border-slate-700/50 text-center flex-shrink-0;
 }
+</style>
 
-/* Modal transitions */
-.modal-enter-active,
-.modal-leave-active {
+<style>
+/* Global transition styles for Teleported modal */
+.help-fade-enter-active,
+.help-fade-leave-active {
   transition: opacity 0.3s ease;
 }
 
-.modal-enter-active .help-modal,
-.modal-leave-active .help-modal {
+.help-fade-enter-active .help-modal,
+.help-fade-leave-active .help-modal {
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
+.help-fade-enter-from,
+.help-fade-leave-to {
+  opacity: 0 !important;
 }
 
-.modal-enter-from .help-modal,
-.modal-leave-to .help-modal {
-  transform: scale(0.95) translateY(10px);
-  opacity: 0;
+.help-fade-enter-from .help-modal,
+.help-fade-leave-to .help-modal {
+  transform: scale(0.95) translateY(10px) !important;
+  opacity: 0 !important;
 }
 </style>

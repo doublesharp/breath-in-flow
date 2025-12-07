@@ -1,9 +1,9 @@
 <template>
-  <div class="flex flex-col items-center py-8">
+  <div class="flex flex-col items-center py-4 sm:py-8">
     <!-- Phase Label -->
     <div
       :class="[
-        'px-6 py-2.5 rounded-full text-sm font-bold uppercase tracking-wider mb-8 shadow-lg transition-all duration-500',
+        'px-6 py-2.5 rounded-full text-sm font-bold uppercase tracking-wider mb-4 sm:mb-8 shadow-lg transition-all duration-500',
         phaseColorClass,
       ]"
     >
@@ -11,7 +11,7 @@
     </div>
 
     <!-- Breathing Circle Container -->
-    <div class="relative w-72 h-72 sm:w-80 sm:h-80 flex items-center justify-center">
+    <div class="relative w-60 h-60 sm:w-80 sm:h-80 flex items-center justify-center">
       <!-- Outer glow ring -->
       <div
         :class="[

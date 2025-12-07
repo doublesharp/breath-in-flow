@@ -30,7 +30,7 @@ async function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    title: 'Breathing Exercise',
+    title: 'Breathing Practice',
     icon: join(process.env.VITE_PUBLIC!, 'icon.png'),
     webPreferences: {
       preload,

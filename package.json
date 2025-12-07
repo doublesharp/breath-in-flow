@@ -4,7 +4,7 @@
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
-  "description": "A breathing exercise app for guided breathwork sessions",
+  "description": "A breathing practice app for guided breathwork sessions",
   "scripts": {
     "dev": "pnpm --filter @breath-in-flow/web dev",
     "build": "pnpm --filter @breath-in-flow/web build",
@@ -44,5 +44,33 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "sharp": "^0.33.2"
+    },
+    "onlyBuiltDependencies": [
+      " ",
+      "/",
+      "@",
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "electron",
+      "electron-winstaller",
+      "g",
+      "i",
+      "l",
+      "m",
+      "n",
+      "p",
+      "r",
+      "s",
+      "sharp",
+      "t",
+      "u"
+    ]
   }
 }

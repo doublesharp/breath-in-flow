@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-6">
-    <div class="card-solid animate-fade-in">
+    <div class="card-solid animate-fade-in opacity-0">
       <div class="flex items-center gap-3 mb-6">
         <div
           class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center"
@@ -33,7 +33,7 @@
           </svg>
         </div>
         <p class="text-slate-400">No saved configurations yet.</p>
-        <p class="text-slate-500 text-sm mt-1">Create one in the Exercise tab!</p>
+        <p class="text-slate-500 text-sm mt-1">Create one in the Practice tab!</p>
       </div>
 
       <div v-else class="space-y-4">
@@ -141,7 +141,7 @@
     </div>
 
     <!-- Preset Configurations -->
-    <div class="card-solid animate-fade-in" style="animation-delay: 0.1s">
+    <div class="card-solid animate-fade-in opacity-0" style="animation-delay: 0.1s">
       <div class="flex items-center gap-3 mb-6">
         <div
           class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center"

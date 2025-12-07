@@ -1,6 +1,6 @@
 # Breath in Flow
 
-A breathing exercise app for guided breathwork sessions. Customize your breathing patterns with adjustable timing, holds, repetitions, and sets to support your wellness practice.
+A breathing practice app for guided breathwork sessions. Customize your breathing patterns with adjustable timing, holds, repetitions, and sets to support your wellness practice.
 
 ## Why Breath in Flow?
 
@@ -63,8 +63,8 @@ Your data stays on your device - no account required.
 
 ### Quick Start
 
-1. Open the app and go to the **Exercise** tab
-2. The default pattern is ready - just tap **Start Exercise**
+1. Open the app and go to the **Practice** tab
+2. The default pattern is ready - just tap **Start Practice**
 3. Follow the visual guide - breathe in as the circle expands, out as it contracts
 4. The app will guide you through each phase with colors and timers
 

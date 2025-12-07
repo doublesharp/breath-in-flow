@@ -1,4 +1,4 @@
-package com.herbbreathing.app;
+package com.breathinflow.app;
 
 import com.getcapacitor.BridgeActivity;
 

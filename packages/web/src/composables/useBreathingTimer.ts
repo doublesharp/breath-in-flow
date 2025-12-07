@@ -44,11 +44,15 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     const { phase: currentPhase, currentTime: time, totalPhaseTime: total } = state.value;
 
     if (currentPhase === 'INHALE') {
-      // Scale up from 0.6 to 1.0
-      return 0.6 + (1 - time / total) * 0.4;
+      // Sine easing for smoother inhale
+      const progress = 1 - time / total;
+      const eased = (1 - Math.cos(progress * Math.PI)) / 2;
+      return 0.6 + eased * 0.4;
     } else if (currentPhase === 'EXHALE') {
-      // Scale down from 1.0 to 0.6
-      return 1.0 - (1 - time / total) * 0.4;
+      // Sine easing for smoother exhale
+      const progress = 1 - time / total;
+      const eased = (1 - Math.cos(progress * Math.PI)) / 2;
+      return 1.0 - eased * 0.4;
     } else if (currentPhase === 'INHALE_HOLD' || currentPhase === 'EXTENDED_INHALE_HOLD') {
       return 1.0;
     } else if (currentPhase === 'EXHALE_HOLD' || currentPhase === 'EXTENDED_EXHALE_HOLD') {

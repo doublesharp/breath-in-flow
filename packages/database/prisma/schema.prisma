@@ -10,7 +10,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Saved breathing exercise configurations
+// Saved breathing practice configurations
 model ExerciseConfig {
   id                        String   @id @default(uuid())
   name                      String
@@ -46,7 +46,7 @@ model ExerciseConfig {
   sessions                  Session[]
 }
 
-// Individual exercise sessions
+// Individual practice sessions
 model Session {
   id              String        @id @default(uuid())
   

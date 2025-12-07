@@ -2,7 +2,7 @@ import { prisma } from './client';
 import type { ExerciseConfig, Session, SessionSet, ExtendedHold } from '@prisma/client';
 
 // ============================================
-// Exercise Config Operations
+// Practice Config Operations
 // ============================================
 
 export interface CreateConfigInput {
