@@ -47,9 +47,14 @@ export const BreathingConfigSchema = z.object({
   // Second extended hold (repeat segment)
   secondExtendedHoldEnabled: z.boolean().default(false),
   secondExtendedHoldType: ExtendedHoldTypeSchema.default('INHALE'),
+  secondExtendedHoldMode: ExtendedHoldModeSchema.default('TIMED'),
+  secondExtendedHoldDuration: z.number().min(0).max(300).default(15),
 
   // Set configuration
   targetSets: z.number().min(0).max(20).default(0), // 0 means record as you go
+
+  // Audio configuration
+  soundEnabled: z.boolean().default(false),
 
   // Metadata
   createdAt: z.date().optional(),
@@ -133,6 +138,7 @@ export const TimerStateSchema = z.object({
   extendedHoldStartTime: z.number().optional(), // For tolerance mode
   extendedHoldElapsed: z.number().default(0), // Time elapsed in extended hold
   isFirstExtendedHold: z.boolean().default(true), // First or second extended hold
+  isRecoveryBreath: z.boolean().default(false), // Whether we are in a recovery breath (inhale before second hold)
 });
 
 export type TimerState = z.infer<typeof TimerStateSchema>;
@@ -154,7 +160,10 @@ export const DEFAULT_BREATHING_CONFIG: CreateBreathingConfig = {
   extendedHoldDuration: 0,
   secondExtendedHoldEnabled: false,
   secondExtendedHoldType: 'INHALE',
+  secondExtendedHoldMode: 'TIMED',
+  secondExtendedHoldDuration: 15,
   targetSets: 0,
+  soundEnabled: false,
 };
 
 export const INITIAL_TIMER_STATE: TimerState = {
@@ -167,6 +176,7 @@ export const INITIAL_TIMER_STATE: TimerState = {
   isPaused: false,
   extendedHoldElapsed: 0,
   isFirstExtendedHold: true,
+  isRecoveryBreath: false,
 };
 
 // ============================================

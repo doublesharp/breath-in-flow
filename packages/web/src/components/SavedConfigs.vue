@@ -292,6 +292,8 @@ const presets: Preset[] = [
     extendedHoldMode: 'TOLERANCE',
     secondExtendedHoldEnabled: true,
     secondExtendedHoldType: 'INHALE',
+    secondExtendedHoldMode: 'TIMED',
+    secondExtendedHoldDuration: 15,
     targetSets: 3,
   },
   {

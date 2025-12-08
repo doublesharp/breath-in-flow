@@ -66,6 +66,7 @@
           stroke-width="2"
         />
         <circle
+          :key="phase"
           cx="50"
           cy="50"
           r="47"

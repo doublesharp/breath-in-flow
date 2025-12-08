@@ -241,7 +241,12 @@ function loadConfig(config: BreathingConfig) {
   activeTab.value = 'practice';
 }
 
+function clearSelectedConfig() {
+  selectedConfig.value = null;
+}
+
 provide('selectedConfig', selectedConfig);
+provide('clearSelectedConfig', clearSelectedConfig);
 </script>
 
 <style scoped>

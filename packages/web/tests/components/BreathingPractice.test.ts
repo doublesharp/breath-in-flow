@@ -32,7 +32,10 @@ describe('BreathingPractice.vue', () => {
     isRunning.value = false
     const wrapper = mount(BreathingPractice, {
       global: {
-        provide: { selectedConfig: ref({}) },
+        provide: { 
+          selectedConfig: ref({}),
+          clearSelectedConfig: vi.fn()
+        },
         stubs: ['BreathingVisualizer'],
       },
     })
@@ -47,7 +50,10 @@ describe('BreathingPractice.vue', () => {
     isRunning.value = true
     const wrapper = mount(BreathingPractice, {
       global: {
-        provide: { selectedConfig: ref({}) },
+        provide: { 
+          selectedConfig: ref({}),
+          clearSelectedConfig: vi.fn()
+        },
         stubs: ['BreathingVisualizer'],
       },
     })
