@@ -22,6 +22,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
   const state = ref<TimerState>({ ...INITIAL_TIMER_STATE });
   const pausedPhase = ref<BreathingPhase | null>(null);
   let intervalId: ReturnType<typeof setInterval> | null = null;
+  let phaseStartTime = 0; // Timestamp when current phase started
+  let pausedTimeRemaining = 0; // Time remaining when paused
+  let lastSoundedSecond = -1; // Track last second we played a sound for
+  let transitionPending = false; // Prevent multiple queued transitions per phase
 
   const phase = computed(() => state.value.phase);
   const currentTime = computed(() => state.value.currentTime);
@@ -65,7 +69,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
   function startInterval() {
     if (intervalId) return;
-    intervalId = setInterval(() => tick(), 100);
+    intervalId = setInterval(() => tick(), 16); // ~60fps keeps visuals responsive without drift
   }
 
   function stopInterval() {
@@ -91,44 +95,46 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
     // Handle extended hold tolerance mode (counting up)
     if (isToleranceMode) {
+      const elapsed = (Date.now() - phaseStartTime) / 1000;
       state.value = {
         ...state.value,
-        extendedHoldElapsed: state.value.extendedHoldElapsed + 0.1,
-        currentTime: state.value.extendedHoldElapsed + 0.1,
+        extendedHoldElapsed: elapsed,
+        currentTime: elapsed,
       };
       return;
     }
 
-    // Countdown for timed phases
-    const newTime = Math.max(0, state.value.currentTime - 0.1);
+    // Calculate time remaining based on actual elapsed time (no drift)
+    const elapsed = (Date.now() - phaseStartTime) / 1000;
+    const newTime = Math.max(0, state.value.totalPhaseTime - elapsed);
     
-    // Play click sound on integer seconds (when crossing integer boundary)
-    // e.g. 4.0 -> 3.9 (click at 4.0, which was previous)
-    // Actually, we want to click when the displayed second changes?
-    // Or just on the beat.
-    // If we are at 4.0, we click.
-    // If we are at 3.0, we click.
-    // We can check if Math.ceil(currentTime) !== Math.ceil(newTime)
-    // But 4.0 -> 3.9 changes ceil from 4 to 4 (wait, ceil(3.9) is 4).
-    // Floor: 4.0 -> 4, 3.9 -> 3. So floor changes.
-    // But we want to click at 4.0.
-    // If we use Math.ceil: 4.0 -> 4. 3.9 -> 4. No change.
-    // If we use Math.floor: 4.0 -> 4. 3.9 -> 3. Change!
-    // So if floor changes, we just passed an integer.
-    // But we want to click AT the integer.
-    // If we are at 4.0, we are about to become 3.9.
-    // So we should click if currentTime is integer.
-    // But floating point equality is bad.
-    // Let's check if we are close to integer.
-    const isInteger = Math.abs(state.value.currentTime - Math.round(state.value.currentTime)) < 0.05;
-    if (isInteger && state.value.currentTime > 0) {
-       soundService.playClick();
+    // Use floor to determine when we've crossed into a new second
+    const currentSecond = Math.floor(newTime);
+    
+    // Play click when we cross a second boundary (skip the starting second and only play for countdown)
+    // For a 4s phase: starts at 4, plays when crossing to 3, 2, 1, 0
+    if (currentSecond !== lastSoundedSecond) {
+      // Only play if we're not at the starting second
+      if (currentSecond < state.value.totalPhaseTime) {
+        lastSoundedSecond = currentSecond;
+        soundService.playClick();
+      } else {
+        // Just update the tracker without playing
+        lastSoundedSecond = currentSecond;
+      }
     }
 
     state.value = { ...state.value, currentTime: newTime };
 
-    if (newTime <= 0) {
-      transitionToNextPhase();
+    // When we've elapsed the full duration (with small buffer), transition to next phase
+    if (elapsed >= state.value.totalPhaseTime && lastSoundedSecond === 0) {
+      if (!transitionPending) {
+        transitionPending = true;
+        setTimeout(() => {
+          transitionPending = false;
+          transitionToNextPhase();
+        }, 0);
+      }
     }
   }
 
@@ -289,17 +295,14 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       currentTime: duration,
       totalPhaseTime: duration,
     };
-    options.onPhaseChange?.(newPhase, state.value);
     
-    // Play phase change sound if not IDLE/COMPLETE
-    if (
-      newPhase !== 'IDLE' && 
-      newPhase !== 'SESSION_COMPLETE' && 
-      newPhase !== 'SET_COMPLETE' && 
-      newPhase !== 'PAUSED'
-    ) {
-      soundService.playPhaseChange();
-    }
+    // Set timestamp AFTER updating state
+    phaseStartTime = Date.now();
+    // Initialize lastSoundedSecond to prevent immediate tick
+    lastSoundedSecond = Math.floor(duration);
+    transitionPending = false;
+    
+    options.onPhaseChange?.(newPhase, state.value);
   }
 
   // Public API
@@ -320,7 +323,8 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     };
 
     options.onPhaseChange?.('INHALE', state.value);
-    soundService.playPhaseChange();
+    
+    // Start interval - it will handle all ticks automatically
     startInterval();
   }
 
@@ -328,6 +332,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     if (!state.value.isRunning || state.value.isPaused) return;
 
     pausedPhase.value = state.value.phase;
+    pausedTimeRemaining = state.value.currentTime;
     state.value = { ...state.value, isPaused: true, phase: 'PAUSED' };
     stopInterval();
     options.onPhaseChange?.('PAUSED', state.value);
@@ -338,6 +343,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
     state.value = { ...state.value, isPaused: false, phase: pausedPhase.value };
     pausedPhase.value = null;
+    
+    // Adjust phase start time to account for pause duration
+    phaseStartTime = Date.now() - (state.value.totalPhaseTime - pausedTimeRemaining) * 1000;
+    
     startInterval();
     options.onPhaseChange?.(state.value.phase, state.value);
   }
@@ -346,6 +355,9 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     stopInterval();
     state.value = { ...INITIAL_TIMER_STATE };
     pausedPhase.value = null;
+    phaseStartTime = 0;
+    pausedTimeRemaining = 0;
+    lastSoundedSecond = -1;
     options.onPhaseChange?.('IDLE', state.value);
   }
 

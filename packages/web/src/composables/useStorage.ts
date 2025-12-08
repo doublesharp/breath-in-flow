@@ -6,12 +6,14 @@ import type {
   Session,
   SessionSet,
   ExtendedHoldRecord,
+  SoundTheme,
 } from '@breath-in-flow/shared';
 import { DEFAULT_BREATHING_CONFIG } from '@breath-in-flow/shared';
 
 // Simple in-memory storage for now (can be replaced with IndexedDB or API calls)
 const configs = ref<BreathingConfig[]>([]);
 const sessions = ref<Session[]>([]);
+const soundTheme = ref<SoundTheme>('default');
 
 // Load from localStorage on init
 function loadFromStorage() {
@@ -36,6 +38,11 @@ function loadFromStorage() {
         return value;
       });
     }
+
+    const storedTheme = localStorage.getItem('breath-in-flow-sound-theme');
+    if (storedTheme) {
+      soundTheme.value = storedTheme as SoundTheme;
+    }
   } catch (e) {
     console.error('Failed to load from storage:', e);
   }
@@ -45,6 +52,7 @@ function saveToStorage() {
   try {
     localStorage.setItem('breath-in-flow-configs', JSON.stringify(configs.value));
     localStorage.setItem('breath-in-flow-sessions', JSON.stringify(sessions.value));
+    localStorage.setItem('breath-in-flow-sound-theme', soundTheme.value);
   } catch (e) {
     console.error('Failed to save to storage:', e);
   }
@@ -57,6 +65,7 @@ loadFromStorage();
 export function resetStorageForTesting() {
   configs.value = [];
   sessions.value = [];
+  soundTheme.value = 'default';
 }
 
 export function useStorage() {
@@ -193,6 +202,11 @@ export function useStorage() {
     return true;
   }
 
+  function deleteAllSessions(): void {
+    sessions.value = [];
+    saveToStorage();
+  }
+
   // Stats
   const stats = computed(() => {
     const completedSessions = sessions.value.filter((s) => s.status === 'COMPLETED');
@@ -210,11 +224,22 @@ export function useStorage() {
     };
   });
 
+  // Sound theme operations
+  function getSoundTheme(): SoundTheme {
+    return soundTheme.value;
+  }
+
+  function setSoundTheme(theme: SoundTheme) {
+    soundTheme.value = theme;
+    saveToStorage();
+  }
+
   return {
     // State
     configs,
     sessions,
     stats,
+    soundTheme,
 
     // Config operations
     createConfig,
@@ -234,6 +259,11 @@ export function useStorage() {
     completeSession,
     cancelSession,
     deleteSession,
+    deleteAllSessions,
+
+    // Sound theme operations
+    getSoundTheme,
+    setSoundTheme,
 
     // Default
     DEFAULT_BREATHING_CONFIG,

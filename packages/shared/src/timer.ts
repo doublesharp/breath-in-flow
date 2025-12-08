@@ -299,13 +299,12 @@ export class BreathingTimer {
 // Utility functions
 export function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  const tenths = Math.floor((seconds % 1) * 10);
+  const secs = Math.max(0, Math.floor(seconds % 60));
 
   if (mins > 0) {
-    return `${mins}:${secs.toString().padStart(2, '0')}.${tenths}`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
-  return `${secs}.${tenths}`;
+  return `${secs}`;
 }
 
 export function formatTimeSimple(seconds: number): string {

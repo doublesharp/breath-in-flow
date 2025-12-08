@@ -1,6 +1,20 @@
 import { z } from 'zod';
 
 // ============================================
+// Sound Theme Schemas
+// ============================================
+
+export const SoundThemeSchema = z.enum([
+  'default',
+  'water',
+  'wind',
+  'subtle',
+  'chimes',
+]);
+
+export type SoundTheme = z.infer<typeof SoundThemeSchema>;
+
+// ============================================
 // Breathing Configuration Schemas
 // ============================================
 

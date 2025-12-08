@@ -357,14 +357,14 @@ describe('BreathingTimer', () => {
 });
 
 describe('formatTime', () => {
-  it('should format seconds with tenths', () => {
-    expect(formatTime(5.35)).toMatch(/^5\.\d$/);
-    expect(formatTime(0.15)).toMatch(/^0\.\d$/);
+  it('should format whole seconds', () => {
+    expect(formatTime(5.35)).toBe('5');
+    expect(formatTime(0.15)).toBe('0');
   });
 
   it('should format minutes and seconds', () => {
-    expect(formatTime(65.5)).toBe('1:05.5');
-    expect(formatTime(125.0)).toBe('2:05.0');
+    expect(formatTime(65.5)).toBe('1:05');
+    expect(formatTime(125.0)).toBe('2:05');
   });
 });
 

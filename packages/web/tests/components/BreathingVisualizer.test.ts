@@ -86,7 +86,7 @@ describe('BreathingVisualizer', () => {
       },
     });
 
-    expect(wrapper.text()).toContain('3.5');
+    expect(wrapper.text()).toContain('3');
   });
 
   it('should apply correct color classes for different phases', async () => {

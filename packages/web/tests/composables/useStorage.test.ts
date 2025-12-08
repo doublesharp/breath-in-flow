@@ -751,5 +751,130 @@ describe('useStorage', () => {
       expect(result).toBeDefined();
       expect(result?.sets[0].extendedHolds.length).toBe(1);
     });
+
+    it('handles loading sessions with null date fields from localStorage', async () => {
+      vi.resetModules();
+
+      const mockLS = {
+        getItem: vi.fn((key: string) => {
+          if (key === 'breath-in-flow-sessions') {
+            // Simulate stored session with null completedAt
+            return JSON.stringify([{
+              id: 's1',
+              configId: 'c1',
+              configSnapshot: {},
+              status: 'IN_PROGRESS',
+              sets: [],
+              targetSets: 1,
+              completedSets: 0,
+              startedAt: new Date().toISOString(),
+              completedAt: null, // null date field
+              notes: '',
+            }]);
+          }
+          return null;
+        }),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+
+      Object.defineProperty(global, 'localStorage', {
+        value: mockLS,
+      });
+
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+      const sessions = storage.getAllSessions();
+
+      // Should load without error despite null date field
+      expect(sessions.length).toBeGreaterThan(0);
+      // The null completedAt should remain null, not become a Date
+      expect(sessions[0].completedAt).toBeNull();
+    });
+  });
+
+  describe('Sound Theme Operations', () => {
+    beforeEach(() => {
+      localStorageMock.clear();
+      resetStorageForTesting();
+    });
+
+    it('should start with default theme', () => {
+      const storage = useStorage();
+      expect(storage.getSoundTheme()).toBe('default');
+    });
+
+    it('should set and get sound theme', () => {
+      const storage = useStorage();
+      
+      storage.setSoundTheme('water');
+      expect(storage.getSoundTheme()).toBe('water');
+      
+      storage.setSoundTheme('wind');
+      expect(storage.getSoundTheme()).toBe('wind');
+      
+      storage.setSoundTheme('subtle');
+      expect(storage.getSoundTheme()).toBe('subtle');
+      
+      storage.setSoundTheme('chimes');
+      expect(storage.getSoundTheme()).toBe('chimes');
+      
+      storage.setSoundTheme('default');
+      expect(storage.getSoundTheme()).toBe('default');
+    });
+
+    it('should persist sound theme to localStorage', () => {
+      const storage = useStorage();
+      
+      storage.setSoundTheme('water');
+      
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+        'breath-in-flow-sound-theme',
+        'water'
+      );
+    });
+
+    it('should load sound theme from localStorage on init', async () => {
+      localStorageMock.setItem('breath-in-flow-sound-theme', 'chimes');
+      
+      // Re-import to trigger loadFromStorage
+      vi.resetModules();
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+      
+      expect(storage.getSoundTheme()).toBe('chimes');
+    });
+
+    it('should expose soundTheme as reactive ref', () => {
+      const storage = useStorage();
+      
+      expect(storage.soundTheme.value).toBe('default');
+      
+      storage.setSoundTheme('wind');
+      expect(storage.soundTheme.value).toBe('wind');
+    });
+
+    it('should reset sound theme on resetStorageForTesting', () => {
+      const storage = useStorage();
+      
+      storage.setSoundTheme('chimes');
+      expect(storage.getSoundTheme()).toBe('chimes');
+      
+      resetStorageForTesting();
+      expect(storage.getSoundTheme()).toBe('default');
+    });
+
+    it('should handle all valid theme values', () => {
+      const storage = useStorage();
+      const themes: Array<'default' | 'water' | 'wind' | 'subtle' | 'chimes'> = [
+        'default', 'water', 'wind', 'subtle', 'chimes'
+      ];
+      
+      themes.forEach(theme => {
+        storage.setSoundTheme(theme);
+        expect(storage.getSoundTheme()).toBe(theme);
+      });
+    });
   });
 });

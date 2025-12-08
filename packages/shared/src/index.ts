@@ -1,5 +1,6 @@
 // Schemas and types
 export {
+  SoundThemeSchema,
   BreathingPhaseSchema,
   ExtendedHoldTypeSchema,
   ExtendedHoldModeSchema,
@@ -17,6 +18,7 @@ export {
 } from './schemas';
 
 export type {
+  SoundTheme,
   BreathingPhase,
   ExtendedHoldType,
   ExtendedHoldMode,

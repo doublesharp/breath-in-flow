@@ -24,6 +24,9 @@ vi.mock('@/composables/useStorage', () => ({
     cancelSession: cancelSessionMock,
     updateSession: updateSessionMock,
     createConfig: createConfigMock,
+    getSoundTheme: vi.fn(() => 'default'),
+    setSoundTheme: vi.fn(),
+    soundTheme: ref('default'),
   }),
 }))
 

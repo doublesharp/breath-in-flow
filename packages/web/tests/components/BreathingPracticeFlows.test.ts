@@ -19,6 +19,9 @@ vi.mock('@/composables/useStorage', () => {
       completeSession: completeSessionMock,
       updateSession: updateSessionMock,
       createConfig: createConfigMock,
+      getSoundTheme: vi.fn(() => 'default'),
+      setSoundTheme: vi.fn(),
+      soundTheme: ref('default'),
     }),
   }
 })
@@ -287,6 +290,27 @@ describe('BreathingPractice flows', () => {
     wrapper.vm.saveSessionNotes()
 
     expect(updateSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('finishSession completes the session and clears data', async () => {
+    completeSessionMock.mockReturnValue(undefined)
+    const wrapper = mount(BreathingPractice, {
+      global: { provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() }, stubs: ['BreathingVisualizer'] },
+    })
+
+    // Set up a fake session
+    wrapper.vm.currentSession = { id: 'test-session', sets: [] }
+    await wrapper.vm.$nextTick()
+
+    // Call finishSession
+    wrapper.vm.finishSession()
+    await wrapper.vm.$nextTick()
+
+    // Should have called completeSession
+    expect(completeSessionMock).toHaveBeenCalledWith('test-session')
+    // Session should be cleared
+    expect(wrapper.vm.currentSession).toBeNull()
+    expect(wrapper.vm.currentSetData).toBeNull()
   })
 
 })

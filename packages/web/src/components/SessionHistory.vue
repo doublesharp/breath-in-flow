@@ -27,30 +27,66 @@
       </Transition>
     </Teleport>
 
+    <!-- Delete All Confirmation Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showDeleteAllModal" class="modal-overlay" @click.self="cancelDeleteAll">
+          <div class="modal-content">
+            <div class="modal-header">
+              <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 class="text-lg font-semibold text-white mt-3">Delete All Sessions</h3>
+              <p class="text-slate-400 text-sm mt-1">Are you sure you want to delete all {{ sessions.length }} sessions? This action cannot be undone.</p>
+            </div>
+            <div class="modal-actions">
+              <button @click="cancelDeleteAll" class="btn-secondary">
+                Cancel
+              </button>
+              <button @click="confirmDeleteAll" class="btn-danger">
+                Delete All
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <div class="card-solid animate-fade-in">
-      <div class="flex items-center gap-3 mb-6">
-        <div
-          class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-5 h-5 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-            />
-          </svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="w-5 h-5 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-white">Session History</h2>
+            <p class="text-sm text-slate-400">Track your progress over time</p>
+          </div>
         </div>
-        <div>
-          <h2 class="text-xl font-bold text-white">Session History</h2>
-          <p class="text-sm text-slate-400">Track your progress over time</p>
-        </div>
+        <button
+          v-if="sessions.length > 0"
+          @click="deleteAllSessions"
+          class="px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all font-medium text-sm border border-red-500/20 hover:border-red-500/30"
+        >
+          Delete All
+        </button>
       </div>
 
       <!-- Stats Summary -->
@@ -195,6 +231,7 @@ const stats = computed(() => storage.stats.value);
 // Delete confirmation modal state
 const showDeleteModal = ref(false);
 const sessionToDelete = ref<string | null>(null);
+const showDeleteAllModal = ref(false);
 
 function formatDate(date: Date): string {
   return new Date(date).toLocaleString();
@@ -220,6 +257,19 @@ function confirmDelete() {
   }
   showDeleteModal.value = false;
   sessionToDelete.value = null;
+}
+
+function deleteAllSessions() {
+  showDeleteAllModal.value = true;
+}
+
+function cancelDeleteAll() {
+  showDeleteAllModal.value = false;
+}
+
+function confirmDeleteAll() {
+  storage.deleteAllSessions();
+  showDeleteAllModal.value = false;
 }
 </script>
 

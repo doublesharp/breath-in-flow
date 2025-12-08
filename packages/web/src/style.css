@@ -130,6 +130,13 @@ body {
     inset 0 0 60px 10px rgba(16, 185, 129, 0.1);
 }
 
+.glow-red {
+  box-shadow:
+  0 0 80px 20px rgba(185, 16, 16, 0.4),
+  0 0 120px 40px rgba(185, 33, 16, 0.2),
+  inset 0 0 60px 10px rgba(185, 89, 16, 0.1);
+}
+
 .glow-amber {
   box-shadow:
     0 0 80px 20px rgba(245, 158, 11, 0.4),
