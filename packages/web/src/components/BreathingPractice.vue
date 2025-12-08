@@ -363,8 +363,10 @@ import {
 const LAST_CONFIG_KEY = 'herb_breathing_last_config';
 
 const storage = useStorage();
-const selectedConfig = inject<{ value: BreathingConfig | null }>('selectedConfig');
-const clearSelectedConfig = inject<() => void>('clearSelectedConfig');
+// Provide safe defaults for injected values to avoid test warnings when not provided
+const selectedConfig = inject<{ value: BreathingConfig | null } | null>('selectedConfig', null);
+// Provide a safe no-op default so tests that don't provide this injection won't warn
+const clearSelectedConfig = inject('clearSelectedConfig', () => {}) as () => void;
 
 // UI state
 const showConfig = ref(false);

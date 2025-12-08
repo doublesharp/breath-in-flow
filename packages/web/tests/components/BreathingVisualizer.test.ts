@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import BreathingVisualizer from '../../src/components/BreathingVisualizer.vue';
+import { BreathingPhase, PHASE_INFO } from '@breath-in-flow/shared';
 
 describe('BreathingVisualizer', () => {
   it('should render with correct phase label', () => {
@@ -109,5 +110,36 @@ describe('BreathingVisualizer', () => {
     // Change to hold
     await wrapper.setProps({ phase: 'INHALE_HOLD' });
     expect(wrapper.html().includes('purple')).toBe(true);
+  });
+
+  describe('BreathingVisualizer phase classes', () => {
+    const phases: BreathingPhase[] = [
+      'INHALE',
+      'INHALE_HOLD',
+      'EXHALE',
+      'EXHALE_HOLD',
+      'EXTENDED_INHALE_HOLD',
+      'EXTENDED_EXHALE_HOLD',
+      'SET_COMPLETE',
+      'SESSION_COMPLETE',
+      'PAUSED',
+      'IDLE',
+    ];
+  
+    phases.forEach((phase) => {
+      it(`renders classes for ${phase}`, () => {
+        const wrapper = mount(BreathingVisualizer, {
+          props: { phase, currentTime: 1, totalTime: 2, scale: 1, isRunning: true },
+        });
+  
+        // Phase label should match PHASE_INFO mapping
+        const label = PHASE_INFO[phase].label;
+        expect(wrapper.text()).toContain(label);
+  
+        // Component should render successfully without errors
+        expect(wrapper.exists()).toBe(true);
+        expect(wrapper.find('[class*="breathing-circle"]').exists()).toBe(true);
+      });
+    });
   });
 });

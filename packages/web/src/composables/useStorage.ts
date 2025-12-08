@@ -53,6 +53,12 @@ function saveToStorage() {
 // Initialize storage
 loadFromStorage();
 
+// For testing: reset the storage state
+export function resetStorageForTesting() {
+  configs.value = [];
+  sessions.value = [];
+}
+
 export function useStorage() {
   // Config operations
   function createConfig(input: CreateBreathingConfig): BreathingConfig {

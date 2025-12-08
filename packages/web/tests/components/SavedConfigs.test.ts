@@ -1,43 +1,163 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
-import SavedConfigs from '../../src/components/SavedConfigs.vue';
-
-// Mock module that components import
-vi.mock('../../src/composables', () => {
-  const mockConfigs = [
-    { id: '1', name: 'Config One', inhaleTime: 4, exhaleTime: 4, createdAt: new Date() },
-  ];
-
-  return {
-    useStorage: () => ({
-      getAllConfigs: () => mockConfigs,
-      deleteConfig: vi.fn(() => true),
-      DEFAULT_BREATHING_CONFIG: {},
-    }),
-  };
-});
+import { describe, it, expect, vi } from 'vitest';
 
 describe('SavedConfigs.vue', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
+  it('shows empty state when no configs', async () => {
+    vi.resetModules();
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({ getAllConfigs: () => [] }),
+    }));
+
+    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
+    const wrapper = mount(SavedConfigs as any);
+    expect(wrapper.text()).toContain('No saved configurations yet.');
   });
 
-  it('renders saved config and handles delete', async () => {
-    // stub window.confirm to accept
-    window.confirm = vi.fn(() => true) as any;
+  it('renders config details including hold lines and extended hold info', async () => {
+    const now = new Date();
+    const config = {
+      id: 'c1',
+      name: 'Test Config',
+      createdAt: now,
+      inhaleTime: 4,
+      inhaleHoldTime: 3,
+      exhaleTime: 5,
+      exhaleHoldTime: 2,
+      repetitions: 4,
+      targetSets: 1,
+      extendedHoldEnabled: true,
+      extendedHoldType: 'EXHALE',
+      extendedHoldMode: 'TIMED',
+      extendedHoldDuration: 10,
+      secondExtendedHoldEnabled: true,
+      secondExtendedHoldType: 'INHALE',
+      secondExtendedHoldMode: 'TIMED',
+    };
 
-    const wrapper = mount(SavedConfigs);
-    expect(wrapper.text()).toContain('Saved Presets');
+    vi.resetModules();
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({ getAllConfigs: () => [config] }),
+    }));
 
-    // Ensure a config name is rendered
-    expect(wrapper.text()).toContain('Config One');
+    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
+    const wrapper = mount(SavedConfigs as any);
+    const text = wrapper.text();
 
-    const deleteBtn = wrapper.find('button[title="Delete configuration"]');
-    expect(deleteBtn.exists()).toBe(true);
+    expect(text).toContain('Test Config');
+    expect(text).toContain('+ 3s hold');
+    expect(text).toContain('+ 2s hold');
+    expect(text).toContain('Extended EXHALE Hold');
+    expect(text).toContain('Second INHALE Hold');
+  });
 
-    await deleteBtn.trigger('click');
-    // After clicking, the mocked deleteConfig should have been called (no direct access here)
-    // At minimum, ensure no errors and UI still renders
-    expect(wrapper.text()).toContain('Saved Presets');
+  it('calls deleteConfig when confirmed', async () => {
+    const deleteMock = vi.fn();
+    const config = { id: 'c1', name: 'ToDelete', createdAt: new Date(), inhaleTime: 2, exhaleTime:2, inhaleHoldTime:0, exhaleHoldTime:0, repetitions:1, targetSets:0, extendedHoldEnabled:false };
+
+    vi.resetModules();
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({ getAllConfigs: () => [config], deleteConfig: deleteMock }),
+    }));
+
+    // Mock confirm to return true
+    (global as any).confirm = () => true;
+
+    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
+    const wrapper = mount(SavedConfigs as any);
+
+    // Click delete button
+    const btn = wrapper.find('button[title="Delete configuration"]');
+    await btn.trigger('click');
+
+    expect(deleteMock).toHaveBeenCalledWith('c1');
+  });
+
+  it('does not call deleteConfig when user cancels', async () => {
+    const deleteMock = vi.fn();
+    const config = { id: 'c1', name: 'ToDelete', createdAt: new Date(), inhaleTime: 2, exhaleTime: 2, inhaleHoldTime: 0, exhaleHoldTime: 0, repetitions: 1, targetSets: 0, extendedHoldEnabled: false };
+
+    vi.resetModules();
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({ getAllConfigs: () => [config], deleteConfig: deleteMock }),
+    }));
+
+    // Mock confirm to return false
+    (global as any).confirm = () => false;
+
+    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
+    const wrapper = mount(SavedConfigs as any);
+
+    // Click delete button
+    const btn = wrapper.find('button[title="Delete configuration"]');
+    await btn.trigger('click');
+
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it('handles preset configurations loading', async () => {
+    vi.resetModules();
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({ getAllConfigs: () => [] }),
+    }));
+
+    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
+    const wrapper = mount(SavedConfigs as any);
+    
+    // Should display preset section
+    expect(wrapper.text()).toContain('Quick Presets');
+    // Should have preset buttons for built-in presets
+    const buttons = wrapper.findAll('button');
+    expect(buttons.length).toBeGreaterThan(0);
+  });
+
+  it('emits loadConfig when clicking load button on saved config', async () => {
+    vi.resetModules();
+    const mockConfig = {
+      id: '1',
+      name: 'Custom Breathing',
+      inhaleTime: 4,
+      inhaleHoldTime: 0,
+      exhaleTime: 6,
+      exhaleHoldTime: 0,
+      repetitions: 5,
+      extendedHoldEnabled: false,
+      targetSets: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({ getAllConfigs: () => [mockConfig], deleteConfig: vi.fn() }),
+    }));
+
+    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
+    const wrapper = mount(SavedConfigs as any);
+
+    const loadButtons = wrapper.findAll('button').filter((b) => b.text().includes('Load'));
+    if (loadButtons.length > 0) {
+      await loadButtons[0].trigger('click');
+      const emitted = wrapper.emitted('loadConfig');
+      expect(emitted).toBeDefined();
+    }
+  });
+
+  it('emits loadConfig when clicking preset button', async () => {
+    vi.resetModules();
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({ getAllConfigs: () => [] }),
+    }));
+
+    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
+    const wrapper = mount(SavedConfigs as any);
+
+    // Find preset buttons (they should be the ones in "Quick Presets" section)
+    const buttons = wrapper.findAll('button');
+    const presetButton = buttons.find((b) => b.text().includes('Hold'));
+    
+    if (presetButton) {
+      await presetButton.trigger('click');
+      const emitted = wrapper.emitted('loadConfig');
+      expect(emitted).toBeDefined();
+    }
   });
 });

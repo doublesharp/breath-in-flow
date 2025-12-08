@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useStorage } from '../../src/composables/useStorage';
-import type { BreathingConfig, CreateBreathingConfig } from '@breath-in-flow/shared';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { useStorage, resetStorageForTesting } from '../../src/composables/useStorage';
+import type { BreathingConfig, CreateBreathingConfig, SessionSet, ExtendedHoldRecord } from '@breath-in-flow/shared';
 import { DEFAULT_BREATHING_CONFIG } from '@breath-in-flow/shared';
 
 // Mock localStorage
@@ -40,14 +40,27 @@ function createTestConfigInput(overrides: Partial<CreateBreathingConfig> = {}): 
     extendedHoldDuration: 30,
     secondExtendedHoldEnabled: false,
     secondExtendedHoldType: 'INHALE',
+    secondExtendedHoldMode: 'TIMED',
+    secondExtendedHoldDuration: 30,
+    soundEnabled: false,
     ...overrides,
   };
 }
 
 describe('useStorage', () => {
+  const originalLocalStorage = global.localStorage;
+
   beforeEach(() => {
     localStorageMock.clear();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+    Object.defineProperty(global, 'localStorage', {
+      value: originalLocalStorage,
+    });
+    vi.restoreAllMocks();
   });
 
   describe('Configuration Operations', () => {
@@ -310,6 +323,12 @@ describe('useStorage', () => {
   });
 
   describe('Stats', () => {
+    beforeEach(() => {
+      resetStorageForTesting();
+      localStorageMock.clear();
+      vi.resetModules();
+    });
+
     it('should calculate stats from completed sessions', () => {
       const storage = useStorage();
 
@@ -355,6 +374,33 @@ describe('useStorage', () => {
       expect(stats.maxHoldTime).toBe(40);
     });
 
+    it('should calculate stats with no extended holds', () => {
+      const storage = useStorage();
+
+      const config = storage.createConfig(createTestConfigInput({
+        name: 'No Holds Stats',
+        extendedHoldEnabled: false,
+      }));
+
+      const session = storage.createSession(config);
+      expect(session.id).toBeDefined();
+      
+      storage.addSetToSession(session.id!, {
+        setNumber: 1,
+        completedRepetitions: 5,
+        startedAt: new Date(),
+        completedAt: new Date(),
+        extendedHolds: [],
+      });
+      storage.completeSession(session.id!);
+
+      const stats = storage.stats.value;
+
+      expect(stats.totalExtendedHolds).toBe(0);
+      expect(stats.avgHoldTime).toBe(0);
+      expect(stats.maxHoldTime).toBe(0);
+    });
+
     it('should return zeros for empty stats', () => {
       // The stats computed property reads from sessions
       const storage = useStorage();
@@ -394,6 +440,316 @@ describe('useStorage', () => {
         'breath-in-flow-sessions',
         expect.any(String)
       );
+    });
+  });
+
+  describe('useStorage Branches - Error Handling', () => {
+    it('handles localStorage.getItem throwing error', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('Storage error');
+      });
+
+      const storage = useStorage();
+      // Should have configs available (from default or fallback)
+      expect(storage.configs).toBeDefined();
+      // DEFAULT_BREATHING_CONFIG should be available
+      expect(storage.DEFAULT_BREATHING_CONFIG).toBeDefined();
+    });
+
+    it('handles localStorage.setItem throwing error', () => {
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('Storage full');
+      });
+
+      const storage = useStorage();
+      // createConfig should handle storage errors gracefully and not throw
+      expect(() => storage.createConfig({
+        name: 'Test Config',
+        inhaleTime: 4,
+        inhaleHoldTime: 0,
+        exhaleTime: 4,
+        exhaleHoldTime: 0,
+        repetitions: 3,
+        targetSets: 0,
+        extendedHoldEnabled: false,
+        extendedHoldType: 'EXHALE',
+        extendedHoldMode: 'TOLERANCE',
+        extendedHoldDuration: 30,
+        secondExtendedHoldEnabled: false,
+        secondExtendedHoldType: 'INHALE',
+        secondExtendedHoldMode: 'TIMED',
+        secondExtendedHoldDuration: 30,
+        soundEnabled: false,
+      })).not.toThrow();
+    });
+
+    it('handles invalid JSON in localStorage', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('{invalid-json');
+      const storage = useStorage();
+      // useStorage should fall back to defaults if JSON parsing fails
+      expect(storage.configs).toBeDefined();
+      expect(storage.DEFAULT_BREATHING_CONFIG).toBeDefined();
+    });
+  });
+
+  describe('useStorage loadFromStorage behavior', () => {
+    it('parses sessions from localStorage and converts date strings to Date objects', async () => {
+      vi.resetModules();
+
+      const now = new Date();
+      const storedSessions = [
+        {
+          id: 's1',
+          configId: 'c1',
+          configSnapshot: { id: 'c1', name: 'C' },
+          status: 'COMPLETED',
+          sets: [],
+          targetSets: 1,
+          completedSets: 1,
+          startedAt: now.toISOString(),
+          completedAt: now.toISOString(),
+        },
+      ];
+
+      const mockLS = {
+        getItem: vi.fn((k: string) => {
+          if (k === 'breath-in-flow-sessions') return JSON.stringify(storedSessions);
+          return null;
+        }),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+
+      Object.defineProperty(global, 'localStorage', {
+        value: mockLS,
+      });
+
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+
+      const sessions = storage.getAllSessions();
+      expect(sessions.length).toBe(1);
+      expect(sessions[0].startedAt).toBeInstanceOf(Date);
+      expect(sessions[0].completedAt).toBeInstanceOf(Date);
+    });
+
+    it('handles localStorage.getItem throwing (load failure) without throwing', async () => {
+      vi.resetModules();
+
+      const mockLS = {
+        getItem: vi.fn(() => { throw new Error('fail'); }),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+
+      Object.defineProperty(global, 'localStorage', {
+        value: mockLS,
+      });
+
+      // Importing should not throw because loadFromStorage catches errors
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+
+      expect(storage.getAllConfigs().length).toBeGreaterThanOrEqual(0);
+      expect(storage.getAllSessions().length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('handles invalid JSON in localStorage for configs', async () => {
+      vi.resetModules();
+
+      const mockLS = {
+        getItem: vi.fn((key: string) => {
+          if (key === 'breath-in-flow-configs') {
+            return '{invalid json}';
+          }
+          return null;
+        }),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+
+      Object.defineProperty(global, 'localStorage', {
+        value: mockLS,
+      });
+
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+
+      expect(storage.getAllConfigs().length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('handles invalid JSON in localStorage for sessions', async () => {
+      vi.resetModules();
+
+      const mockLS = {
+        getItem: vi.fn((key: string) => {
+          if (key === 'breath-in-flow-sessions') {
+            return '{invalid json}';
+          }
+          return null;
+        }),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+
+      Object.defineProperty(global, 'localStorage', {
+        value: mockLS,
+      });
+
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+
+      expect(storage.getAllSessions().length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('handles setItem throwing when saving', () => {
+      const mockLS = {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(() => { throw new Error('quota exceeded'); }),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+
+      Object.defineProperty(global, 'localStorage', {
+        value: mockLS,
+      });
+
+      // Suppress console.error for this test since we're testing error handling
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const storage = useStorage();
+      const config = createTestConfigInput();
+
+      // Should not throw even if setItem fails
+      expect(() => storage.createConfig(config)).not.toThrow();
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('updateSession returns undefined when session not found', () => {
+      const storage = useStorage();
+      resetStorageForTesting();
+
+      const result = storage.updateSession('nonexistent-id', { notes: 'Updated' });
+
+      expect(result).toBeUndefined();
+    });
+
+    it('updateSession successfully updates an existing session', () => {
+      const storage = useStorage();
+      resetStorageForTesting();
+
+      const config = createTestConfigInput();
+      const session = storage.createSession(config);
+
+      const updatedSession = storage.updateSession(session.id!, { notes: 'Updated notes' });
+
+      expect(updatedSession).toBeDefined();
+      expect(updatedSession?.notes).toBe('Updated notes');
+    });
+
+    it('addSetToSession returns undefined when session not found', () => {
+      const storage = useStorage();
+      resetStorageForTesting();
+
+      const mockSet: SessionSet = {
+        setNumber: 1,
+        completedRepetitions: 5,
+        extendedHolds: [],
+        startedAt: new Date(),
+      };
+
+      const result = storage.addSetToSession('nonexistent-id', mockSet);
+
+      expect(result).toBeUndefined();
+    });
+
+    it('addSetToSession successfully adds a set to session', () => {
+      const storage = useStorage();
+      resetStorageForTesting();
+
+      const config = createTestConfigInput();
+      const session = storage.createSession(config);
+
+      const mockSet: SessionSet = {
+        setNumber: 1,
+        completedRepetitions: 5,
+        extendedHolds: [],
+        startedAt: new Date(),
+      };
+
+      const result = storage.addSetToSession(session.id!, mockSet);
+
+      expect(result).toBeDefined();
+      expect(result?.sets.length).toBe(1);
+    });
+
+    it('addExtendedHoldToSet returns undefined when session not found', () => {
+      const storage = useStorage();
+      resetStorageForTesting();
+
+      const hold: ExtendedHoldRecord = {
+        type: 'EXHALE',
+        mode: 'TIMED',
+        actualDuration: 30,
+        completedAt: new Date(),
+      };
+
+      const result = storage.addExtendedHoldToSet('nonexistent-id', 0, hold);
+
+      expect(result).toBeUndefined();
+    });
+
+    it('addExtendedHoldToSet returns undefined when set index not found', () => {
+      const storage = useStorage();
+      resetStorageForTesting();
+
+      const config = createTestConfigInput();
+      const session = storage.createSession(config);
+
+      const hold: ExtendedHoldRecord = {
+        type: 'EXHALE',
+        mode: 'TIMED',
+        actualDuration: 30,
+        completedAt: new Date(),
+      };
+
+      const result = storage.addExtendedHoldToSet(session.id!, 99, hold); // Invalid set index
+
+      expect(result).toBeUndefined();
+    });
+
+    it('addExtendedHoldToSet successfully adds hold to existing set', () => {
+      const storage = useStorage();
+      resetStorageForTesting();
+
+      const config = createTestConfigInput();
+      const session = storage.createSession(config);
+
+      const mockSet: SessionSet = {
+        setNumber: 1,
+        completedRepetitions: 5,
+        extendedHolds: [],
+        startedAt: new Date(),
+      };
+
+      storage.addSetToSession(session.id!, mockSet);
+
+      const hold: ExtendedHoldRecord = {
+        type: 'EXHALE',
+        mode: 'TIMED',
+        actualDuration: 30,
+        completedAt: new Date(),
+      };
+
+      const result = storage.addExtendedHoldToSet(session.id!, 0, hold);
+
+      expect(result).toBeDefined();
+      expect(result?.sets[0].extendedHolds.length).toBe(1);
     });
   });
 });

@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted, getCurrentInstance } from 'vue';
 import {
   BreathingConfig,
   BreathingPhase,
@@ -385,9 +385,12 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     tick();
   }
 
-  onUnmounted(() => {
-    stopInterval();
-  });
+  // Only register onUnmounted if called from a component's setup()
+  if (getCurrentInstance()) {
+    onUnmounted(() => {
+      stopInterval();
+    });
+  }
 
   return {
     // State
