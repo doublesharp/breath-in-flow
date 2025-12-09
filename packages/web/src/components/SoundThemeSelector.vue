@@ -1,8 +1,6 @@
 <template>
   <div class="sound-theme-selector">
-    <label for="sound-theme" class="block text-sm font-medium text-slate-300 mb-2">
-      Sound Theme
-    </label>
+    <label for="sound-theme" class="block text-sm font-medium text-slate-300 mb-2"> Sound Theme </label>
     <div class="flex flex-col sm:flex-row gap-2">
       <select
         id="sound-theme"
@@ -10,11 +8,11 @@
         @change="onThemeChange"
         class="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
       >
-        <option value="default">🥁 Default (Woodblock & Bells)</option>
-        <option value="water">💧 Water (Droplets & Flow)</option>
-        <option value="wind">🌬️ Wind (Breeze & Gust)</option>
-        <option value="subtle">✨ Subtle (Minimal Tones)</option>
-        <option value="chimes">🔔 Chimes (Harmonious Bells)</option>
+        <option value="default">🥁 Woodblock (Default)</option>
+        <option value="water">💧 Water</option>
+        <option value="wind">🌬️ Wind</option>
+        <option value="subtle">✨ Subtle</option>
+        <option value="chimes">🔔 Chimes</option>
       </select>
       <button
         @click="testTheme"
@@ -22,7 +20,12 @@
         :disabled="!soundEnabled"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+          />
         </svg>
         Test
       </button>
@@ -58,19 +61,19 @@ function testTheme() {
     // Temporarily enable the sound service for testing
     soundService.setEnabled(true);
     soundService.playClick();
-    setTimeout(() => {
-      soundService.playPhaseChange();
-    }, 500);
   }
 }
 
 // Watch for external changes to sound theme
-watch(() => storage.soundTheme?.value, (newTheme) => {
-  if (newTheme) {
-    selectedTheme.value = newTheme;
-    soundService.setTheme(newTheme);
+watch(
+  () => storage.soundTheme?.value,
+  (newTheme) => {
+    if (newTheme) {
+      selectedTheme.value = newTheme;
+      soundService.setTheme(newTheme);
+    }
   }
-});
+);
 </script>
 
 <style scoped>

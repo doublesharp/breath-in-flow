@@ -279,8 +279,7 @@ export class GarminService implements WearableService {
       averages: {
         preStress: avgPreStress,
         postStress: avgPostStress,
-        stressReduction:
-          avgPreStress && avgPostStress ? avgPreStress - avgPostStress : undefined,
+        stressReduction: avgPreStress && avgPostStress ? avgPreStress - avgPostStress : undefined,
         preHR: avgPreHR,
         postHR: avgPostHR,
         preHRV: avgPreHRV,

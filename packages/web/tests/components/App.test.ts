@@ -40,7 +40,7 @@ describe('App.vue', () => {
     });
 
     const buttons = wrapper.findAll('button');
-    
+
     // Test History tab
     const historyBtn = buttons.find((b) => b.text().includes('History'));
     if (historyBtn) {
@@ -112,11 +112,11 @@ describe('App.vue', () => {
     };
 
     // Access the component instance to call loadConfig
-    const vm = wrapper.vm as any;
-    vm.loadConfig(mockConfig);
-    
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm.loadConfig as (config: BreathingConfig) => void)(mockConfig);
+
     await nextTick();
-    
+
     // Should switch to practice tab
     expect(vm.activeTab).toBe('practice');
     expect(vm.selectedConfig).toEqual(mockConfig);
@@ -150,16 +150,14 @@ describe('App.vue', () => {
       updatedAt: new Date(),
     };
 
-    const vm = wrapper.vm as any;
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
     vm.selectedConfig = mockConfig;
     
     await nextTick();
     
     // Now clear the config
-    vm.clearSelectedConfig();
-    
-    await nextTick();
-    
+    (vm.clearSelectedConfig as () => void)();    await nextTick();
+
     // Should clear the selected config
     expect(vm.selectedConfig).toBeNull();
   });

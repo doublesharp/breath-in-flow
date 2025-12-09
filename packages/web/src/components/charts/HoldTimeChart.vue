@@ -69,16 +69,7 @@ import {
 import type { Session } from '@breath-in-flow/shared';
 import { format } from 'date-fns';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const props = withDefaults(
   defineProps<{

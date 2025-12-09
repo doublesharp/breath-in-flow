@@ -36,6 +36,9 @@ async function createWindow() {
       preload,
       nodeIntegration: false,
       contextIsolation: true,
+      // Enable Web Audio API for sound playback
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
     // Standard titlebar for dragging
     titleBarStyle: 'default',
@@ -64,7 +67,16 @@ async function createWindow() {
   } else {
     // Load the index.html when not in development
     await mainWindow.loadFile(indexHtml);
+    // Enable DevTools in production for debugging (can be removed later)
+    // Open with Cmd+Option+I on macOS
   }
+
+  // Add keyboard shortcut to toggle DevTools
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.meta && input.alt && input.key.toLowerCase() === 'i') {
+      mainWindow?.webContents.toggleDevTools();
+    }
+  });
 }
 
 // This method will be called when Electron has finished

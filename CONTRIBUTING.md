@@ -58,6 +58,7 @@ breath-in-flow/
    - For desktop builds: Platform-specific requirements handled by electron-builder
 
 2. **Clone and Install**
+
    ```bash
    git clone https://github.com/breathinflow/breath-in-flow.git
    cd breath-in-flow
@@ -66,11 +67,12 @@ breath-in-flow/
    ```
 
 3. **Start Development Server**
+
    ```bash
    pnpm dev
    ```
 
-   The app will be available at `http://localhost:3000`.
+   The app will be available at `http://localhost:3003`.
 
 ## Building
 
@@ -94,6 +96,7 @@ pnpm build:mobile    # All mobile platforms (android, ios)
 ```
 
 Build outputs are organized in `dist/`:
+
 ```
 dist/
 ├── mac/        # macOS DMG and ZIP files
@@ -168,7 +171,7 @@ Releases are automated via GitHub Actions when a version tag is pushed.
 ### Creating a Release
 
 1. **Update Version Numbers**
-   
+
    Update version in these files:
    - `package.json` (root)
    - `packages/shared/package.json`
@@ -176,26 +179,28 @@ Releases are automated via GitHub Actions when a version tag is pushed.
    - `packages/web/package.json`
 
 2. **Commit Version Bump**
+
    ```bash
    git add -A
    git commit -m "chore: bump version to 0.1.0"
    ```
 
 3. **Create and Push Tag**
+
    ```bash
    git tag v0.1.0
    git push origin main --tags
    ```
 
 4. **Review Draft Release**
-   
+
    The GitHub Action will:
    - Run tests
    - Build for all platforms (macOS ARM64/Intel, Windows, Linux, Android)
    - Create a draft release with all artifacts
 
 5. **Publish Release**
-   
+
    Go to GitHub Releases, review the draft, edit release notes if needed, and publish.
 
 ### Version Numbering
@@ -207,8 +212,9 @@ We follow [Semantic Versioning](https://semver.org/):
 - **Patch** (0.0.1): Bug fixes, backward compatible
 
 Pre-release versions:
+
 - `v0.1.0-alpha.1` - Alpha releases
-- `v0.1.0-beta.1` - Beta releases  
+- `v0.1.0-beta.1` - Beta releases
 - `v0.1.0-rc.1` - Release candidates
 
 ### Hotfixes

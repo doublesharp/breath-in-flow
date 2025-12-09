@@ -4,13 +4,7 @@ import { z } from 'zod';
 // Sound Theme Schemas
 // ============================================
 
-export const SoundThemeSchema = z.enum([
-  'default',
-  'water',
-  'wind',
-  'subtle',
-  'chimes',
-]);
+export const SoundThemeSchema = z.enum(['default', 'water', 'wind', 'subtle', 'chimes']);
 
 export type SoundTheme = z.infer<typeof SoundThemeSchema>;
 
@@ -204,65 +198,107 @@ export interface PhaseInfo {
   color: string;
 }
 
+function getBreathInstruction(duration: number, type: 'inhale' | 'exhale'): string {
+  const action = type === 'inhale' ? 'Breathe in' : 'Breathe out';
+  
+  if (duration <= 2) {
+    return `${action} quickly`;
+  } else if (duration <= 4) {
+    return `${action} steadily`;
+  } else if (duration <= 6) {
+    return `${action} slowly`;
+  } else {
+    return `${action} very slowly`;
+  }
+}
+
+export function getPhaseInfo(phase: BreathingPhase, config?: BreathingConfig): PhaseInfo {
+  const baseInfo: Record<BreathingPhase, Omit<PhaseInfo, 'instruction'> & { instruction: string | ((c: BreathingConfig) => string) }> = {
+    IDLE: {
+      phase: 'IDLE',
+      label: 'Ready',
+      instruction: 'Press Start to begin',
+      color: 'gray',
+    },
+    INHALE: {
+      phase: 'INHALE',
+      label: 'Inhale',
+      instruction: (c: BreathingConfig) => getBreathInstruction(c.inhaleTime, 'inhale'),
+      color: 'green',
+    },
+    INHALE_HOLD: {
+      phase: 'INHALE_HOLD',
+      label: 'Hold',
+      instruction: 'Hold your breath',
+      color: 'amber',
+    },
+    EXHALE: {
+      phase: 'EXHALE',
+      label: 'Exhale',
+      instruction: (c: BreathingConfig) => getBreathInstruction(c.exhaleTime, 'exhale'),
+      color: 'blue',
+    },
+    EXHALE_HOLD: {
+      phase: 'EXHALE_HOLD',
+      label: 'Hold',
+      instruction: 'Hold empty',
+      color: 'amber',
+    },
+    EXTENDED_INHALE_HOLD: {
+      phase: 'EXTENDED_INHALE_HOLD',
+      label: 'Extended Hold',
+      instruction: 'Hold as long as comfortable',
+      color: 'red',
+    },
+    EXTENDED_EXHALE_HOLD: {
+      phase: 'EXTENDED_EXHALE_HOLD',
+      label: 'Extended Hold',
+      instruction: 'Hold as long as comfortable',
+      color: 'red',
+    },
+    SET_COMPLETE: {
+      phase: 'SET_COMPLETE',
+      label: 'Set Complete',
+      instruction: 'Rest before next set',
+      color: 'emerald',
+    },
+    SESSION_COMPLETE: {
+      phase: 'SESSION_COMPLETE',
+      label: 'Complete!',
+      instruction: 'Great job!',
+      color: 'emerald',
+    },
+    PAUSED: {
+      phase: 'PAUSED',
+      label: 'Paused',
+      instruction: 'Press Resume to continue',
+      color: 'gray',
+    },
+  };
+
+  const info = baseInfo[phase];
+  const instruction = typeof info.instruction === 'function' 
+    ? (config ? info.instruction(config) : 'Breathe')
+    : info.instruction;
+
+  return {
+    phase: info.phase,
+    label: info.label,
+    instruction,
+    color: info.color,
+  };
+}
+
+// Backward compatibility - default PHASE_INFO without config
 export const PHASE_INFO: Record<BreathingPhase, PhaseInfo> = {
-  IDLE: {
-    phase: 'IDLE',
-    label: 'Ready',
-    instruction: 'Press Start to begin',
-    color: 'gray',
-  },
-  INHALE: {
-    phase: 'INHALE',
-    label: 'Inhale',
-    instruction: 'Breathe in slowly',
-    color: 'blue',
-  },
-  INHALE_HOLD: {
-    phase: 'INHALE_HOLD',
-    label: 'Hold',
-    instruction: 'Hold your breath',
-    color: 'purple',
-  },
-  EXHALE: {
-    phase: 'EXHALE',
-    label: 'Exhale',
-    instruction: 'Breathe out slowly',
-    color: 'green',
-  },
-  EXHALE_HOLD: {
-    phase: 'EXHALE_HOLD',
-    label: 'Hold',
-    instruction: 'Hold empty',
-    color: 'orange',
-  },
-  EXTENDED_INHALE_HOLD: {
-    phase: 'EXTENDED_INHALE_HOLD',
-    label: 'Extended Hold',
-    instruction: 'Hold as long as comfortable',
-    color: 'indigo',
-  },
-  EXTENDED_EXHALE_HOLD: {
-    phase: 'EXTENDED_EXHALE_HOLD',
-    label: 'Extended Hold',
-    instruction: 'Hold as long as comfortable',
-    color: 'amber',
-  },
-  SET_COMPLETE: {
-    phase: 'SET_COMPLETE',
-    label: 'Set Complete',
-    instruction: 'Rest before next set',
-    color: 'teal',
-  },
-  SESSION_COMPLETE: {
-    phase: 'SESSION_COMPLETE',
-    label: 'Complete!',
-    instruction: 'Great job!',
-    color: 'emerald',
-  },
-  PAUSED: {
-    phase: 'PAUSED',
-    label: 'Paused',
-    instruction: 'Press Resume to continue',
-    color: 'gray',
-  },
+  IDLE: getPhaseInfo('IDLE'),
+  INHALE: getPhaseInfo('INHALE', DEFAULT_BREATHING_CONFIG as BreathingConfig),
+  INHALE_HOLD: getPhaseInfo('INHALE_HOLD'),
+  EXHALE: getPhaseInfo('EXHALE', DEFAULT_BREATHING_CONFIG as BreathingConfig),
+  EXHALE_HOLD: getPhaseInfo('EXHALE_HOLD'),
+  EXTENDED_INHALE_HOLD: getPhaseInfo('EXTENDED_INHALE_HOLD'),
+  EXTENDED_EXHALE_HOLD: getPhaseInfo('EXTENDED_EXHALE_HOLD'),
+  SET_COMPLETE: getPhaseInfo('SET_COMPLETE'),
+  SESSION_COMPLETE: getPhaseInfo('SESSION_COMPLETE'),
+  PAUSED: getPhaseInfo('PAUSED'),
 };

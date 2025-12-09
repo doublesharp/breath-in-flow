@@ -3,7 +3,7 @@ import type { SoundTheme } from '@breath-in-flow/shared';
 class SoundService {
   private audioContext: AudioContext | null = null;
   private isEnabled = false;
-  private currentTheme: SoundTheme = "default";
+  private currentTheme: SoundTheme = 'default';
 
   private createReverb(ctx: AudioContext) {
     const input = ctx.createGain();
@@ -13,7 +13,7 @@ class SoundService {
 
     delay.delayTime.value = 0.12;
     feedback.gain.value = 0.06;
-    lp.type = "lowpass";
+    lp.type = 'lowpass';
     lp.frequency.value = 1800;
 
     input.connect(delay);
@@ -41,8 +41,17 @@ class SoundService {
 
   private getContext() {
     if (!this.audioContext) {
-      const AC = window.AudioContext || (window as any).webkitAudioContext;
-      if (AC) this.audioContext = new AC();
+      const AC =
+        window.AudioContext || (window as unknown as Record<string, unknown>).webkitAudioContext;
+      if (AC) {
+        this.audioContext = new (AC as unknown as typeof AudioContext)();
+        // Immediately try to resume for Electron compatibility
+        if (this.audioContext.state === 'suspended') {
+          this.audioContext.resume().catch(() => {
+            // Resume will be retried when audio is enabled or played
+          });
+        }
+      }
     }
     return this.audioContext;
   }
@@ -51,7 +60,11 @@ class SoundService {
     this.isEnabled = enabled;
     if (enabled) {
       const ctx = this.getContext();
-      if (ctx && ctx.state === "suspended") ctx.resume();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {
+          // Will be retried on next playback attempt
+        });
+      }
     }
   }
 
@@ -72,7 +85,16 @@ class SoundService {
     const ctx = this.getContext();
     if (!ctx) return;
 
-    this.playTick(ctx, 1.0);
+    // Ensure context is running (important for Electron)
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => {
+        this.playTick(ctx, 1.0);
+      }).catch(() => {
+        // Silently fail - audio context couldn't resume
+      });
+    } else {
+      this.playTick(ctx, 1.0);
+    }
   }
 
   // ------------------------------------------------------------
@@ -81,13 +103,13 @@ class SoundService {
 
   private playTick(ctx: AudioContext, accent: number) {
     switch (this.currentTheme) {
-      case "water":
+      case 'water':
         return this.waterTick(ctx, accent);
-      case "wind":
+      case 'wind':
         return this.windTick(ctx, accent);
-      case "subtle":
+      case 'subtle':
         return this.subtleTick(ctx, accent);
-      case "chimes":
+      case 'chimes':
         return this.chimesTick(ctx, accent);
       default:
         return this.defaultTick(ctx, accent);
@@ -102,7 +124,7 @@ class SoundService {
     const t = ctx.currentTime;
 
     const osc = ctx.createOscillator();
-    osc.type = "triangle";
+    osc.type = 'triangle';
     osc.frequency.value = 600;
 
     const gain = ctx.createGain();
@@ -127,7 +149,7 @@ class SoundService {
     const t = ctx.currentTime;
 
     const osc = ctx.createOscillator();
-    osc.type = "sine";
+    osc.type = 'sine';
 
     const base = 650;
     osc.frequency.setValueAtTime(base, t);
@@ -157,12 +179,12 @@ class SoundService {
     const noise = this.makeNoise(ctx);
 
     const band = ctx.createBiquadFilter();
-    band.type = "bandpass";
+    band.type = 'bandpass';
     band.frequency.value = 1400;
     band.Q.value = 1.8;
 
     const gain = ctx.createGain();
-    const peak = 0.30 * accent;
+    const peak = 0.3 * accent;
 
     gain.gain.setValueAtTime(0, t);
     gain.gain.linearRampToValueAtTime(peak, t + 0.02);
@@ -175,7 +197,7 @@ class SoundService {
 
     // airy anchor tone
     const osc = ctx.createOscillator();
-    osc.type = "sine";
+    osc.type = 'sine';
     osc.frequency.value = 500;
 
     const toneGain = ctx.createGain();
@@ -201,7 +223,7 @@ class SoundService {
     const t = ctx.currentTime;
 
     const osc = ctx.createOscillator();
-    osc.type = "sine";
+    osc.type = 'sine';
     osc.frequency.value = 660;
 
     const gain = ctx.createGain();
@@ -222,7 +244,7 @@ class SoundService {
     const t = ctx.currentTime;
 
     const osc = ctx.createOscillator();
-    osc.type = "triangle";
+    osc.type = 'triangle';
     osc.frequency.value = 1200;
 
     const gain = ctx.createGain();

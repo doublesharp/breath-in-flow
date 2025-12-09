@@ -1,13 +1,14 @@
 <template>
   <div>
     <!-- Help Button (Fixed position on desktop, in header on mobile) -->
-    <button
-      @click="showHelp = true"
-      class="help-trigger"
-      aria-label="Open help"
-    >
+    <button @click="showHelp = true" class="help-trigger" aria-label="Open help">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
       </svg>
       <span class="hidden sm:inline">Help</span>
     </button>
@@ -20,9 +21,22 @@
             <!-- Header -->
             <div class="help-header">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <div
+                  class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-5 h-5 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                 </div>
                 <div>
@@ -31,7 +45,13 @@
                 </div>
               </div>
               <button @click="showHelp = false" class="help-close-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="w-6 h-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -56,13 +76,24 @@
               <div v-if="activeSection === 'start'" class="help-section">
                 <h3 class="help-section-title">
                   <span class="help-section-icon bg-emerald-500/20 text-emerald-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      />
                     </svg>
                   </span>
                   Getting Started
                 </h3>
-                
+
                 <div class="help-card">
                   <h4 class="help-card-title">Quick Start</h4>
                   <ol class="help-list">
@@ -88,8 +119,19 @@
               <div v-if="activeSection === 'practice'" class="help-section">
                 <h3 class="help-section-title">
                   <span class="help-section-icon bg-blue-500/20 text-blue-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
                   </span>
                   Practice Guide
@@ -130,9 +172,8 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Visual Guide</h4>
                   <p class="text-slate-300 text-sm">
-                    The breathing circle shows your progress through each phase. 
-                    Watch the circle expand during inhale and contract during exhale. 
-                    The countdown timer shows seconds remaining in the current phase.
+                    The breathing circle shows your progress through each phase. Watch the circle expand during inhale
+                    and contract during exhale. The countdown timer shows seconds remaining in the current phase.
                   </p>
                 </div>
               </div>
@@ -141,9 +182,25 @@
               <div v-if="activeSection === 'config'" class="help-section">
                 <h3 class="help-section-title">
                   <span class="help-section-icon bg-purple-500/20 text-purple-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                      />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
                     </svg>
                   </span>
                   Configuration
@@ -163,8 +220,8 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Extended Holds</h4>
                   <p class="text-slate-300 text-sm mb-3">
-                    Extended holds are longer breath holds performed at the end of each set. 
-                    They're great for building breath tolerance.
+                    Extended holds are longer breath holds performed at the end of each set. They're great for building
+                    breath tolerance.
                   </p>
                   <ul class="help-list">
                     <li><strong>Hold Type</strong> - Choose inhale hold or exhale hold</li>
@@ -177,9 +234,9 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Sets</h4>
                   <p class="text-slate-300 text-sm">
-                    A set consists of your repetitions plus any extended holds. 
-                    Set a <strong>Target Sets</strong> number or leave at 0 to go indefinitely.
-                    After each set, choose to continue or finish your session.
+                    A set consists of your repetitions plus any extended holds. Set a
+                    <strong>Target Sets</strong> number or leave at 0 to go indefinitely. After each set, choose to
+                    continue or finish your session.
                   </p>
                 </div>
               </div>
@@ -188,8 +245,19 @@
               <div v-if="activeSection === 'techniques'" class="help-section">
                 <h3 class="help-section-title">
                   <span class="help-section-icon bg-amber-500/20 text-amber-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                      />
                     </svg>
                   </span>
                   Popular Techniques
@@ -248,8 +316,19 @@
                 </div>
 
                 <div class="help-tip">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-5 h-5 text-amber-400 flex-shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
                   </svg>
                   <p>Start with shorter hold times and work your way up. Never push to the point of discomfort.</p>
                 </div>
@@ -259,8 +338,19 @@
               <div v-if="activeSection === 'data'" class="help-section">
                 <h3 class="help-section-title">
                   <span class="help-section-icon bg-indigo-500/20 text-indigo-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                      />
                     </svg>
                   </span>
                   Presets & History
@@ -303,9 +393,7 @@
 
                 <div class="help-card">
                   <h4 class="help-card-title">Analytics Dashboard</h4>
-                  <p class="text-slate-300 text-sm">
-                    The Analytics tab shows your progress with visual charts:
-                  </p>
+                  <p class="text-slate-300 text-sm">The Analytics tab shows your progress with visual charts:</p>
                   <ul class="help-list">
                     <li><strong>Hold Time Chart</strong> - Track breath hold improvements</li>
                     <li><strong>Sessions Per Week</strong> - Monitor practice consistency</li>
@@ -318,8 +406,19 @@
               <div v-if="activeSection === 'tips'" class="help-section">
                 <h3 class="help-section-title">
                   <span class="help-section-icon bg-rose-500/20 text-rose-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                      />
                     </svg>
                   </span>
                   Tips & Best Practices
@@ -358,12 +457,26 @@
                 </div>
 
                 <div class="help-tip warning">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-5 h-5 text-amber-400 flex-shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
                   </svg>
                   <div>
                     <p class="font-medium text-amber-400">Safety Note</p>
-                    <p class="text-sm">Consult a healthcare provider before starting breathwork if you have respiratory conditions, cardiovascular issues, or are pregnant. Stop immediately if you feel unwell.</p>
+                    <p class="text-sm">
+                      Consult a healthcare provider before starting breathwork if you have respiratory conditions,
+                      cardiovascular issues, or are pregnant. Stop immediately if you feel unwell.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -388,60 +501,161 @@ const activeSection = ref('start');
 
 // Tab configuration with inline icon components
 const tabs = [
-  { 
-    id: 'start', 
+  {
+    id: 'start',
     label: 'Start',
     icon: {
-      render: () => h('svg', { xmlns: 'http://www.w3.org/2000/svg', class: 'w-4 h-4', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-        h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M13 10V3L4 14h7v7l9-11h-7z' })
-      ])
-    }
+      render: () =>
+        h(
+          'svg',
+          {
+            xmlns: 'http://www.w3.org/2000/svg',
+            class: 'w-4 h-4',
+            fill: 'none',
+            viewBox: '0 0 24 24',
+            stroke: 'currentColor',
+          },
+          [
+            h('path', {
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              'stroke-width': '2',
+              d: 'M13 10V3L4 14h7v7l9-11h-7z',
+            }),
+          ]
+        ),
+    },
   },
-  { 
-    id: 'practice', 
+  {
+    id: 'practice',
     label: 'Practice',
     icon: {
-      render: () => h('svg', { xmlns: 'http://www.w3.org/2000/svg', class: 'w-4 h-4', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-        h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' })
-      ])
-    }
+      render: () =>
+        h(
+          'svg',
+          {
+            xmlns: 'http://www.w3.org/2000/svg',
+            class: 'w-4 h-4',
+            fill: 'none',
+            viewBox: '0 0 24 24',
+            stroke: 'currentColor',
+          },
+          [
+            h('path', {
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              'stroke-width': '2',
+              d: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+            }),
+          ]
+        ),
+    },
   },
-  { 
-    id: 'config', 
+  {
+    id: 'config',
     label: 'Settings',
     icon: {
-      render: () => h('svg', { xmlns: 'http://www.w3.org/2000/svg', class: 'w-4 h-4', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-        h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' }),
-        h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z' })
-      ])
-    }
+      render: () =>
+        h(
+          'svg',
+          {
+            xmlns: 'http://www.w3.org/2000/svg',
+            class: 'w-4 h-4',
+            fill: 'none',
+            viewBox: '0 0 24 24',
+            stroke: 'currentColor',
+          },
+          [
+            h('path', {
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              'stroke-width': '2',
+              d: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
+            }),
+            h('path', {
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              'stroke-width': '2',
+              d: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z',
+            }),
+          ]
+        ),
+    },
   },
-  { 
-    id: 'techniques', 
+  {
+    id: 'techniques',
     label: 'Techniques',
     icon: {
-      render: () => h('svg', { xmlns: 'http://www.w3.org/2000/svg', class: 'w-4 h-4', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-        h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' })
-      ])
-    }
+      render: () =>
+        h(
+          'svg',
+          {
+            xmlns: 'http://www.w3.org/2000/svg',
+            class: 'w-4 h-4',
+            fill: 'none',
+            viewBox: '0 0 24 24',
+            stroke: 'currentColor',
+          },
+          [
+            h('path', {
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              'stroke-width': '2',
+              d: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z',
+            }),
+          ]
+        ),
+    },
   },
-  { 
-    id: 'data', 
+  {
+    id: 'data',
     label: 'Data',
     icon: {
-      render: () => h('svg', { xmlns: 'http://www.w3.org/2000/svg', class: 'w-4 h-4', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-        h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4' })
-      ])
-    }
+      render: () =>
+        h(
+          'svg',
+          {
+            xmlns: 'http://www.w3.org/2000/svg',
+            class: 'w-4 h-4',
+            fill: 'none',
+            viewBox: '0 0 24 24',
+            stroke: 'currentColor',
+          },
+          [
+            h('path', {
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              'stroke-width': '2',
+              d: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4',
+            }),
+          ]
+        ),
+    },
   },
-  { 
-    id: 'tips', 
+  {
+    id: 'tips',
     label: 'Tips',
     icon: {
-      render: () => h('svg', { xmlns: 'http://www.w3.org/2000/svg', class: 'w-4 h-4', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-        h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' })
-      ])
-    }
+      render: () =>
+        h(
+          'svg',
+          {
+            xmlns: 'http://www.w3.org/2000/svg',
+            class: 'w-4 h-4',
+            fill: 'none',
+            viewBox: '0 0 24 24',
+            stroke: 'currentColor',
+          },
+          [
+            h('path', {
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              'stroke-width': '2',
+              d: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z',
+            }),
+          ]
+        ),
+    },
   },
 ];
 
@@ -564,7 +778,9 @@ ol.help-list li::before {
 
 .help-fade-enter-active .help-modal,
 .help-fade-leave-active .help-modal {
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
 }
 
 .help-fade-enter-from,

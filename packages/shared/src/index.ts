@@ -15,6 +15,7 @@ export {
   DEFAULT_BREATHING_CONFIG,
   INITIAL_TIMER_STATE,
   PHASE_INFO,
+  getPhaseInfo,
 } from './schemas';
 
 export type {

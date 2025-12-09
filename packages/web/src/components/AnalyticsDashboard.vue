@@ -65,10 +65,24 @@
         </button>
       </div>
 
-      <div v-if="wearableConnected" class="flex items-center gap-4 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+      <div
+        v-if="wearableConnected"
+        class="flex items-center gap-4 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl"
+      >
         <div class="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-6 h-6 text-emerald-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
         </div>
         <div class="flex-1">
@@ -142,7 +156,9 @@
               <div class="text-right">
                 <div class="text-sm text-slate-400">Pattern</div>
                 <div class="font-semibold text-white">
-                  {{ session.configSnapshot.inhaleTime }}-{{ session.configSnapshot.inhaleHoldTime || 0 }}-{{ session.configSnapshot.exhaleTime }}-{{ session.configSnapshot.exhaleHoldTime || 0 }}
+                  {{ session.configSnapshot.inhaleTime }}-{{ session.configSnapshot.inhaleHoldTime || 0 }}-{{
+                    session.configSnapshot.exhaleTime
+                  }}-{{ session.configSnapshot.exhaleHoldTime || 0 }}
                 </div>
               </div>
               <span
@@ -163,9 +179,22 @@
 
     <!-- Empty State -->
     <div v-if="sessions.length === 0" class="card-solid animate-fade-in text-center py-12">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      <div
+        class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-8 h-8 text-white"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+          />
         </svg>
       </div>
       <p class="text-slate-400">No session data yet.</p>
@@ -252,13 +281,17 @@ async function loadStressData() {
 }
 
 // Watch for connection changes and load data
-watch(wearableConnected, (connected) => {
-  if (connected) {
-    loadStressData();
-  } else {
-    stressData.value = null;
-  }
-}, { immediate: true });
+watch(
+  wearableConnected,
+  (connected) => {
+    if (connected) {
+      loadStressData();
+    } else {
+      stressData.value = null;
+    }
+  },
+  { immediate: true }
+);
 
 function formatTime(seconds: number): string {
   if (!seconds) return '0s';

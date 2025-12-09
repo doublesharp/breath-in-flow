@@ -30,7 +30,7 @@ describe('HoldTimeChart.vue', () => {
       {
         id: 's1',
         configId: 'c1',
-        configSnapshot: {} as any,
+        configSnapshot: {} as Record<string, unknown>,
         status: 'COMPLETED',
         sets: [
           {
@@ -48,11 +48,11 @@ describe('HoldTimeChart.vue', () => {
         completedSets: 1,
         startedAt: new Date(),
         completedAt: new Date(),
-      } as any,
+} as unknown as Session,
       {
         id: 's2',
         configId: 'c2',
-        configSnapshot: {} as any,
+        configSnapshot: {} as Record<string, unknown>,
         status: 'COMPLETED',
         sets: [
           {
@@ -69,7 +69,7 @@ describe('HoldTimeChart.vue', () => {
         completedSets: 1,
         startedAt: new Date(),
         completedAt: new Date(),
-      } as any,
+} as unknown as Session,
     ]
 
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions } })
@@ -89,7 +89,7 @@ describe('HoldTimeChart.vue', () => {
       {
         id: 's1',
         configId: 'c1',
-        configSnapshot: {} as any,
+        configSnapshot: {} as Record<string, unknown>,
         status: 'COMPLETED',
         sets: [
           {
@@ -111,7 +111,7 @@ describe('HoldTimeChart.vue', () => {
         completedSets: 1,
         startedAt: new Date(),
         completedAt: new Date(),
-      } as any,
+} as unknown as Session,
     ]
 
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions } })
@@ -127,7 +127,7 @@ describe('HoldTimeChart.vue', () => {
       {
         id: 's1',
         configId: 'c1',
-        configSnapshot: {} as any,
+        configSnapshot: {} as Record<string, unknown>,
         status: 'COMPLETED',
         sets: [
           {
@@ -144,7 +144,7 @@ describe('HoldTimeChart.vue', () => {
         completedSets: 1,
         startedAt: new Date(),
         completedAt: new Date(),
-      } as any,
+} as unknown as Session,
     ]
 
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions } })
@@ -159,7 +159,7 @@ describe('HoldTimeChart.vue', () => {
       {
         id: 's1',
         configId: 'c1',
-        configSnapshot: {} as any,
+        configSnapshot: {} as Record<string, unknown>,
         status: 'COMPLETED',
         sets: [
           {
@@ -185,7 +185,7 @@ describe('HoldTimeChart.vue', () => {
         completedSets: 2,
         startedAt: new Date(),
         completedAt: new Date(),
-      } as any,
+} as unknown as Session,
     ]
 
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions } })
@@ -199,7 +199,7 @@ describe('HoldTimeChart.vue', () => {
       {
         id: 's1',
         configId: 'c1',
-        configSnapshot: {} as any,
+        configSnapshot: {} as Record<string, unknown>,
         status: 'COMPLETED',
         sets: [
           {
@@ -216,11 +216,11 @@ describe('HoldTimeChart.vue', () => {
         completedSets: 1,
         startedAt: new Date(),
         completedAt: new Date(),
-      } as any,
+} as unknown as Session,
       {
         id: 's2',
         configId: 'c1',
-        configSnapshot: {} as any,
+        configSnapshot: {} as Record<string, unknown>,
         status: 'COMPLETED',
         sets: [
           {
@@ -237,7 +237,7 @@ describe('HoldTimeChart.vue', () => {
         completedSets: 1,
         startedAt: new Date(),
         completedAt: new Date(),
-      } as any,
+} as unknown as Session,
     ]
 
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions } })
@@ -254,7 +254,7 @@ describe('HoldTimeChart.vue', () => {
       {
         id: 's1',
         configId: 'c1',
-        configSnapshot: {} as any,
+        configSnapshot: {} as Record<string, unknown>,
         status: 'COMPLETED',
         sets: [
           {
@@ -271,7 +271,7 @@ describe('HoldTimeChart.vue', () => {
         completedSets: 1,
         startedAt: new Date(),
         completedAt: new Date(),
-      } as any,
+} as unknown as Session,
     ]
 
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions } })

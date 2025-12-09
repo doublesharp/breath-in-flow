@@ -86,8 +86,8 @@ describe('SessionHistory.vue', () => {
     expect(document.body.innerHTML).toContain('Delete Session');
 
     // Confirm delete - find delete button in modal by text
-    const modalDelete = Array.from(document.body.querySelectorAll('button')).find((b) =>
-      b.textContent?.trim() === 'Delete'
+    const modalDelete = Array.from(document.body.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Delete'
     );
     if (modalDelete) {
       (modalDelete as HTMLButtonElement).click();
@@ -184,8 +184,8 @@ describe('SessionHistory.vue', () => {
     expect(document.body.innerHTML).toContain('Delete Session');
 
     // Find cancel button and click it
-    const modalCancel = Array.from(document.body.querySelectorAll('button')).find((b) =>
-      b.textContent?.trim() === 'Cancel'
+    const modalCancel = Array.from(document.body.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Cancel'
     );
     if (modalCancel) {
       (modalCancel as HTMLButtonElement).click();

@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GarminService } from '../../src/services/wearables/garmin';
-import type { StressDataPoint, HeartRateDataPoint, HRVDataPoint } from '../../src/services/wearables/types';
+import type {
+  StressDataPoint,
+  HeartRateDataPoint,
+  HRVDataPoint,
+} from '../../src/services/wearables/types';
 
 describe('GarminService', () => {
   let service: GarminService;
@@ -19,7 +23,7 @@ describe('GarminService', () => {
     });
 
     // Clear storage before each test
-    Object.keys(mockStorage).forEach(key => delete mockStorage[key]);
+    Object.keys(mockStorage).forEach((key) => delete mockStorage[key]);
 
     // Create fresh instance
     service = new GarminService();
@@ -27,7 +31,7 @@ describe('GarminService', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    Object.keys(mockStorage).forEach(key => delete mockStorage[key]);
+    Object.keys(mockStorage).forEach((key) => delete mockStorage[key]);
   });
 
   describe('connection management', () => {
@@ -353,7 +357,7 @@ describe('GarminService', () => {
   describe('mock mode', () => {
     it('should operate in mock mode by default', async () => {
       await service.connect();
-      
+
       // Mock mode is internal but we can verify by checking that data is generated
       const data = await service.getStressData(
         new Date('2024-01-15T10:00:00'),
@@ -369,14 +373,14 @@ describe('GarminService', () => {
     it('loads connection state from localStorage with valid data', () => {
       const validState = { connected: true, mockMode: true, lastSync: '2023-01-01T00:00:00.000Z' };
       mockStorage['garmin_connection'] = JSON.stringify(validState);
-      
+
       const newService = new GarminService();
       expect(newService.isConnected()).toBe(true);
     });
 
     it('handles invalid JSON in localStorage gracefully', () => {
       mockStorage['garmin_connection'] = '{invalid-json';
-      
+
       const newService = new GarminService();
       expect(newService.isConnected()).toBe(false); // Should default to false
     });
@@ -398,7 +402,8 @@ describe('GarminService', () => {
     it('returns empty arrays when connected but mockMode is false (simulating real API not implemented)', async () => {
       await service.connect();
       // Manually set mockMode to false to hit the "Real API call" branch which returns []
-      (service as unknown as { connectionData: { mockMode: boolean } }).connectionData.mockMode = false;
+      (service as unknown as { connectionData: { mockMode: boolean } }).connectionData.mockMode =
+        false;
 
       const start = new Date();
       const end = new Date(start.getTime() + 60000);
@@ -414,12 +419,12 @@ describe('GarminService', () => {
       const end = new Date(start.getTime() + 1000 * 60 * 5); // 5 min session
 
       const biometrics = await service.getSessionBiometrics(start, end);
-      
+
       // Check structure
       expect(biometrics.averages).toBeDefined();
       // Since mock data is random, we just check types
       if (biometrics.averages.preStress !== undefined) {
-          expect(typeof biometrics.averages.preStress).toBe('number');
+        expect(typeof biometrics.averages.preStress).toBe('number');
       }
     });
 
@@ -433,7 +438,7 @@ describe('GarminService', () => {
       const end = new Date(start.getTime() + 1000);
 
       const biometrics = await service.getSessionBiometrics(start, end);
-      
+
       expect(biometrics.averages.preStress).toBeUndefined();
       expect(biometrics.averages.stressReduction).toBeUndefined();
     });
@@ -447,7 +452,7 @@ describe('GarminService', () => {
       const data = await service.getStressData(start, end);
       expect(data.length).toBeGreaterThan(0);
     });
-    
+
     it('generates mock data without time modifiers (night time)', async () => {
       await service.connect();
       // Pick a time at night (e.g., 03:00 AM)
@@ -477,7 +482,7 @@ describe('GarminService singleton', () => {
 
   it('should export a singleton instance', async () => {
     const { garminService } = await import('../../src/services/wearables/garmin');
-    
+
     expect(garminService).toBeDefined();
     expect(typeof garminService.isConnected).toBe('function');
     expect(typeof garminService.connect).toBe('function');

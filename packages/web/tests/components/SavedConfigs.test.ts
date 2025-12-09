@@ -9,7 +9,7 @@ describe('SavedConfigs.vue', () => {
     }));
 
     const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as any);
+    const wrapper = mount(SavedConfigs as unknown);
     expect(wrapper.text()).toContain('No saved configurations yet.');
   });
 
@@ -40,7 +40,7 @@ describe('SavedConfigs.vue', () => {
     }));
 
     const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as any);
+    const wrapper = mount(SavedConfigs as unknown);
     const text = wrapper.text();
 
     expect(text).toContain('Test Config');
@@ -52,7 +52,18 @@ describe('SavedConfigs.vue', () => {
 
   it('calls deleteConfig when confirmed', async () => {
     const deleteMock = vi.fn();
-    const config = { id: 'c1', name: 'ToDelete', createdAt: new Date(), inhaleTime: 2, exhaleTime:2, inhaleHoldTime:0, exhaleHoldTime:0, repetitions:1, targetSets:0, extendedHoldEnabled:false };
+    const config = {
+      id: 'c1',
+      name: 'ToDelete',
+      createdAt: new Date(),
+      inhaleTime: 2,
+      exhaleTime: 2,
+      inhaleHoldTime: 0,
+      exhaleHoldTime: 0,
+      repetitions: 1,
+      targetSets: 0,
+      extendedHoldEnabled: false,
+    };
 
     vi.resetModules();
     vi.doMock('../../src/composables', () => ({
@@ -60,10 +71,10 @@ describe('SavedConfigs.vue', () => {
     }));
 
     // Mock confirm to return true
-    (global as any).confirm = () => true;
+    (global as unknown as Record<string, unknown>).confirm = () => true;
 
     const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as any);
+    const wrapper = mount(SavedConfigs as unknown);
 
     // Click delete button
     const btn = wrapper.find('button[title="Delete configuration"]');
@@ -74,7 +85,18 @@ describe('SavedConfigs.vue', () => {
 
   it('does not call deleteConfig when user cancels', async () => {
     const deleteMock = vi.fn();
-    const config = { id: 'c1', name: 'ToDelete', createdAt: new Date(), inhaleTime: 2, exhaleTime: 2, inhaleHoldTime: 0, exhaleHoldTime: 0, repetitions: 1, targetSets: 0, extendedHoldEnabled: false };
+    const config = {
+      id: 'c1',
+      name: 'ToDelete',
+      createdAt: new Date(),
+      inhaleTime: 2,
+      exhaleTime: 2,
+      inhaleHoldTime: 0,
+      exhaleHoldTime: 0,
+      repetitions: 1,
+      targetSets: 0,
+      extendedHoldEnabled: false,
+    };
 
     vi.resetModules();
     vi.doMock('../../src/composables', () => ({
@@ -82,10 +104,10 @@ describe('SavedConfigs.vue', () => {
     }));
 
     // Mock confirm to return false
-    (global as any).confirm = () => false;
+    (global as unknown as Record<string, unknown>).confirm = () => false;
 
     const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as any);
+    const wrapper = mount(SavedConfigs as unknown);
 
     // Click delete button
     const btn = wrapper.find('button[title="Delete configuration"]');
@@ -101,8 +123,8 @@ describe('SavedConfigs.vue', () => {
     }));
 
     const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as any);
-    
+    const wrapper = mount(SavedConfigs as unknown);
+
     // Should display preset section
     expect(wrapper.text()).toContain('Quick Presets');
     // Should have preset buttons for built-in presets
@@ -131,7 +153,7 @@ describe('SavedConfigs.vue', () => {
     }));
 
     const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as any);
+    const wrapper = mount(SavedConfigs as unknown);
 
     const loadButtons = wrapper.findAll('button').filter((b) => b.text().includes('Load'));
     if (loadButtons.length > 0) {
@@ -148,12 +170,12 @@ describe('SavedConfigs.vue', () => {
     }));
 
     const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as any);
+    const wrapper = mount(SavedConfigs as unknown);
 
     // Find preset buttons (they should be the ones in "Quick Presets" section)
     const buttons = wrapper.findAll('button');
     const presetButton = buttons.find((b) => b.text().includes('Hold'));
-    
+
     if (presetButton) {
       await presetButton.trigger('click');
       const emitted = wrapper.emitted('loadConfig');

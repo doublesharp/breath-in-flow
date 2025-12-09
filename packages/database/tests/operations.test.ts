@@ -2,16 +2,16 @@ import { describe, it, expect } from 'vitest';
 
 /**
  * Database operations tests
- * 
+ *
  * Note: These tests are placeholders. The database package provides Prisma
  * operations for persistent storage, but the main application currently uses
  * localStorage for client-side storage (see packages/web/src/composables/useStorage.ts).
- * 
+ *
  * Full database tests would require:
  * 1. Setting up a test database
  * 2. Running migrations
  * 3. Cleaning up after each test
- * 
+ *
  * The operations module exports functions for:
  * - Config management (CRUD)
  * - Session management (CRUD + set/hold tracking)
@@ -22,7 +22,7 @@ describe('Database Operations', () => {
   describe('Module exports', () => {
     it('should export config operations', async () => {
       const operations = await import('../src/operations');
-      
+
       expect(operations.createConfig).toBeDefined();
       expect(operations.getConfig).toBeDefined();
       expect(operations.getAllConfigs).toBeDefined();
@@ -34,7 +34,7 @@ describe('Database Operations', () => {
 
     it('should export session operations', async () => {
       const operations = await import('../src/operations');
-      
+
       expect(operations.createSession).toBeDefined();
       expect(operations.getSession).toBeDefined();
       expect(operations.getAllSessions).toBeDefined();
@@ -47,7 +47,7 @@ describe('Database Operations', () => {
 
     it('should export set and hold operations', async () => {
       const operations = await import('../src/operations');
-      
+
       expect(operations.createSet).toBeDefined();
       expect(operations.updateSet).toBeDefined();
       expect(operations.completeSet).toBeDefined();
@@ -56,7 +56,7 @@ describe('Database Operations', () => {
 
     it('should export stats operations', async () => {
       const operations = await import('../src/operations');
-      
+
       expect(operations.getSessionStats).toBeDefined();
       expect(operations.getConfigStats).toBeDefined();
     });

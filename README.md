@@ -44,6 +44,7 @@ Breathing exercises are a simple yet powerful tool for:
 ### Preset Techniques
 
 Built-in templates for popular breathing methods:
+
 - Box Breathing (4-4-4-4)
 - 4-7-8 Relaxation
 - Wim Hof Method
@@ -53,6 +54,7 @@ Built-in templates for popular breathing methods:
 ### Works Everywhere
 
 Available on:
+
 - **Desktop**: macOS, Windows, Linux
 - **Mobile**: iOS, Android
 - **Web**: Any modern browser

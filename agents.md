@@ -138,10 +138,12 @@ breath-in-flow/
 ## Clinical Insights
 
 ### Altitude Adaptations
+
 Standard 4-7-8 breathing (15 seconds without fresh air) can be stressful at altitude.
 Adapted patterns like 3-5-7 reduce oxygen debt while maintaining parasympathetic activation.
 
 ### Key Principles
+
 - Long exhale activates parasympathetic response (calming)
 - Breath volume matters as much as timing
 - Individual patterns should be customized based on:

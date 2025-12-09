@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useStorage, resetStorageForTesting } from '../../src/composables/useStorage';
-import type { BreathingConfig, CreateBreathingConfig, SessionSet, ExtendedHoldRecord } from '@breath-in-flow/shared';
+import type {
+  BreathingConfig,
+  CreateBreathingConfig,
+  SessionSet,
+  ExtendedHoldRecord,
+} from '@breath-in-flow/shared';
 import { DEFAULT_BREATHING_CONFIG } from '@breath-in-flow/shared';
 
 // Mock localStorage
@@ -25,7 +30,9 @@ Object.defineProperty(global, 'localStorage', {
 });
 
 // Helper function to create a valid test config input
-function createTestConfigInput(overrides: Partial<CreateBreathingConfig> = {}): CreateBreathingConfig {
+function createTestConfigInput(
+  overrides: Partial<CreateBreathingConfig> = {}
+): CreateBreathingConfig {
   return {
     name: 'Test Config',
     inhaleTime: 4,
@@ -85,7 +92,7 @@ describe('useStorage', () => {
 
       const created = storage.createConfig(input);
       expect(created.id).toBeDefined();
-      
+
       const retrieved = storage.getConfig(created.id!);
 
       expect(retrieved).toBeDefined();
@@ -103,7 +110,7 @@ describe('useStorage', () => {
     it('should get all configs', () => {
       const storage = useStorage();
       const baseInput = createTestConfigInput();
-      
+
       // Get initial count
       const initialCount = storage.getAllConfigs().length;
 
@@ -122,7 +129,7 @@ describe('useStorage', () => {
 
       const created = storage.createConfig(input);
       expect(created.id).toBeDefined();
-      
+
       const updated = storage.updateConfig(created.id!, { name: 'Updated Name', inhaleTime: 6 });
 
       expect(updated).toBeDefined();
@@ -144,7 +151,7 @@ describe('useStorage', () => {
 
       const created = storage.createConfig(input);
       expect(created.id).toBeDefined();
-      
+
       const deleted = storage.deleteConfig(created.id!);
 
       expect(deleted).toBe(true);
@@ -184,7 +191,7 @@ describe('useStorage', () => {
       const storage = useStorage();
       const created = storage.createSession(testConfig);
       expect(created.id).toBeDefined();
-      
+
       const retrieved = storage.getSession(created.id!);
 
       expect(retrieved).toBeDefined();
@@ -223,7 +230,7 @@ describe('useStorage', () => {
       const storage = useStorage();
       const created = storage.createSession(testConfig);
       expect(created.id).toBeDefined();
-      
+
       const updated = storage.updateSession(created.id!, { status: 'COMPLETED' });
 
       expect(updated).toBeDefined();
@@ -283,7 +290,7 @@ describe('useStorage', () => {
       const storage = useStorage();
       const session = storage.createSession(testConfig);
       expect(session.id).toBeDefined();
-      
+
       const completed = storage.completeSession(session.id!);
 
       expect(completed).toBeDefined();
@@ -295,7 +302,7 @@ describe('useStorage', () => {
       const storage = useStorage();
       const session = storage.createSession(testConfig);
       expect(session.id).toBeDefined();
-      
+
       const cancelled = storage.cancelSession(session.id!);
 
       expect(cancelled).toBeDefined();
@@ -307,7 +314,7 @@ describe('useStorage', () => {
       const storage = useStorage();
       const session = storage.createSession(testConfig);
       expect(session.id).toBeDefined();
-      
+
       const deleted = storage.deleteSession(session.id!);
 
       expect(deleted).toBe(true);
@@ -332,15 +339,17 @@ describe('useStorage', () => {
     it('should calculate stats from completed sessions', () => {
       const storage = useStorage();
 
-      const config = storage.createConfig(createTestConfigInput({
-        name: 'Stats Test',
-        extendedHoldEnabled: true,
-      }));
+      const config = storage.createConfig(
+        createTestConfigInput({
+          name: 'Stats Test',
+          extendedHoldEnabled: true,
+        })
+      );
 
       // Create and complete a session with sets and holds
       const session = storage.createSession(config);
       expect(session.id).toBeDefined();
-      
+
       storage.addSetToSession(session.id!, {
         setNumber: 1,
         completedRepetitions: 5,
@@ -377,14 +386,16 @@ describe('useStorage', () => {
     it('should calculate stats with no extended holds', () => {
       const storage = useStorage();
 
-      const config = storage.createConfig(createTestConfigInput({
-        name: 'No Holds Stats',
-        extendedHoldEnabled: false,
-      }));
+      const config = storage.createConfig(
+        createTestConfigInput({
+          name: 'No Holds Stats',
+          extendedHoldEnabled: false,
+        })
+      );
 
       const session = storage.createSession(config);
       expect(session.id).toBeDefined();
-      
+
       storage.addSetToSession(session.id!, {
         setNumber: 1,
         completedRepetitions: 5,
@@ -404,7 +415,7 @@ describe('useStorage', () => {
     it('should return zeros for empty stats', () => {
       // The stats computed property reads from sessions
       const storage = useStorage();
-      
+
       expect(storage.stats.value).toBeDefined();
       expect(typeof storage.stats.value.totalSessions).toBe('number');
       expect(typeof storage.stats.value.avgHoldTime).toBe('number');
@@ -463,24 +474,26 @@ describe('useStorage', () => {
 
       const storage = useStorage();
       // createConfig should handle storage errors gracefully and not throw
-      expect(() => storage.createConfig({
-        name: 'Test Config',
-        inhaleTime: 4,
-        inhaleHoldTime: 0,
-        exhaleTime: 4,
-        exhaleHoldTime: 0,
-        repetitions: 3,
-        targetSets: 0,
-        extendedHoldEnabled: false,
-        extendedHoldType: 'EXHALE',
-        extendedHoldMode: 'TOLERANCE',
-        extendedHoldDuration: 30,
-        secondExtendedHoldEnabled: false,
-        secondExtendedHoldType: 'INHALE',
-        secondExtendedHoldMode: 'TIMED',
-        secondExtendedHoldDuration: 30,
-        soundEnabled: false,
-      })).not.toThrow();
+      expect(() =>
+        storage.createConfig({
+          name: 'Test Config',
+          inhaleTime: 4,
+          inhaleHoldTime: 0,
+          exhaleTime: 4,
+          exhaleHoldTime: 0,
+          repetitions: 3,
+          targetSets: 0,
+          extendedHoldEnabled: false,
+          extendedHoldType: 'EXHALE',
+          extendedHoldMode: 'TOLERANCE',
+          extendedHoldDuration: 30,
+          secondExtendedHoldEnabled: false,
+          secondExtendedHoldType: 'INHALE',
+          secondExtendedHoldMode: 'TIMED',
+          secondExtendedHoldDuration: 30,
+          soundEnabled: false,
+        })
+      ).not.toThrow();
     });
 
     it('handles invalid JSON in localStorage', () => {
@@ -538,7 +551,9 @@ describe('useStorage', () => {
       vi.resetModules();
 
       const mockLS = {
-        getItem: vi.fn(() => { throw new Error('fail'); }),
+        getItem: vi.fn(() => {
+          throw new Error('fail');
+        }),
         setItem: vi.fn(),
         removeItem: vi.fn(),
         clear: vi.fn(),
@@ -609,7 +624,9 @@ describe('useStorage', () => {
     it('handles setItem throwing when saving', () => {
       const mockLS = {
         getItem: vi.fn(() => null),
-        setItem: vi.fn(() => { throw new Error('quota exceeded'); }),
+        setItem: vi.fn(() => {
+          throw new Error('quota exceeded');
+        }),
         removeItem: vi.fn(),
         clear: vi.fn(),
       };
@@ -759,18 +776,20 @@ describe('useStorage', () => {
         getItem: vi.fn((key: string) => {
           if (key === 'breath-in-flow-sessions') {
             // Simulate stored session with null completedAt
-            return JSON.stringify([{
-              id: 's1',
-              configId: 'c1',
-              configSnapshot: {},
-              status: 'IN_PROGRESS',
-              sets: [],
-              targetSets: 1,
-              completedSets: 0,
-              startedAt: new Date().toISOString(),
-              completedAt: null, // null date field
-              notes: '',
-            }]);
+            return JSON.stringify([
+              {
+                id: 's1',
+                configId: 'c1',
+                configSnapshot: {},
+                status: 'IN_PROGRESS',
+                sets: [],
+                targetSets: 1,
+                completedSets: 0,
+                startedAt: new Date().toISOString(),
+                completedAt: null, // null date field
+                notes: '',
+              },
+            ]);
           }
           return null;
         }),
@@ -807,60 +826,57 @@ describe('useStorage', () => {
 
     it('should set and get sound theme', () => {
       const storage = useStorage();
-      
+
       storage.setSoundTheme('water');
       expect(storage.getSoundTheme()).toBe('water');
-      
+
       storage.setSoundTheme('wind');
       expect(storage.getSoundTheme()).toBe('wind');
-      
+
       storage.setSoundTheme('subtle');
       expect(storage.getSoundTheme()).toBe('subtle');
-      
+
       storage.setSoundTheme('chimes');
       expect(storage.getSoundTheme()).toBe('chimes');
-      
+
       storage.setSoundTheme('default');
       expect(storage.getSoundTheme()).toBe('default');
     });
 
     it('should persist sound theme to localStorage', () => {
       const storage = useStorage();
-      
+
       storage.setSoundTheme('water');
-      
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'breath-in-flow-sound-theme',
-        'water'
-      );
+
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('breath-in-flow-sound-theme', 'water');
     });
 
     it('should load sound theme from localStorage on init', async () => {
       localStorageMock.setItem('breath-in-flow-sound-theme', 'chimes');
-      
+
       // Re-import to trigger loadFromStorage
       vi.resetModules();
       const mod = await import('../../src/composables/useStorage');
       const storage = mod.useStorage();
-      
+
       expect(storage.getSoundTheme()).toBe('chimes');
     });
 
     it('should expose soundTheme as reactive ref', () => {
       const storage = useStorage();
-      
+
       expect(storage.soundTheme.value).toBe('default');
-      
+
       storage.setSoundTheme('wind');
       expect(storage.soundTheme.value).toBe('wind');
     });
 
     it('should reset sound theme on resetStorageForTesting', () => {
       const storage = useStorage();
-      
+
       storage.setSoundTheme('chimes');
       expect(storage.getSoundTheme()).toBe('chimes');
-      
+
       resetStorageForTesting();
       expect(storage.getSoundTheme()).toBe('default');
     });
@@ -868,10 +884,14 @@ describe('useStorage', () => {
     it('should handle all valid theme values', () => {
       const storage = useStorage();
       const themes: Array<'default' | 'water' | 'wind' | 'subtle' | 'chimes'> = [
-        'default', 'water', 'wind', 'subtle', 'chimes'
+        'default',
+        'water',
+        'wind',
+        'subtle',
+        'chimes',
       ];
-      
-      themes.forEach(theme => {
+
+      themes.forEach((theme) => {
         storage.setSoundTheme(theme);
         expect(storage.getSoundTheme()).toBe(theme);
       });

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { soundService } from '../../src/services/soundService';
 
 class FakeOscillator {
-  public frequency = { 
+  public frequency = {
     setValueAtTime: vi.fn(),
     exponentialRampToValueAtTime: vi.fn(),
     linearRampToValueAtTime: vi.fn(),
@@ -12,9 +12,17 @@ class FakeOscillator {
   public started = false;
   public stopped = false;
   constructor(public ctx: FakeAudioContext) {}
-  connect(node: unknown) { this.connects.push(node); }
-  start(t?: number) { this.started = true; this.ctx._started.push(this); }
-  stop(t?: number) { this.stopped = true; this.ctx._stopped.push(this); }
+  connect(node: unknown) {
+    this.connects.push(node);
+  }
+  start(t?: number) {
+    this.started = true;
+    this.ctx._started.push(this);
+  }
+  stop(t?: number) {
+    this.stopped = true;
+    this.ctx._stopped.push(this);
+  }
 }
 
 class FakeGain {
@@ -25,7 +33,9 @@ class FakeGain {
   };
   public connects: unknown[] = [];
   constructor(public ctx: FakeAudioContext) {}
-  connect(node: unknown) { this.connects.push(node); }
+  connect(node: unknown) {
+    this.connects.push(node);
+  }
 }
 
 class FakeBufferSource {
@@ -34,9 +44,15 @@ class FakeBufferSource {
   public started = false;
   public stopped = false;
   constructor(public ctx: FakeAudioContext) {}
-  connect(node: unknown) { this.connects.push(node); }
-  start(t?: number) { this.started = true; }
-  stop(t?: number) { this.stopped = true; }
+  connect(node: unknown) {
+    this.connects.push(node);
+  }
+  start(t?: number) {
+    this.started = true;
+  }
+  stop(t?: number) {
+    this.stopped = true;
+  }
 }
 
 class FakeFilter {
@@ -50,7 +66,9 @@ class FakeFilter {
   };
   public connects: unknown[] = [];
   constructor(public ctx: FakeAudioContext) {}
-  connect(node: unknown) { this.connects.push(node); }
+  connect(node: unknown) {
+    this.connects.push(node);
+  }
 }
 
 class FakeAudioContext {
@@ -146,7 +164,11 @@ class FakeAudioContext {
     } as unknown as DynamicsCompressorNode;
   }
 
-  resume() { this.resumed = true; this.state = 'running'; return Promise.resolve(); }
+  resume() {
+    this.resumed = true;
+    this.state = 'running';
+    return Promise.resolve();
+  }
 }
 
 describe('soundService', () => {
@@ -192,8 +214,6 @@ describe('soundService', () => {
     expect(ctx._filters.length).toBeGreaterThanOrEqual(1); // for reverb lowpass
   });
 
-
-
   describe('SoundService Branches - Context & Audio Control', () => {
     it('resumes audio context when enabled if it was suspended', async () => {
       // Mock AudioContext
@@ -202,16 +222,24 @@ describe('soundService', () => {
         state: 'suspended',
         resume: resumeMock,
         close: vi.fn(),
-        createGain: () => ({ connect: vi.fn(), gain: { value: 0, linearRampToValueAtTime: vi.fn() } }),
-        createOscillator: () => ({ connect: vi.fn(), start: vi.fn(), stop: vi.fn(), frequency: { value: 0, exponentialRampToValueAtTime: vi.fn() } }),
+        createGain: () => ({
+          connect: vi.fn(),
+          gain: { value: 0, linearRampToValueAtTime: vi.fn() },
+        }),
+        createOscillator: () => ({
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+          frequency: { value: 0, exponentialRampToValueAtTime: vi.fn() },
+        }),
         currentTime: 0,
       };
-      
+
       // Inject mock context
       (soundService as unknown as { audioContext: unknown }).audioContext = mockContext;
-      
+
       soundService.setEnabled(true);
-      
+
       expect(resumeMock).toHaveBeenCalled();
     });
 
@@ -220,7 +248,7 @@ describe('soundService', () => {
       // playClick should return early without doing anything
       // We verify it doesn't throw and the service is disabled
       expect(() => soundService.playClick()).not.toThrow();
-      
+
       // Verify enabled flag is off
       soundService.setEnabled(true);
       soundService.setEnabled(false);
@@ -231,7 +259,7 @@ describe('soundService', () => {
     it('does not play sound if audio context is missing', () => {
       soundService.setEnabled(true);
       (soundService as unknown as { audioContext: null }).audioContext = null;
-      
+
       // Method should handle null audioContext gracefully
       expect(() => soundService.playClick()).not.toThrow();
     });
@@ -245,7 +273,10 @@ describe('soundService', () => {
     });
 
     it('setEnabled resumes suspended AudioContext', () => {
-      const resume = vi.fn(() => { (fakeCtx as unknown as { state: string }).state = 'running'; });
+      const resume = vi.fn(() => {
+        (fakeCtx as unknown as { state: string }).state = 'running';
+        return Promise.resolve();
+      });
       const fakeCtx: unknown = {
         state: 'suspended',
         resume,
@@ -279,18 +310,25 @@ describe('soundService', () => {
       expect(() => soundService.playClick()).not.toThrow();
     });
 
-
-
     it('playClick resumes suspended context before playing', () => {
-      const resume = vi.fn();
+      const resume = vi.fn(() => Promise.resolve());
       const start = vi.fn();
       const stop = vi.fn();
       const setValueAtTime = vi.fn();
       const linearRampToValueAtTime = vi.fn();
       const exponentialRampToValueAtTime = vi.fn();
 
-      const fakeOsc = () => ({ start, stop, connect: vi.fn(), frequency: { setValueAtTime, exponentialRampToValueAtTime, linearRampToValueAtTime }, type: '' });
-      const fakeGain = () => ({ connect: vi.fn(), gain: { setValueAtTime, linearRampToValueAtTime, exponentialRampToValueAtTime } });
+      const fakeOsc = () => ({
+        start,
+        stop,
+        connect: vi.fn(),
+        frequency: { setValueAtTime, exponentialRampToValueAtTime, linearRampToValueAtTime },
+        type: '',
+      });
+      const fakeGain = () => ({
+        connect: vi.fn(),
+        gain: { setValueAtTime, linearRampToValueAtTime, exponentialRampToValueAtTime },
+      });
 
       const fakeCtx: unknown = {
         state: 'suspended',
@@ -300,7 +338,11 @@ describe('soundService', () => {
         createGain: fakeGain,
         createWaveShaper: () => ({ connect: vi.fn(), curve: null }),
         createDelay: () => ({ connect: vi.fn(), delayTime: { setValueAtTime: vi.fn() } }),
-        createBiquadFilter: () => ({ connect: vi.fn(), frequency: { setValueAtTime: vi.fn() }, Q: { setValueAtTime: vi.fn() } }),
+        createBiquadFilter: () => ({
+          connect: vi.fn(),
+          frequency: { setValueAtTime: vi.fn() },
+          Q: { setValueAtTime: vi.fn() },
+        }),
         destination: {},
       };
 
@@ -314,19 +356,25 @@ describe('soundService', () => {
       expect(resume).toHaveBeenCalled();
     });
 
-
-
     it('resumes audio context when playing click if context is suspended', async () => {
       const resume = vi.fn(() => Promise.resolve());
       const fakeOsc = vi.fn(() => ({
         connect: vi.fn(),
         start: vi.fn(),
         stop: vi.fn(),
-        frequency: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() },
+        frequency: {
+          setValueAtTime: vi.fn(),
+          exponentialRampToValueAtTime: vi.fn(),
+          linearRampToValueAtTime: vi.fn(),
+        },
       }));
       const fakeGain = vi.fn(() => ({
         connect: vi.fn(),
-        gain: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+        gain: {
+          setValueAtTime: vi.fn(),
+          linearRampToValueAtTime: vi.fn(),
+          exponentialRampToValueAtTime: vi.fn(),
+        },
       }));
 
       const fakeCtx = {
@@ -337,7 +385,11 @@ describe('soundService', () => {
         createGain: fakeGain,
         createWaveShaper: () => ({ connect: vi.fn(), curve: null }),
         createDelay: () => ({ connect: vi.fn(), delayTime: { setValueAtTime: vi.fn() } }),
-        createBiquadFilter: () => ({ connect: vi.fn(), frequency: { setValueAtTime: vi.fn() }, Q: { setValueAtTime: vi.fn() } }),
+        createBiquadFilter: () => ({
+          connect: vi.fn(),
+          frequency: { setValueAtTime: vi.fn() },
+          Q: { setValueAtTime: vi.fn() },
+        }),
         destination: {},
       };
 
@@ -355,7 +407,8 @@ describe('soundService', () => {
   describe('Sound Themes', () => {
     beforeEach(() => {
       FakeAudioContext.instances = [];
-      (global as unknown as Record<string, unknown>).AudioContext = FakeAudioContext as unknown as typeof AudioContext;
+      (global as unknown as Record<string, unknown>).AudioContext =
+        FakeAudioContext as unknown as typeof AudioContext;
       (soundService as unknown as { audioContext: null }).audioContext = null;
       soundService.setEnabled(true);
     });
@@ -435,21 +488,12 @@ describe('soundService', () => {
       expect(ctx._filters.length).toBeGreaterThanOrEqual(1); // for reverb lowpass
     });
 
-
-
-
-
-
-
-
-
-
-
     it('should not play sounds when disabled regardless of theme', () => {
       FakeAudioContext.instances = [];
-      (global as unknown as Record<string, unknown>).AudioContext = FakeAudioContext as unknown as typeof AudioContext;
+      (global as unknown as Record<string, unknown>).AudioContext =
+        FakeAudioContext as unknown as typeof AudioContext;
       (soundService as unknown as { audioContext: null }).audioContext = null;
-      
+
       soundService.setEnabled(false);
       soundService.setTheme('water');
       soundService.playClick();

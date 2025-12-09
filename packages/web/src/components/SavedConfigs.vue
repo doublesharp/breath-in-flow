@@ -27,9 +27,22 @@
       </div>
 
       <div v-if="configs.length === 0" class="text-center py-12 glass rounded-xl">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+        <div
+          class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-8 h-8 text-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+            />
           </svg>
         </div>
         <p class="text-slate-400">No saved configurations yet.</p>
@@ -45,9 +58,7 @@
           <div class="flex items-start justify-between">
             <div class="flex-1">
               <div class="font-semibold text-white text-lg">{{ config.name }}</div>
-              <div class="text-sm text-slate-400 mt-1">
-                Created {{ formatDate(config.createdAt) }}
-              </div>
+              <div class="text-sm text-slate-400 mt-1">Created {{ formatDate(config.createdAt) }}</div>
             </div>
             <div class="flex items-center gap-3">
               <button @click="$emit('loadConfig', config)" class="btn-primary">
@@ -74,12 +85,7 @@
                 class="w-10 h-10 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all flex items-center justify-center"
                 title="Delete configuration"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path
                     fill-rule="evenodd"
                     d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
@@ -120,13 +126,9 @@
 
           <!-- Extended Hold Info -->
           <div v-if="config.extendedHoldEnabled" class="mt-4 flex flex-wrap gap-2">
-            <span
-              class="px-3 py-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg text-sm border border-indigo-500/30"
-            >
+            <span class="px-3 py-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg text-sm border border-indigo-500/30">
               Extended {{ config.extendedHoldType }} Hold ({{
-                config.extendedHoldMode === 'TIMED'
-                  ? config.extendedHoldDuration + 's'
-                  : 'Tolerance'
+                config.extendedHoldMode === 'TIMED' ? config.extendedHoldDuration + 's' : 'Tolerance'
               }})
             </span>
             <span
@@ -187,12 +189,7 @@
                 viewBox="0 0 24 24"
                 stroke="currentColor"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M5 10l7-7m0 0l7 7m-7-7v18"
-                />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
               </svg>
               {{ preset.inhaleTime }}s in
             </span>
@@ -204,12 +201,7 @@
                 viewBox="0 0 24 24"
                 stroke="currentColor"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
-                />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
               {{ preset.exhaleTime }}s out
             </span>

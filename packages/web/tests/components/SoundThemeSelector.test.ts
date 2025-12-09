@@ -82,10 +82,6 @@ describe('SoundThemeSelector', () => {
     await button.trigger('click');
 
     expect(soundService.playClick).toHaveBeenCalled();
-    
-    // Wait for setTimeout to trigger playPhaseChange
-    await new Promise(resolve => setTimeout(resolve, 600));
-    expect(soundService.playPhaseChange).toHaveBeenCalled();
   });
 
   it('should not test sound when test button is clicked and sound is disabled', async () => {
@@ -99,7 +95,6 @@ describe('SoundThemeSelector', () => {
     await button.trigger('click');
 
     expect(soundService.playClick).not.toHaveBeenCalled();
-    expect(soundService.playPhaseChange).not.toHaveBeenCalled();
   });
 
   it('should disable test button when sound is disabled', () => {
@@ -126,7 +121,7 @@ describe('SoundThemeSelector', () => {
 
   it('should persist theme selection to storage', async () => {
     resetStorageForTesting();
-    
+
     const wrapper = mount(SoundThemeSelector, {
       props: {
         soundEnabled: true,

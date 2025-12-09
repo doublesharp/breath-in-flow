@@ -62,16 +62,7 @@ import {
 } from 'chart.js';
 import type { StressDataPoint } from '../../services/wearables/types';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const props = withDefaults(
   defineProps<{

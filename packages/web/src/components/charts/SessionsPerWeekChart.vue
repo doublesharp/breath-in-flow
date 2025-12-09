@@ -119,9 +119,7 @@ const chartData = computed<ChartData<'bar'> | null>(() => {
         label: 'Sessions',
         data: weeklyData.value.map((w) => w.count),
         backgroundColor: weeklyData.value.map((_, i) =>
-          i === weeklyData.value.length - 1
-            ? 'rgba(16, 185, 129, 0.8)'
-            : 'rgba(59, 130, 246, 0.6)'
+          i === weeklyData.value.length - 1 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(59, 130, 246, 0.6)'
         ),
         borderColor: weeklyData.value.map((_, i) =>
           i === weeklyData.value.length - 1 ? 'rgb(16, 185, 129)' : 'rgb(59, 130, 246)'

@@ -4,7 +4,7 @@ import {
   BreathingPhase,
   TimerState,
   INITIAL_TIMER_STATE,
-  PHASE_INFO,
+  getPhaseInfo,
   formatTime,
 } from '@breath-in-flow/shared';
 import { soundService } from '../services/soundService';
@@ -38,7 +38,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
   const isFirstExtendedHold = computed(() => state.value.isFirstExtendedHold);
   const isRecoveryBreath = computed(() => state.value.isRecoveryBreath);
 
-  const phaseInfo = computed(() => PHASE_INFO[state.value.phase]);
+  const phaseInfo = computed(() => getPhaseInfo(state.value.phase, config));
   const displayTime = computed(() => formatTime(state.value.currentTime));
   const progress = computed(() => {
     if (state.value.totalPhaseTime === 0) return 0;
@@ -107,10 +107,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     // Calculate time remaining based on actual elapsed time (no drift)
     const elapsed = (Date.now() - phaseStartTime) / 1000;
     const newTime = Math.max(0, state.value.totalPhaseTime - elapsed);
-    
+
     // Use floor to determine when we've crossed into a new second
     const currentSecond = Math.floor(newTime);
-    
+
     // Play click when we cross a second boundary (skip the starting second and only play for countdown)
     // For a 4s phase: starts at 4, plays when crossing to 3, 2, 1, 0
     if (currentSecond !== lastSoundedSecond) {
@@ -181,10 +181,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
         // Usually this callback is used to record the session.
         // If it was timed, we pass the target duration. If tolerance, we pass 0 or maybe the elapsed?
         // The original code passed config.extendedHoldDuration.
-        
+
         const isFirst = state.value.isFirstExtendedHold;
         const duration = isFirst ? config.extendedHoldDuration : config.secondExtendedHoldDuration;
-        
+
         options.onExtendedHoldEnd?.(duration, holdType, state.value);
         handlePostExtendedHold();
         break;
@@ -251,16 +251,16 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
         // But if we just finished EXTENDED_INHALE_HOLD, we are full. If we need to EXHALE hold, we need to EXHALE first.
         // For now, let's assume standard Wim Hof: Exhale Hold -> Inhale -> Inhale Hold.
         // If the pattern is Inhale Hold -> Exhale -> Exhale Hold, we need an Exhale transition.
-        
+
         // If we are full (INHALE_HOLD) and need to be empty (EXHALE_HOLD), we need to exhale.
         const justFinishedInhaleHold = state.value.phase === 'EXTENDED_INHALE_HOLD';
         if (justFinishedInhaleHold && config.secondExtendedHoldType === 'EXHALE') {
-           // We need a recovery exhale?
-           // For simplicity, let's just start the hold. The user can exhale quickly.
-           // Or we could add isRecoveryExhale logic.
-           startExtendedHold();
+          // We need a recovery exhale?
+          // For simplicity, let's just start the hold. The user can exhale quickly.
+          // Or we could add isRecoveryExhale logic.
+          startExtendedHold();
         } else {
-           startExtendedHold();
+          startExtendedHold();
         }
       }
       return;
@@ -295,13 +295,13 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       currentTime: duration,
       totalPhaseTime: duration,
     };
-    
+
     // Set timestamp AFTER updating state
     phaseStartTime = Date.now();
     // Initialize lastSoundedSecond to prevent immediate tick
     lastSoundedSecond = Math.floor(duration);
     transitionPending = false;
-    
+
     options.onPhaseChange?.(newPhase, state.value);
   }
 
@@ -311,19 +311,18 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
     soundService.setEnabled(config.soundEnabled);
 
+    // Initialize state
     state.value = {
       ...INITIAL_TIMER_STATE,
-      phase: 'INHALE',
-      currentTime: config.inhaleTime,
-      totalPhaseTime: config.inhaleTime,
       currentRepetition: 1,
       currentSet: 1,
       isRunning: true,
       isPaused: false,
     };
 
-    options.onPhaseChange?.('INHALE', state.value);
-    
+    // Use setPhase to properly initialize phaseStartTime
+    setPhase('INHALE', config.inhaleTime);
+
     // Start interval - it will handle all ticks automatically
     startInterval();
   }
@@ -343,10 +342,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
     state.value = { ...state.value, isPaused: false, phase: pausedPhase.value };
     pausedPhase.value = null;
-    
+
     // Adjust phase start time to account for pause duration
     phaseStartTime = Date.now() - (state.value.totalPhaseTime - pausedTimeRemaining) * 1000;
-    
+
     startInterval();
     options.onPhaseChange?.(state.value.phase, state.value);
   }

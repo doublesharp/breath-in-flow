@@ -7,20 +7,29 @@
           <div class="modal-content">
             <div class="modal-header">
               <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="w-6 h-6 text-red-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
                 </svg>
               </div>
               <h3 class="text-lg font-semibold text-white mt-3">Delete Session</h3>
-              <p class="text-slate-400 text-sm mt-1">Are you sure you want to delete this session? This action cannot be undone.</p>
+              <p class="text-slate-400 text-sm mt-1">
+                Are you sure you want to delete this session? This action cannot be undone.
+              </p>
             </div>
             <div class="modal-actions">
-              <button @click="cancelDelete" class="btn-secondary">
-                Cancel
-              </button>
-              <button @click="confirmDelete" class="btn-danger">
-                Delete
-              </button>
+              <button @click="cancelDelete" class="btn-secondary">Cancel</button>
+              <button @click="confirmDelete" class="btn-danger">Delete</button>
             </div>
           </div>
         </div>
@@ -34,20 +43,29 @@
           <div class="modal-content">
             <div class="modal-header">
               <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="w-6 h-6 text-red-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
                 </svg>
               </div>
               <h3 class="text-lg font-semibold text-white mt-3">Delete All Sessions</h3>
-              <p class="text-slate-400 text-sm mt-1">Are you sure you want to delete all {{ sessions.length }} sessions? This action cannot be undone.</p>
+              <p class="text-slate-400 text-sm mt-1">
+                Are you sure you want to delete all {{ sessions.length }} sessions? This action cannot be undone.
+              </p>
             </div>
             <div class="modal-actions">
-              <button @click="cancelDeleteAll" class="btn-secondary">
-                Cancel
-              </button>
-              <button @click="confirmDeleteAll" class="btn-danger">
-                Delete All
-              </button>
+              <button @click="cancelDeleteAll" class="btn-secondary">Cancel</button>
+              <button @click="confirmDeleteAll" class="btn-danger">Delete All</button>
             </div>
           </div>
         </div>
@@ -115,9 +133,22 @@
 
       <!-- Session List -->
       <div v-if="sessions.length === 0" class="text-center py-12 glass rounded-xl">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        <div
+          class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-8 h-8 text-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+            />
           </svg>
         </div>
         <p class="text-slate-400">No sessions recorded yet.</p>
@@ -157,12 +188,7 @@
                 class="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all flex items-center justify-center"
                 title="Delete session"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-4 w-4"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path
                     fill-rule="evenodd"
                     d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
@@ -306,7 +332,9 @@ function confirmDeleteAll() {
 
 .modal-enter-active .modal-content,
 .modal-leave-active .modal-content {
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
 }
 
 .modal-enter-from,
