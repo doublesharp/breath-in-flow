@@ -1,5 +1,45 @@
 <template>
   <div class="space-y-6">
+    <!-- Delete Confirmation Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showDeleteConfirmation"
+        class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        @click.self="showDeleteConfirmation = false"
+      >
+        <div class="card-solid max-w-md w-full animate-scale-in">
+          <div class="flex items-start gap-4">
+            <div class="p-3 rounded-xl bg-red-500/10">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="w-6 h-6 text-red-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-xl font-bold text-white mb-2">Delete Configuration?</h3>
+              <p class="text-slate-300 mb-6">
+                Are you sure you want to delete "{{ configToDelete?.name }}"? This action cannot be undone.
+              </p>
+              <div class="flex gap-3 justify-end">
+                <button @click="showDeleteConfirmation = false" class="btn-secondary">Cancel</button>
+                <button @click="confirmDelete" class="btn-danger">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <div class="card-solid animate-fade-in opacity-0">
       <div class="flex items-center gap-3 mb-6">
         <div
@@ -230,7 +270,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useStorage } from '../composables';
 import { DEFAULT_BREATHING_CONFIG, type BreathingConfig } from '@breath-in-flow/shared';
 
@@ -240,6 +280,9 @@ defineEmits<{
 
 const storage = useStorage();
 const configs = computed(() => storage.getAllConfigs());
+
+const showDeleteConfirmation = ref(false);
+const configToDelete = ref<BreathingConfig | null>(null);
 
 interface Preset extends BreathingConfig {
   description: string;
@@ -257,6 +300,8 @@ const presets: Preset[] = [
     repetitions: 4,
     extendedHoldEnabled: false,
     targetSets: 0,
+    soundEnabled: true,
+    soundTheme: 'subtle',
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -269,6 +314,8 @@ const presets: Preset[] = [
     repetitions: 4,
     extendedHoldEnabled: false,
     targetSets: 0,
+    soundEnabled: true,
+    soundTheme: 'chimes',
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -287,6 +334,8 @@ const presets: Preset[] = [
     secondExtendedHoldMode: 'TIMED',
     secondExtendedHoldDuration: 15,
     targetSets: 3,
+    soundEnabled: true,
+    soundTheme: 'wind',
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -299,6 +348,8 @@ const presets: Preset[] = [
     repetitions: 6,
     extendedHoldEnabled: false,
     targetSets: 0,
+    soundEnabled: true,
+    soundTheme: 'water',
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -311,6 +362,8 @@ const presets: Preset[] = [
     repetitions: 6,
     extendedHoldEnabled: false,
     targetSets: 0,
+    soundEnabled: true,
+    soundTheme: 'wood',
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -323,6 +376,8 @@ const presets: Preset[] = [
     repetitions: 8,
     extendedHoldEnabled: false,
     targetSets: 1,
+    soundEnabled: true,
+    soundTheme: 'water',
   },
 ];
 
@@ -332,8 +387,18 @@ function formatDate(date?: Date): string {
 }
 
 function deleteConfig(id: string) {
-  if (confirm('Are you sure you want to delete this configuration?')) {
-    storage.deleteConfig(id);
+  const config = storage.getAllConfigs().find((c) => c.id === id);
+  if (config) {
+    configToDelete.value = config;
+    showDeleteConfirmation.value = true;
   }
+}
+
+function confirmDelete() {
+  if (configToDelete.value?.id) {
+    storage.deleteConfig(configToDelete.value.id);
+  }
+  showDeleteConfirmation.value = false;
+  configToDelete.value = null;
 }
 </script>

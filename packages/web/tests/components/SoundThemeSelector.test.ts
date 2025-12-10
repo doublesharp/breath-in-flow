@@ -40,14 +40,14 @@ describe('SoundThemeSelector', () => {
 
     const options = wrapper.findAll('option');
     expect(options.length).toBe(5);
-    expect(options[0].attributes('value')).toBe('default');
+    expect(options[0].attributes('value')).toBe('wood');
     expect(options[1].attributes('value')).toBe('water');
     expect(options[2].attributes('value')).toBe('wind');
     expect(options[3].attributes('value')).toBe('subtle');
     expect(options[4].attributes('value')).toBe('chimes');
   });
 
-  it('should start with default theme selected', () => {
+  it('should start with wood theme selected', () => {
     const wrapper = mount(SoundThemeSelector, {
       props: {
         soundEnabled: true,
@@ -55,7 +55,7 @@ describe('SoundThemeSelector', () => {
     });
 
     const select = wrapper.find('select');
-    expect(select.element.value).toBe('default');
+    expect(select.element.value).toBe('wood');
   });
 
   it('should change theme when selection changes', async () => {

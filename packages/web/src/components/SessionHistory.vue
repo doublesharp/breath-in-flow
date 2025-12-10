@@ -36,7 +36,7 @@
       </Transition>
     </Teleport>
 
-    <!-- Delete All Confirmation Modal -->
+    <!-- Clear All Confirmation Modal -->
     <Teleport to="body">
       <Transition name="modal">
         <div v-if="showDeleteAllModal" class="modal-overlay" @click.self="cancelDeleteAll">
@@ -58,14 +58,14 @@
                   />
                 </svg>
               </div>
-              <h3 class="text-lg font-semibold text-white mt-3">Delete All Sessions</h3>
+              <h3 class="text-lg font-semibold text-white mt-3">Clear All Sessions</h3>
               <p class="text-slate-400 text-sm mt-1">
-                Are you sure you want to delete all {{ sessions.length }} sessions? This action cannot be undone.
+                Are you sure you want to clear all {{ sessions.length }} sessions? This action cannot be undone.
               </p>
             </div>
             <div class="modal-actions">
               <button @click="cancelDeleteAll" class="btn-secondary">Cancel</button>
-              <button @click="confirmDeleteAll" class="btn-danger">Delete All</button>
+              <button @click="confirmDeleteAll" class="btn-danger">Clear All</button>
             </div>
           </div>
         </div>
@@ -103,7 +103,7 @@
           @click="deleteAllSessions"
           class="px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all font-medium text-sm border border-red-500/20 hover:border-red-500/30"
         >
-          Delete All
+          Clear All
         </button>
       </div>
 

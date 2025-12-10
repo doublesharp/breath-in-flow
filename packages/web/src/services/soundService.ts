@@ -3,7 +3,7 @@ import type { SoundTheme } from '@breath-in-flow/shared';
 class SoundService {
   private audioContext: AudioContext | null = null;
   private isEnabled = false;
-  private currentTheme: SoundTheme = 'default';
+  private currentTheme: SoundTheme = 'wood';
 
   private createReverb(ctx: AudioContext) {
     const input = ctx.createGain();
@@ -87,11 +87,14 @@ class SoundService {
 
     // Ensure context is running (important for Electron)
     if (ctx.state === 'suspended') {
-      ctx.resume().then(() => {
-        this.playTick(ctx, 1.0);
-      }).catch(() => {
-        // Silently fail - audio context couldn't resume
-      });
+      ctx
+        .resume()
+        .then(() => {
+          this.playTick(ctx, 1.0);
+        })
+        .catch(() => {
+          // Silently fail - audio context couldn't resume
+        });
     } else {
       this.playTick(ctx, 1.0);
     }
@@ -111,6 +114,7 @@ class SoundService {
         return this.subtleTick(ctx, accent);
       case 'chimes':
         return this.chimesTick(ctx, accent);
+      case 'wood':
       default:
         return this.defaultTick(ctx, accent);
     }

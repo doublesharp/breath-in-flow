@@ -24,7 +24,7 @@
               />
             </svg>
           </div>
-          <span>Breath in Flow</span>
+          <span>{{ AppConfig.appName }}</span>
         </h1>
 
         <div class="flex items-center gap-2">
@@ -150,7 +150,7 @@
       <transition name="fade" mode="out-in">
         <BreathingPractice v-if="activeTab === 'practice'" key="practice" />
         <SessionHistory v-else-if="activeTab === 'history'" key="history" />
-        <SavedConfigs v-else-if="activeTab === 'configs'" key="configs" @load-config="loadConfig" />
+        <PracticePresets v-else-if="activeTab === 'configs'" key="configs" @load-config="loadConfig" />
         <AnalyticsDashboard v-else-if="activeTab === 'analytics'" key="analytics" />
       </transition>
     </main>
@@ -240,10 +240,10 @@
 import { ref, provide } from 'vue';
 import BreathingPractice from './components/BreathingPractice.vue';
 import SessionHistory from './components/SessionHistory.vue';
-import SavedConfigs from './components/SavedConfigs.vue';
+import PracticePresets from './components/PracticePresets.vue';
 import AnalyticsDashboard from './components/AnalyticsDashboard.vue';
 import HelpSystem from './components/HelpSystem.vue';
-import type { BreathingConfig } from '@breath-in-flow/shared';
+import { AppConfig, type BreathingConfig } from '@breath-in-flow/shared';
 
 const activeTab = ref<'practice' | 'history' | 'configs' | 'analytics'>('practice');
 const selectedConfig = ref<BreathingConfig | null>(null);

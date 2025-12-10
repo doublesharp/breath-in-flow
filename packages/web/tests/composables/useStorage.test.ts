@@ -50,6 +50,7 @@ function createTestConfigInput(
     secondExtendedHoldMode: 'TIMED',
     secondExtendedHoldDuration: 30,
     soundEnabled: false,
+    soundTheme: 'wood',
     ...overrides,
   };
 }
@@ -492,6 +493,7 @@ describe('useStorage', () => {
           secondExtendedHoldMode: 'TIMED',
           secondExtendedHoldDuration: 30,
           soundEnabled: false,
+          soundTheme: 'wood',
         })
       ).not.toThrow();
     });
@@ -839,8 +841,8 @@ describe('useStorage', () => {
       storage.setSoundTheme('chimes');
       expect(storage.getSoundTheme()).toBe('chimes');
 
-      storage.setSoundTheme('default');
-      expect(storage.getSoundTheme()).toBe('default');
+      storage.setSoundTheme('wood');
+      expect(storage.getSoundTheme()).toBe('wood');
     });
 
     it('should persist sound theme to localStorage', () => {
@@ -883,8 +885,8 @@ describe('useStorage', () => {
 
     it('should handle all valid theme values', () => {
       const storage = useStorage();
-      const themes: Array<'default' | 'water' | 'wind' | 'subtle' | 'chimes'> = [
-        'default',
+      const themes: Array<'wood' | 'water' | 'wind' | 'subtle' | 'chimes'> = [
+        'wood',
         'water',
         'wind',
         'subtle',

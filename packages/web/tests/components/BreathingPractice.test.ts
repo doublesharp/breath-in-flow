@@ -27,6 +27,7 @@ vi.mock('@/composables/useStorage', () => ({
     getSoundTheme: vi.fn(() => 'default'),
     setSoundTheme: vi.fn(),
     soundTheme: ref('default'),
+    getAllConfigs: vi.fn(() => []),
   }),
 }));
 
@@ -89,25 +90,25 @@ describe('BreathingPractice.vue', () => {
           selectedConfig: ref({}),
           clearSelectedConfig: vi.fn(),
         },
-        stubs: ['BreathingVisualizer'],
       },
+      attachTo: document.body, // Required for Teleport support
     });
+    
+    await nextTick(); // Wait for component to render with isRunning = false
 
-    // Open the configuration panel by finding the button that contains the configure header
-    const allButtons = wrapper.findAll('button');
-    const toggleConfig = allButtons.find((b) =>
-      b.text().toLowerCase().includes('configure practice')
-    );
-    expect(toggleConfig).toBeTruthy();
-    if (toggleConfig) await toggleConfig.trigger('click');
+    // Open the configuration modal directly
+    wrapper.vm.showConfigModal = true;
+    await nextTick(); // Wait for modal DOM to render
 
-    // Find the audio toggle button and click it
-    const audioToggle = wrapper.find('.toggle');
-    expect(audioToggle.exists()).toBe(true);
-    await audioToggle.trigger('click');
+    // Modal and toggles are in document.body (Teleported)
+    const audioToggle = document.body.querySelector('.toggle') as HTMLElement;
+    expect(audioToggle).toBeTruthy();
+    audioToggle.click();
+    await nextTick();
 
     // After clicking, the toggle should have the enabled class
-    expect(audioToggle.classes()).toContain('toggle-enabled');
+    expect(audioToggle.classList.contains('toggle-enabled')).toBe(true);
+    wrapper.unmount();
   });
 
   it('calls pause when Pause button clicked', async () => {
@@ -123,7 +124,7 @@ describe('BreathingPractice.vue', () => {
       attachTo: document.body,
     });
     await nextTick();
-    
+
     // The pause button is in the fullscreen modal teleported to body
     const pauseBtn = document.querySelector('button.btn-warning') as HTMLButtonElement;
     expect(pauseBtn).toBeTruthy();
@@ -132,76 +133,7 @@ describe('BreathingPractice.vue', () => {
       await nextTick();
     }
     expect(pauseMock).toHaveBeenCalled();
-    
-    wrapper.unmount();
-  });
 
-  it.skip('shows Release Hold UI during EXTENDED_INHALE_HOLD', async () => {
-    const wrapper = mount(BreathingPractice, { 
-      global: { 
-        stubs: ['BreathingVisualizer'],
-        provide: {
-          selectedConfig: ref({}),
-          clearSelectedConfig: vi.fn(),
-        },
-      },
-      attachTo: document.body,
-    });
-
-    // Trigger running state and extended hold phase
-    if (wrapper.vm.timer) {
-      wrapper.vm.timer.isRunning.value = true;
-      await nextTick(); // Let watch update isRunning
-      await nextTick(); // Let DOM update
-      
-      wrapper.vm.timer.phase.value = 'EXTENDED_INHALE_HOLD';
-      wrapper.vm.timer.extendedHoldElapsed.value = 3.4;
-      await nextTick(); // Let DOM update with new phase
-    }
-
-    // Check in teleported modal on document.body
-    const hasReleaseHold = document.body.textContent?.includes('Release Hold') || false;
-    expect(hasReleaseHold).toBeTruthy();
-    
-    wrapper.unmount();
-  });
-
-  it.skip('confirmExit shows confirmation and stops session on confirm', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    
-    const wrapper = mount(BreathingPractice, {
-      global: {
-        provide: {
-          selectedConfig: ref({}),
-          clearSelectedConfig: vi.fn(),
-        },
-        stubs: ['BreathingVisualizer'],
-      },
-    });
-    
-    // Set up a session - access the currentSession ref and set its value
-    const vm = wrapper.vm as Record<string, unknown>;
-    const sessionRef = vm.currentSession as { value: unknown };
-    sessionRef.value = { id: 1 };
-    await nextTick();
-    
-    const stopSpy = vi.spyOn(wrapper.vm.timer, 'stop');
-    
-    // Call confirmExit to show modal
-    (vm.confirmExit as () => void)();
-    await nextTick();
-    
-    // Check that modal is shown
-    expect((vm.showStopConfirmation as { value: boolean }).value).toBe(true);
-    
-    // Confirm the stop action
-    (vm.confirmStopSession as () => void)();
-    await nextTick();
-    
-    expect(stopSpy).toHaveBeenCalled();
-    expect(cancelSessionMock).toHaveBeenCalled();
-    expect((vm.showStopConfirmation as { value: boolean }).value).toBe(false);
-    
     wrapper.unmount();
   });
 
@@ -215,18 +147,18 @@ describe('BreathingPractice.vue', () => {
         stubs: ['BreathingVisualizer'],
       },
     });
-    
+
     // Set up a session
     if (wrapper.vm.currentSession) {
       wrapper.vm.currentSession = { id: 1 } as Record<string, unknown>;
     }
-    
+
     const stopSpy = vi.spyOn(wrapper.vm.timer, 'stop');
-    
+
     // Call confirmExit to show modal
     ((wrapper.vm as Record<string, unknown>).confirmExit as () => void)();
     await nextTick();
-    
+
     // The modal should be shown - we just verify stop wasn't called yet
     expect(stopSpy).not.toHaveBeenCalled();
     expect(cancelSessionMock).not.toHaveBeenCalled();
@@ -252,19 +184,31 @@ describe('BreathingPractice.vue', () => {
   });
 
   it('Save Preset flow warns when name present', async () => {
-    const wrapper = shallowMount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+    isRunning.value = false;
+    const wrapper = mount(BreathingPractice, { 
+      attachTo: document.body,
+    });
+    
+    await nextTick(); // Wait for component to render
 
-    // Open config and set a name
-    wrapper.vm.showConfig = true;
+    // Open config modal directly
+    wrapper.vm.showConfigModal = true;
+    await nextTick(); // Wait for modal DOM to render
+    
+    // Set the config name
     wrapper.vm.configName = 'My Preset';
-
     await nextTick();
 
-    const saveBtn = wrapper.find('button.btn-secondary');
-    expect(saveBtn.exists()).toBeTruthy();
-    await saveBtn.trigger('click');
+    // Find Save Preset button in document.body (Teleported)
+    const buttons = document.body.querySelectorAll('button');
+    const saveBtn = Array.from(buttons).find(b => b.textContent?.includes('Save Preset')) as HTMLElement;
+    expect(saveBtn).toBeTruthy();
+    saveBtn.click();
+    await nextTick();
 
-    expect(alertSpy).toHaveBeenCalled();
+    // Should show success notification modal in document.body
+    expect(document.body.textContent).toContain('Configuration saved');
+    wrapper.unmount();
   });
 
   it('renders the component and has required UI elements', () => {
@@ -288,19 +232,26 @@ describe('BreathingPractice.vue', () => {
     expect(wrapper.vm).toBeDefined();
   });
 
-  it('saveConfig shows alert when configuration name is empty', async () => {
-    const wrapper = shallowMount(BreathingPractice, {
+  it('saveConfig shows modal when configuration name is empty', async () => {
+    const wrapper = mount(BreathingPractice, {
       global: {
         stubs: ['BreathingVisualizer'],
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
       },
+      attachTo: document.body,
     });
 
-    // In setup components, methods are exposed but state isn't directly accessible
-    // Call saveConfig which should trigger alert since default configName is empty
+    // Call saveConfig which should show modal since default configName is empty
     if (typeof (wrapper.vm as unknown as Record<string, unknown>).saveConfig === 'function') {
-      await ((wrapper.vm as unknown as Record<string, unknown>).saveConfig as () => Promise<void>)();
-      expect(alertSpy).toHaveBeenCalledWith('Please enter a configuration name');
+      await (
+        (wrapper.vm as unknown as Record<string, unknown>).saveConfig as () => Promise<void>
+      )();
+      await nextTick();
+      
+      // Check that error modal is visible in document.body (Teleport)
+      expect(document.body.textContent).toContain('Please enter a configuration name');
     }
+    wrapper.unmount();
   });
 
   it('component renders and mounts without errors', () => {

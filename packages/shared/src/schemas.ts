@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Sound Theme Schemas
 // ============================================
 
-export const SoundThemeSchema = z.enum(['default', 'water', 'wind', 'subtle', 'chimes']);
+export const SoundThemeSchema = z.enum(['wood', 'water', 'wind', 'subtle', 'chimes']);
 
 export type SoundTheme = z.infer<typeof SoundThemeSchema>;
 
@@ -62,7 +62,8 @@ export const BreathingConfigSchema = z.object({
   targetSets: z.number().min(0).max(20).default(0), // 0 means record as you go
 
   // Audio configuration
-  soundEnabled: z.boolean().default(false),
+  soundEnabled: z.boolean().default(true),
+  soundTheme: SoundThemeSchema.default('wood'),
 
   // Metadata
   createdAt: z.date().optional(),
@@ -171,7 +172,8 @@ export const DEFAULT_BREATHING_CONFIG: CreateBreathingConfig = {
   secondExtendedHoldMode: 'TIMED',
   secondExtendedHoldDuration: 15,
   targetSets: 0,
-  soundEnabled: false,
+  soundEnabled: true,
+  soundTheme: 'wood',
 };
 
 export const INITIAL_TIMER_STATE: TimerState = {
@@ -200,7 +202,7 @@ export interface PhaseInfo {
 
 function getBreathInstruction(duration: number, type: 'inhale' | 'exhale'): string {
   const action = type === 'inhale' ? 'Breathe in' : 'Breathe out';
-  
+
   if (duration <= 2) {
     return `${action} quickly`;
   } else if (duration <= 4) {
@@ -213,7 +215,10 @@ function getBreathInstruction(duration: number, type: 'inhale' | 'exhale'): stri
 }
 
 export function getPhaseInfo(phase: BreathingPhase, config?: BreathingConfig): PhaseInfo {
-  const baseInfo: Record<BreathingPhase, Omit<PhaseInfo, 'instruction'> & { instruction: string | ((c: BreathingConfig) => string) }> = {
+  const baseInfo: Record<
+    BreathingPhase,
+    Omit<PhaseInfo, 'instruction'> & { instruction: string | ((c: BreathingConfig) => string) }
+  > = {
     IDLE: {
       phase: 'IDLE',
       label: 'Ready',
@@ -277,9 +282,12 @@ export function getPhaseInfo(phase: BreathingPhase, config?: BreathingConfig): P
   };
 
   const info = baseInfo[phase];
-  const instruction = typeof info.instruction === 'function' 
-    ? (config ? info.instruction(config) : 'Breathe')
-    : info.instruction;
+  const instruction =
+    typeof info.instruction === 'function'
+      ? config
+        ? info.instruction(config)
+        : 'Breathe'
+      : info.instruction;
 
   return {
     phase: info.phase,

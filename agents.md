@@ -185,6 +185,7 @@ Adapted patterns like 3-5-7 reduce oxygen debt while maintaining parasympathetic
 - Ensure coverage of edge cases
 - Don't create lots of testing files, try to use the same ones with good names
 - Don't pass results through `tail` and `head` for tests and coverage
+- Run tests after each change to check for regressions or other issues
 
 ## Breathing Cycle State Machine
 

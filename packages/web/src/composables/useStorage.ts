@@ -13,7 +13,7 @@ import { DEFAULT_BREATHING_CONFIG } from '@breath-in-flow/shared';
 // Simple in-memory storage for now (can be replaced with IndexedDB or API calls)
 const configs = ref<BreathingConfig[]>([]);
 const sessions = ref<Session[]>([]);
-const soundTheme = ref<SoundTheme>('default');
+const soundTheme = ref<SoundTheme>('wood');
 
 // Load from localStorage on init
 function loadFromStorage() {
@@ -65,7 +65,7 @@ loadFromStorage();
 export function resetStorageForTesting() {
   configs.value = [];
   sessions.value = [];
-  soundTheme.value = 'default';
+  soundTheme.value = 'wood';
 }
 
 export function useStorage() {

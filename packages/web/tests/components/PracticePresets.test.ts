@@ -1,15 +1,16 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi } from 'vitest';
+import { nextTick } from 'vue';
 
-describe('SavedConfigs.vue', () => {
+describe('PracticePresets.vue', () => {
   it('shows empty state when no configs', async () => {
     vi.resetModules();
     vi.doMock('../../src/composables', () => ({
       useStorage: () => ({ getAllConfigs: () => [] }),
     }));
 
-    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as unknown);
+    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
+    const wrapper = mount(PracticePresets as unknown);
     expect(wrapper.text()).toContain('No saved configurations yet.');
   });
 
@@ -39,8 +40,8 @@ describe('SavedConfigs.vue', () => {
       useStorage: () => ({ getAllConfigs: () => [config] }),
     }));
 
-    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as unknown);
+    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
+    const wrapper = mount(PracticePresets as unknown);
     const text = wrapper.text();
 
     expect(text).toContain('Test Config');
@@ -70,17 +71,27 @@ describe('SavedConfigs.vue', () => {
       useStorage: () => ({ getAllConfigs: () => [config], deleteConfig: deleteMock }),
     }));
 
-    // Mock confirm to return true
-    (global as unknown as Record<string, unknown>).confirm = () => true;
-
-    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as unknown);
+    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
+    const wrapper = mount(PracticePresets as unknown, {
+      attachTo: document.body,
+    });
 
     // Click delete button
     const btn = wrapper.find('button[title="Delete configuration"]');
     await btn.trigger('click');
+    await nextTick();
+
+    // Modal should be visible in document.body (Teleport)
+    expect(document.body.textContent).toContain('Are you sure you want to delete');
+
+    // Click confirm delete button in modal
+    const confirmBtn = document.body.querySelector('button.btn-danger') as HTMLElement;
+    expect(confirmBtn).toBeTruthy();
+    confirmBtn.click();
+    await nextTick();
 
     expect(deleteMock).toHaveBeenCalledWith('c1');
+    wrapper.unmount();
   });
 
   it('does not call deleteConfig when user cancels', async () => {
@@ -106,8 +117,8 @@ describe('SavedConfigs.vue', () => {
     // Mock confirm to return false
     (global as unknown as Record<string, unknown>).confirm = () => false;
 
-    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as unknown);
+    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
+    const wrapper = mount(PracticePresets as unknown);
 
     // Click delete button
     const btn = wrapper.find('button[title="Delete configuration"]');
@@ -122,8 +133,8 @@ describe('SavedConfigs.vue', () => {
       useStorage: () => ({ getAllConfigs: () => [] }),
     }));
 
-    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as unknown);
+    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
+    const wrapper = mount(PracticePresets as unknown);
 
     // Should display preset section
     expect(wrapper.text()).toContain('Quick Presets');
@@ -152,8 +163,8 @@ describe('SavedConfigs.vue', () => {
       useStorage: () => ({ getAllConfigs: () => [mockConfig], deleteConfig: vi.fn() }),
     }));
 
-    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as unknown);
+    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
+    const wrapper = mount(PracticePresets as unknown);
 
     const loadButtons = wrapper.findAll('button').filter((b) => b.text().includes('Load'));
     if (loadButtons.length > 0) {
@@ -169,8 +180,8 @@ describe('SavedConfigs.vue', () => {
       useStorage: () => ({ getAllConfigs: () => [] }),
     }));
 
-    const { default: SavedConfigs } = await import('../../src/components/SavedConfigs.vue');
-    const wrapper = mount(SavedConfigs as unknown);
+    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
+    const wrapper = mount(PracticePresets as unknown);
 
     // Find preset buttons (they should be the ones in "Quick Presets" section)
     const buttons = wrapper.findAll('button');

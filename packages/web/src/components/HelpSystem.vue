@@ -41,7 +41,7 @@
                 </div>
                 <div>
                   <h2 class="text-xl font-bold text-white">Help & Guide</h2>
-                  <p class="text-sm text-slate-400">Learn how to use Breath in Flow</p>
+                  <p class="text-sm text-slate-400">Learn how to use {{AppConfig.appName}}</p>
                 </div>
               </div>
               <button @click="showHelp = false" class="help-close-btn">
@@ -484,7 +484,7 @@
 
             <!-- Footer -->
             <div class="help-footer">
-              <p class="text-slate-500 text-sm">Breath in Flow • Breathing exercises for everyone</p>
+              <p class="text-slate-500 text-sm">{{ AppConfig.appName }} • Breathing exercises for everyone</p>
             </div>
           </div>
         </div>
@@ -494,6 +494,7 @@
 </template>
 
 <script setup lang="ts">
+import { AppConfig } from '@breath-in-flow/shared';
 import { ref, h } from 'vue';
 
 const showHelp = ref(false);

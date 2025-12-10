@@ -1,3 +1,8 @@
+// Configuration
+export {
+  AppConfig
+} from './config';
+
 // Schemas and types
 export {
   SoundThemeSchema,

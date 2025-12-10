@@ -8,7 +8,7 @@
         @change="onThemeChange"
         class="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
       >
-        <option value="default">🥁 Woodblock (Default)</option>
+        <option value="wood">🥁 Woodblock</option>
         <option value="water">💧 Water</option>
         <option value="wind">🌬️ Wind</option>
         <option value="subtle">✨ Subtle</option>
@@ -44,7 +44,7 @@ const props = defineProps<{
 }>();
 
 const storage = useStorage();
-const selectedTheme = ref<SoundTheme>('default');
+const selectedTheme = ref<SoundTheme>('wood');
 
 onMounted(() => {
   selectedTheme.value = storage.getSoundTheme();

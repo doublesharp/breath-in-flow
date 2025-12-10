@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import App from '../../src/App.vue';
+import { AppConfig, BreathingConfig } from '@breath-in-flow/shared';
 
 describe('App.vue', () => {
   it('renders header and navigation buttons', () => {
@@ -10,14 +11,14 @@ describe('App.vue', () => {
         stubs: {
           BreathingPractice: true,
           SessionHistory: true,
-          SavedConfigs: true,
+          PracticePresets: true,
           AnalyticsDashboard: true,
           HelpSystem: true,
         },
       },
     });
 
-    expect(wrapper.text()).toContain('Breath in Flow');
+    expect(wrapper.text()).toContain(AppConfig.appName);
 
     // Desktop nav buttons (rendered in header)
     expect(wrapper.findAll('button').some((b) => b.text().includes('Practice'))).toBeTruthy();
@@ -32,7 +33,7 @@ describe('App.vue', () => {
         stubs: {
           BreathingPractice: { template: '<div>Practice</div>' },
           SessionHistory: { template: '<div>History</div>' },
-          SavedConfigs: { template: '<div>Configs</div>' },
+          PracticePresets: { template: '<div>Configs</div>' },
           AnalyticsDashboard: { template: '<div>Analytics</div>' },
           HelpSystem: { template: '<div>Help</div>' },
         },
@@ -72,7 +73,7 @@ describe('App.vue', () => {
         stubs: {
           BreathingPractice: true,
           SessionHistory: true,
-          SavedConfigs: true,
+          PracticePresets: true,
           AnalyticsDashboard: true,
           HelpSystem: true,
         },
@@ -89,7 +90,7 @@ describe('App.vue', () => {
         stubs: {
           BreathingPractice: true,
           SessionHistory: true,
-          SavedConfigs: true,
+          PracticePresets: true,
           AnalyticsDashboard: true,
           HelpSystem: true,
         },
@@ -104,9 +105,17 @@ describe('App.vue', () => {
       exhaleTime: 6,
       exhaleHoldTime: 0,
       repetitions: 5,
+      extendedHoldEnabled: false,
       extendedHoldType: 'EXHALE',
+      extendedHoldMode: 'TOLERANCE',
       extendedHoldDuration: 10,
-      soundEnabled: false,
+      secondExtendedHoldEnabled: false,
+      secondExtendedHoldType: 'INHALE',
+      secondExtendedHoldMode: 'TIMED',
+      secondExtendedHoldDuration: 15,
+      targetSets: 0,
+      soundEnabled: true,
+      soundTheme: 'wood',
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -128,7 +137,7 @@ describe('App.vue', () => {
         stubs: {
           BreathingPractice: true,
           SessionHistory: true,
-          SavedConfigs: true,
+          PracticePresets: true,
           AnalyticsDashboard: true,
           HelpSystem: true,
         },
@@ -143,20 +152,29 @@ describe('App.vue', () => {
       exhaleTime: 6,
       exhaleHoldTime: 0,
       repetitions: 5,
+      extendedHoldEnabled: false,
       extendedHoldType: 'EXHALE',
+      extendedHoldMode: 'TOLERANCE',
       extendedHoldDuration: 10,
+      secondExtendedHoldEnabled: false,
+      secondExtendedHoldType: 'INHALE',
+      secondExtendedHoldMode: 'TIMED',
+      secondExtendedHoldDuration: 15,
+      targetSets: 0,
       soundEnabled: false,
+      soundTheme: 'wood',
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
     const vm = wrapper.vm as unknown as Record<string, unknown>;
     vm.selectedConfig = mockConfig;
-    
+
     await nextTick();
-    
+
     // Now clear the config
-    (vm.clearSelectedConfig as () => void)();    await nextTick();
+    (vm.clearSelectedConfig as () => void)();
+    await nextTick();
 
     // Should clear the selected config
     expect(vm.selectedConfig).toBeNull();

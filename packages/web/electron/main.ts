@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, screen } from 'electron';
 import { join } from 'path';
 
 // The built directory structure
@@ -25,12 +25,15 @@ const url = process.env.VITE_DEV_SERVER_URL;
 const indexHtml = join(process.env.DIST, 'index.html');
 
 async function createWindow() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { height } = primaryDisplay.workAreaSize;
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
+    width: 450,
+    height: Math.round(height * 0.67),
+    minWidth: 400,
     minHeight: 600,
-    title: 'Breathing Practice',
+    title: 'Breath In Flow',
     icon: join(process.env.VITE_PUBLIC!, 'icon.png'),
     webPreferences: {
       preload,
@@ -83,11 +86,9 @@ async function createWindow() {
 // initialization and is ready to create browser windows.
 app.whenReady().then(createWindow);
 
-// Quit when all windows are closed, except on macOS
+// Quit when all windows are closed
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  app.quit();
   mainWindow = null;
 });
 

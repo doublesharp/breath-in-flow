@@ -413,8 +413,8 @@ describe('soundService', () => {
       soundService.setEnabled(true);
     });
 
-    it('should default to "default" theme', () => {
-      expect(soundService.getTheme()).toBe('default');
+    it('should default to "wood" theme', () => {
+      expect(soundService.getTheme()).toBe('wood');
     });
 
     it('should change theme to "water"', () => {
@@ -437,12 +437,12 @@ describe('soundService', () => {
       expect(soundService.getTheme()).toBe('chimes');
     });
 
-    it('should play default click sound with default theme', () => {
-      soundService.setTheme('default');
+    it('should play "wood" click sound with wood theme', () => {
+      soundService.setTheme('wood');
       soundService.playClick();
 
       const ctx = FakeAudioContext.instances[0];
-      // Default theme creates 1 oscillator + reverb effects
+      // Wood theme creates 1 oscillator + reverb effects
       expect(ctx._oscillators.length).toBeGreaterThanOrEqual(1);
       expect(ctx._started.length).toBeGreaterThanOrEqual(1);
       expect(ctx._filters.length).toBeGreaterThanOrEqual(1); // reverb lowpass filter

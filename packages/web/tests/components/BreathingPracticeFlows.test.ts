@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ref } from 'vue';
+import { ref, nextTick } from 'vue';
 import BreathingPractice from '@/components/BreathingPractice.vue';
 
 const createSessionMock = vi.fn();
@@ -22,6 +22,7 @@ vi.mock('@/composables/useStorage', () => {
       getSoundTheme: vi.fn(() => 'default'),
       setSoundTheme: vi.fn(),
       soundTheme: ref('default'),
+      getAllConfigs: vi.fn(() => []),
     }),
   };
 });
@@ -62,15 +63,23 @@ vi.mock('@/composables/useBreathingTimer', () => {
         },
         endExtendedHold: () => {
           // simulate ending an extended hold (default values)
-          (opts.onExtendedHoldEnd as ((duration: number, type: string, data: Record<string, unknown>) => void) | undefined)?.(12, 'INHALE', {});
+          (
+            opts.onExtendedHoldEnd as
+              | ((duration: number, type: string, data: Record<string, unknown>) => void)
+              | undefined
+          )?.(12, 'INHALE', {});
         },
         // Test helpers that the test can call via wrapper.vm.timer
         triggerSetComplete: (setNum = 1) => {
-          (opts.onSetComplete as ((setNum: number, data: Record<string, unknown>) => void) | undefined)?.(setNum, {});
+          (
+            opts.onSetComplete as
+              | ((setNum: number, data: Record<string, unknown>) => void)
+              | undefined
+          )?.(setNum, {});
           phase.value = 'SET_COMPLETE';
         },
         triggerSessionComplete: () => {
-          (opts.onSessionComplete as ((data: Record<string, unknown>) => void) | undefined)?.({})
+          (opts.onSessionComplete as ((data: Record<string, unknown>) => void) | undefined)?.({});
           phase.value = 'SESSION_COMPLETE';
         },
       };
@@ -220,37 +229,54 @@ describe('BreathingPractice flows', () => {
   });
 
   it('save preset requires a name and then saves', async () => {
-    // mock alert
-    const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
     const wrapper = mount(BreathingPractice, {
       global: {
         provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
-        stubs: ['BreathingVisualizer'],
       },
+      attachTo: document.body,
     });
+    
+    await nextTick(); // Wait for component to render
 
-    // Open config panel
-    const toggleConfig = wrapper
-      .findAll('button')
-      .find((b) => b.text().toLowerCase().includes('configure practice'));
-    expect(toggleConfig).toBeTruthy();
-    if (toggleConfig) await toggleConfig.trigger('click');
+    // Open config modal directly
+    wrapper.vm.showConfigModal = true;
+    await nextTick(); // Wait for modal DOM to render
 
-    // Click Save Preset with empty name
-    const saveBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().toLowerCase().includes('save preset'));
+    // Modal should be visible in document.body (Teleported)
+    expect(document.body.textContent).toContain('Configure Practice');
+
+    // Find Save Preset button in document.body (Teleported)
+    let buttons = document.body.querySelectorAll('button');
+    let saveBtn = Array.from(buttons).find(b => b.textContent?.includes('Save Preset')) as HTMLElement;
     expect(saveBtn).toBeTruthy();
-    if (saveBtn) await saveBtn.trigger('click');
-    expect(alertMock).toHaveBeenCalled();
+    saveBtn.click();
+    await nextTick();
+    
+    // Check that error modal appears in document.body
+    expect(document.body.textContent).toContain('Please enter a configuration name');
 
-    // Fill in a name and click again
-    const nameInput = wrapper.find('input[type="text"]');
-    await nameInput.setValue('Morning');
-    if (saveBtn) await saveBtn.trigger('click');
+    // Close the error modal
+    const okBtn = document.body.querySelector('button.btn-primary') as HTMLElement;
+    expect(okBtn).toBeTruthy();
+    okBtn.click();
+    await nextTick();
+
+    // Fill in a name and click again - find input in document.body
+    const nameInput = document.body.querySelector('input[type="text"][placeholder*="name"]') as HTMLInputElement;
+    expect(nameInput).toBeTruthy();
+    nameInput.value = 'Morning';
+    nameInput.dispatchEvent(new Event('input'));
+    await nextTick();
+    
+    // Find save button again
+    buttons = document.body.querySelectorAll('button');
+    saveBtn = Array.from(buttons).find(b => b.textContent?.includes('Save Preset')) as HTMLElement;
+    expect(saveBtn).toBeTruthy();
+    saveBtn.click();
+    await nextTick();
+    
     expect(createConfigMock).toHaveBeenCalled();
-
-    alertMock.mockRestore();
+    wrapper.unmount();
   });
 
   it('does not add a set when onSetComplete is called and no current set data exists', async () => {
