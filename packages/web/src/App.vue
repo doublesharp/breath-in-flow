@@ -7,21 +7,16 @@
       <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
         <h1 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
           <div
-            class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/30"
+            class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-500 via-emerald-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/30"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              class="w-5 h-5 sm:w-6 sm:h-6 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+              class="w-5 h-5 sm:w-6 sm:h-6"
+              viewBox="0 0 100 100"
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              />
+              <circle cx="50" cy="50" r="45" fill="white" opacity="0.9"/>
+              <circle cx="50" cy="50" r="30" fill="white" opacity="0.3"/>
+              <circle cx="50" cy="50" r="15" fill="white" opacity="0.5"/>
             </svg>
           </div>
           <span>{{ AppConfig.appName }}</span>

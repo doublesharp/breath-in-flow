@@ -1,7 +1,7 @@
 {
   "name": "@breath-in-flow/web",
-  "version": "0.0.1",
-  "description": "A breathing practice app for guided breathwork sessions",
+  "version": "0.0.2",
+  "description": "A breathing exercise app for guided breathwork sessions",
   "author": {
     "name": "Breath in Flow",
     "email": "hello@breathinflow.app"
