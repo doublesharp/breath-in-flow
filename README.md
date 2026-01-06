@@ -47,7 +47,7 @@ Built-in templates for popular breathing methods:
 
 - Box Breathing (4-4-4-4)
 - 4-7-8 Relaxation
-- Wim Hof Method
+- Cyclic Hyperventilation Method
 - Coherent Breathing
 - And more...
 
@@ -119,7 +119,7 @@ Developed by Dr. Andrew Weil as a natural tranquilizer for the nervous system.
 - Inhale: 4 seconds → Hold: 7 seconds → Exhale: 8 seconds
 - **Best for**: Sleep, anxiety relief, deep relaxation
 
-### Wim Hof Method
+### Cyclic Hyperventilation Method
 
 Power breathing technique for energy and cold tolerance.
 

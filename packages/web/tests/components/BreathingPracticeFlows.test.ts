@@ -19,9 +19,9 @@ vi.mock('@/composables/useStorage', () => {
       completeSession: completeSessionMock,
       updateSession: updateSessionMock,
       createConfig: createConfigMock,
-      getSoundTheme: vi.fn(() => 'default'),
+      getSoundTheme: vi.fn(() => 'wood'),
       setSoundTheme: vi.fn(),
-      soundTheme: ref('default'),
+      soundTheme: ref('wood'),
       getAllConfigs: vi.fn(() => []),
     }),
   };
@@ -40,6 +40,7 @@ vi.mock('@/composables/useBreathingTimer', () => {
       const totalPhaseTime = ref(0);
       const breathingScale = ref(1);
       const extendedHoldElapsed = ref(0);
+      const isFirstExtendedHold = ref(true);
 
       return {
         phase,
@@ -51,6 +52,7 @@ vi.mock('@/composables/useBreathingTimer', () => {
         totalPhaseTime,
         breathingScale,
         extendedHoldElapsed,
+        isFirstExtendedHold,
         start: () => {
           isRunning.value = true;
         },
@@ -235,7 +237,7 @@ describe('BreathingPractice flows', () => {
       },
       attachTo: document.body,
     });
-    
+
     await nextTick(); // Wait for component to render
 
     // Open config modal directly
@@ -247,11 +249,13 @@ describe('BreathingPractice flows', () => {
 
     // Find Save Preset button in document.body (Teleported)
     let buttons = document.body.querySelectorAll('button');
-    let saveBtn = Array.from(buttons).find(b => b.textContent?.includes('Save Preset')) as HTMLElement;
+    let saveBtn = Array.from(buttons).find((b) =>
+      b.textContent?.includes('Save Preset')
+    ) as HTMLElement;
     expect(saveBtn).toBeTruthy();
     saveBtn.click();
     await nextTick();
-    
+
     // Check that error modal appears in document.body
     expect(document.body.textContent).toContain('Please enter a configuration name');
 
@@ -262,19 +266,23 @@ describe('BreathingPractice flows', () => {
     await nextTick();
 
     // Fill in a name and click again - find input in document.body
-    const nameInput = document.body.querySelector('input[type="text"][placeholder*="name"]') as HTMLInputElement;
+    const nameInput = document.body.querySelector(
+      'input[type="text"][placeholder*="name"]'
+    ) as HTMLInputElement;
     expect(nameInput).toBeTruthy();
     nameInput.value = 'Morning';
     nameInput.dispatchEvent(new Event('input'));
     await nextTick();
-    
+
     // Find save button again
     buttons = document.body.querySelectorAll('button');
-    saveBtn = Array.from(buttons).find(b => b.textContent?.includes('Save Preset')) as HTMLElement;
+    saveBtn = Array.from(buttons).find((b) =>
+      b.textContent?.includes('Save Preset')
+    ) as HTMLElement;
     expect(saveBtn).toBeTruthy();
     saveBtn.click();
     await nextTick();
-    
+
     expect(createConfigMock).toHaveBeenCalled();
     wrapper.unmount();
   });

@@ -41,7 +41,7 @@
                 </div>
                 <div>
                   <h2 class="text-xl font-bold text-white">Help & Guide</h2>
-                  <p class="text-sm text-slate-400">Learn how to use {{AppConfig.appName}}</p>
+                  <p class="text-sm text-slate-400">Learn how to use {{ AppConfig.appName }}</p>
                 </div>
               </div>
               <button @click="showHelp = false" class="help-close-btn">
@@ -303,7 +303,7 @@
                 </div>
 
                 <div class="help-card">
-                  <h4 class="help-card-title">Wim Hof Method</h4>
+                  <h4 class="help-card-title">Cyclic Hyperventilation Method</h4>
                   <p class="text-slate-400 text-sm mb-2">Power breathing with extended holds</p>
                   <div class="help-pattern">
                     <span class="text-blue-400">2s inhale</span>

@@ -9,14 +9,10 @@
           <div
             class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-500 via-emerald-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/30"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="w-5 h-5 sm:w-6 sm:h-6"
-              viewBox="0 0 100 100"
-            >
-              <circle cx="50" cy="50" r="45" fill="white" opacity="0.9"/>
-              <circle cx="50" cy="50" r="30" fill="white" opacity="0.3"/>
-              <circle cx="50" cy="50" r="15" fill="white" opacity="0.5"/>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 sm:w-6 sm:h-6" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="45" fill="white" opacity="0.9" />
+              <circle cx="50" cy="50" r="30" fill="white" opacity="0.3" />
+              <circle cx="50" cy="50" r="15" fill="white" opacity="0.5" />
             </svg>
           </div>
           <span>{{ AppConfig.appName }}</span>

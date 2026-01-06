@@ -1,7 +1,5 @@
 // Configuration
-export {
-  AppConfig
-} from './config';
+export { AppConfig } from './config.js';
 
 // Schemas and types
 export {
@@ -21,7 +19,7 @@ export {
   INITIAL_TIMER_STATE,
   PHASE_INFO,
   getPhaseInfo,
-} from './schemas';
+} from './schemas.js';
 
 export type {
   SoundTheme,
@@ -37,7 +35,7 @@ export type {
   CreateSession,
   TimerState,
   PhaseInfo,
-} from './schemas';
+} from './schemas.js';
 
 // Timer
 export {
@@ -46,6 +44,6 @@ export {
   formatTimeSimple,
   calculateTotalCycleTime,
   calculateSetTime,
-} from './timer';
+} from './timer.js';
 
-export type { BreathingTimerCallbacks } from './timer';
+export type { BreathingTimerCallbacks } from './timer.js';

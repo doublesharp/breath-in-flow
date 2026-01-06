@@ -202,9 +202,11 @@
                 v-if="timer.phase.value === 'EXTENDED_INHALE_HOLD' || timer.phase.value === 'EXTENDED_EXHALE_HOLD'"
                 class="mt-8 text-center p-6 glass rounded-2xl animate-scale-in"
               >
-                <p class="text-slate-300 mb-3">Hold as long as comfortable</p>
+                <p class="text-slate-300 mb-3">
+                  {{ isToleranceExtendedHold ? 'Hold as long as comfortable' : 'Hold for the timer' }}
+                </p>
                 <p class="text-5xl font-mono font-bold text-indigo-400 animate-pulse-glow">
-                  {{ formatTime(timer.extendedHoldElapsed.value) }}
+                  {{ formatTime(isToleranceExtendedHold ? timer.extendedHoldElapsed.value : timer.currentTime.value) }}
                 </p>
                 <button @click="endExtendedHold" class="mt-6 btn-warning btn-action">
                   <span class="flex items-center gap-2 justify-center">
@@ -861,7 +863,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, inject, onMounted } from 'vue';
+import { ref, reactive, watch, inject, onMounted, computed } from 'vue';
 import BreathingVisualizer from './BreathingVisualizer.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
 import { useBreathingTimer, useStorage } from '../composables';
@@ -944,10 +946,15 @@ const timer = useBreathingTimer(config, {
   },
   onExtendedHoldEnd: (duration, type, _state) => {
     if (currentSession.value && currentSetData.value) {
+      const isFirst = timer.isFirstExtendedHold.value;
+      const mode = isFirst ? config.extendedHoldMode : config.secondExtendedHoldMode;
+      const targetDuration =
+        mode === 'TIMED' ? (isFirst ? config.extendedHoldDuration : config.secondExtendedHoldDuration) : undefined;
+
       storage.addExtendedHoldToSet(currentSession.value.id!, currentSession.value.sets.length, {
         type,
-        mode: config.extendedHoldMode,
-        targetDuration: config.extendedHoldMode === 'TIMED' ? config.extendedHoldDuration : undefined,
+        mode,
+        targetDuration,
         actualDuration: duration,
         completedAt: new Date(),
       });
@@ -958,6 +965,14 @@ const timer = useBreathingTimer(config, {
       storage.completeSession(currentSession.value.id!);
     }
   },
+});
+
+const isToleranceExtendedHold = computed(() => {
+  const phase = timer.phase.value;
+  if (phase !== 'EXTENDED_INHALE_HOLD' && phase !== 'EXTENDED_EXHALE_HOLD') return false;
+
+  const mode = timer.isFirstExtendedHold.value ? config.extendedHoldMode : config.secondExtendedHoldMode;
+  return mode === 'TOLERANCE';
 });
 
 // Watch for config changes from parent (when loading presets)
@@ -1064,9 +1079,7 @@ function saveConfig() {
 
   // Check if a saved preset with this name already exists
   const existingConfigs = storage.getAllConfigs();
-  const existingConfig = existingConfigs.find(
-    (c) => c.name.toLowerCase() === configName.value.trim().toLowerCase()
-  );
+  const existingConfig = existingConfigs.find((c) => c.name.toLowerCase() === configName.value.trim().toLowerCase());
 
   if (existingConfig) {
     // Show confirmation modal to overwrite
@@ -1089,9 +1102,7 @@ function confirmOverwrite() {
 
   // Find and delete the existing config
   const existingConfigs = storage.getAllConfigs();
-  const existingConfig = existingConfigs.find(
-    (c) => c.name.toLowerCase() === configName.value.trim().toLowerCase()
-  );
+  const existingConfig = existingConfigs.find((c) => c.name.toLowerCase() === configName.value.trim().toLowerCase());
 
   if (existingConfig?.id) {
     storage.deleteConfig(existingConfig.id);

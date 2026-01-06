@@ -2,9 +2,11 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import electron from 'vite-plugin-electron';
 import renderer from 'vite-plugin-electron-renderer';
-import { resolve } from 'path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const isElectron = process.env.BUILD_TARGET === 'electron';
+const configDir = dirname(fileURLToPath(import.meta.url));
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -62,11 +64,11 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      '@': resolve(configDir, 'src'),
     },
   },
   server: {
-    port: 3003,
+    port: 7080,
   },
   build: {
     outDir: 'dist',
@@ -75,7 +77,7 @@ export default defineConfig({
     ...(isElectron && {
       rollupOptions: {
         input: {
-          main: resolve(__dirname, 'index.html'),
+          main: resolve(configDir, 'index.html'),
         },
       },
     }),

@@ -319,7 +319,7 @@ const presets: Preset[] = [
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
-    name: 'Wim Hof Style',
+    name: 'Cyclic Hyperventilation Method',
     description: 'Fast breathing with extended exhale hold',
     inhaleTime: 2,
     inhaleHoldTime: 0,

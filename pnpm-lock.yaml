@@ -88,6 +88,12 @@ importers:
 
   packages/web:
     dependencies:
+      '@breath-in-flow/database':
+        specifier: workspace:*
+        version: link:../database
+      '@breath-in-flow/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@capacitor/android':
         specifier: ^7.4.4
         version: 7.4.4(@capacitor/core@7.4.4)
@@ -119,12 +125,6 @@ importers:
         specifier: ^3.22.4
         version: 3.25.76
     devDependencies:
-      '@breath-in-flow/database':
-        specifier: workspace:*
-        version: link:../database
-      '@breath-in-flow/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@capacitor/assets':
         specifier: ^3.0.5
         version: 3.0.5(@types/node@20.19.25)(encoding@0.1.13)(typescript@5.9.3)

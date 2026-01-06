@@ -24,9 +24,9 @@ vi.mock('@/composables/useStorage', () => ({
     cancelSession: cancelSessionMock,
     updateSession: updateSessionMock,
     createConfig: createConfigMock,
-    getSoundTheme: vi.fn(() => 'default'),
+    getSoundTheme: vi.fn(() => 'wood'),
     setSoundTheme: vi.fn(),
-    soundTheme: ref('default'),
+    soundTheme: ref('wood'),
     getAllConfigs: vi.fn(() => []),
   }),
 }));
@@ -43,6 +43,7 @@ vi.mock('@/composables/useBreathingTimer', () => {
       currentRepetition: ref(1),
       currentSet: ref(1),
       extendedHoldElapsed: ref(0),
+      isFirstExtendedHold: ref(true),
       start: startMock,
       pause: pauseMock,
       stop: vi.fn(),
@@ -93,7 +94,7 @@ describe('BreathingPractice.vue', () => {
       },
       attachTo: document.body, // Required for Teleport support
     });
-    
+
     await nextTick(); // Wait for component to render with isRunning = false
 
     // Open the configuration modal directly
@@ -185,23 +186,25 @@ describe('BreathingPractice.vue', () => {
 
   it('Save Preset flow warns when name present', async () => {
     isRunning.value = false;
-    const wrapper = mount(BreathingPractice, { 
+    const wrapper = mount(BreathingPractice, {
       attachTo: document.body,
     });
-    
+
     await nextTick(); // Wait for component to render
 
     // Open config modal directly
     wrapper.vm.showConfigModal = true;
     await nextTick(); // Wait for modal DOM to render
-    
+
     // Set the config name
     wrapper.vm.configName = 'My Preset';
     await nextTick();
 
     // Find Save Preset button in document.body (Teleported)
     const buttons = document.body.querySelectorAll('button');
-    const saveBtn = Array.from(buttons).find(b => b.textContent?.includes('Save Preset')) as HTMLElement;
+    const saveBtn = Array.from(buttons).find((b) =>
+      b.textContent?.includes('Save Preset')
+    ) as HTMLElement;
     expect(saveBtn).toBeTruthy();
     saveBtn.click();
     await nextTick();
@@ -247,7 +250,7 @@ describe('BreathingPractice.vue', () => {
         (wrapper.vm as unknown as Record<string, unknown>).saveConfig as () => Promise<void>
       )();
       await nextTick();
-      
+
       // Check that error modal is visible in document.body (Teleport)
       expect(document.body.textContent).toContain('Please enter a configuration name');
     }

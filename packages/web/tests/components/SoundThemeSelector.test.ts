@@ -7,7 +7,7 @@ import { soundService } from '../../src/services/soundService';
 vi.mock('../../src/services/soundService', () => ({
   soundService: {
     setTheme: vi.fn(),
-    getTheme: vi.fn(() => 'default'),
+    getTheme: vi.fn(() => 'wood'),
     playClick: vi.fn(),
     playPhaseChange: vi.fn(),
     setEnabled: vi.fn(),
@@ -148,7 +148,7 @@ describe('SoundThemeSelector', () => {
     });
 
     const select = wrapper.find('select');
-    const themes = ['water', 'wind', 'subtle', 'chimes', 'default'];
+    const themes = ['wood', 'water', 'wind', 'subtle', 'chimes'];
 
     for (const theme of themes) {
       await select.setValue(theme);

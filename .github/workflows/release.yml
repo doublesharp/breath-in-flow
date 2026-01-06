@@ -1,0 +1,335 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: false
+        type: string
+
+# Ensure only one release workflow runs at a time
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Run tests first
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Run tests
+        run: pnpm test
+
+  # Build for macOS (ARM64)
+  build-macos:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build Electron app (macOS)
+        working-directory: packages/web
+        run: |
+          pnpm build:electron
+          pnpm exec electron-builder --mac --arm64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            packages/web/release/*/*.dmg
+            packages/web/release/*/*.zip
+          retention-days: 7
+
+  # Build for macOS Intel (x64)
+  build-macos-intel:
+    needs: test
+    runs-on: macos-13 # Intel Mac runner
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build Electron app (macOS Intel)
+        working-directory: packages/web
+        run: |
+          pnpm build:electron
+          pnpm exec electron-builder --mac --x64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS Intel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel-build
+          path: |
+            packages/web/release/*/*.dmg
+            packages/web/release/*/*.zip
+          retention-days: 7
+
+  # Build for Windows
+  build-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build Electron app (Windows)
+        working-directory: packages/web
+        run: |
+          pnpm build:electron
+          pnpm exec electron-builder --win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            packages/web/release/*/*.exe
+          retention-days: 7
+
+  # Build for Linux
+  build-linux:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build Electron app (Linux)
+        working-directory: packages/web
+        run: |
+          pnpm build:electron
+          pnpm exec electron-builder --linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            packages/web/release/*/*.AppImage
+            packages/web/release/*/*.deb
+          retention-days: 7
+
+  # Build Android APK
+  build-android:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build web assets
+        working-directory: packages/web
+        run: pnpm build
+
+      - name: Sync Capacitor
+        working-directory: packages/web
+        run: npx cap sync android
+
+      - name: Build Android APK
+        working-directory: packages/web/android
+        run: ./gradlew assembleDebug
+
+      - name: Rename APK
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          cp packages/web/android/app/build/outputs/apk/debug/app-debug.apk "breath-in-flow-${VERSION}.apk"
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build
+          path: '*.apk'
+          retention-days: 7
+
+  # Create GitHub Release
+  release:
+    needs: [build-macos, build-macos-intel, build-windows, build-linux, build-android]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize release files
+        run: |
+          mkdir -p release-files
+          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.apk" \) -exec cp {} release-files/ \;
+          ls -la release-files/
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Breath in Flow v${{ steps.version.outputs.VERSION }}
+          draft: true
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          generate_release_notes: true
+          files: release-files/*
+          body: |
+            ## Breath in Flow v${{ steps.version.outputs.VERSION }}
+
+            ### Downloads
+
+            | Platform | File |
+            |----------|------|
+            | macOS (Apple Silicon) | `Breath in Flow-*-arm64.dmg` |
+            | macOS (Intel) | `Breath in Flow-*-x64.dmg` |
+            | Windows | `Breath in Flow Setup *.exe` |
+            | Linux (AppImage) | `breath-in-flow-*.AppImage` |
+            | Linux (Debian) | `breath-in-flow-*.deb` |
+            | Android | `breath-in-flow-*.apk` |
+
+            ### Installation Notes
+
+            **macOS**: You may need to right-click and select "Open" the first time due to Gatekeeper.
+
+            **Windows**: Windows SmartScreen may show a warning. Click "More info" then "Run anyway".
+
+            **Linux**: Make the AppImage executable: `chmod +x breath-in-flow-*.AppImage`
+
+            **Android**: Enable "Install from unknown sources" in your device settings.
+
+            ---
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

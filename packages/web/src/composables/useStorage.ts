@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue';
+import { ref, computed, isProxy, toRaw } from 'vue';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   BreathingConfig,
@@ -68,6 +68,20 @@ export function resetStorageForTesting() {
   soundTheme.value = 'wood';
 }
 
+function cloneConfig(config: BreathingConfig): BreathingConfig {
+  const source = isProxy(config) ? toRaw(config) : config;
+
+  try {
+    if (typeof structuredClone === 'function') {
+      return structuredClone(source);
+    }
+  } catch (error) {
+    console.warn('structuredClone failed, falling back to JSON copy', error);
+  }
+
+  return JSON.parse(JSON.stringify(source)) as BreathingConfig;
+}
+
 export function useStorage() {
   // Config operations
   function createConfig(input: CreateBreathingConfig): BreathingConfig {
@@ -117,10 +131,13 @@ export function useStorage() {
 
   // Session operations
   function createSession(config: BreathingConfig): Session {
+    // Ensure the snapshot is an immutable, non-reactive copy of the config
+    const configSnapshot = cloneConfig(config);
+
     const session: Session = {
       id: uuidv4(),
       configId: config.id,
-      configSnapshot: config,
+      configSnapshot,
       status: 'IN_PROGRESS',
       sets: [],
       targetSets: config.targetSets,

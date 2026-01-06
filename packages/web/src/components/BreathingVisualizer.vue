@@ -14,8 +14,8 @@
     <div class="relative w-60 h-60 sm:w-80 sm:h-80 flex items-center justify-center p-4">
       <!-- Outer glow ring -->
       <div
-        :class="['absolute inset-4 rounded-full transition-all duration-500 opacity-30 blur-xl', phaseGlowClass]"
-        :style="{ transform: `scale(${scale * 1.1})` }"
+        class="absolute inset-4 rounded-full transition-all duration-700 opacity-30 blur-xl"
+        :style="{ transform: `scale(${scale * 1.1})`, ...phaseGlowStyle }"
       ></div>
 
       <!-- Background circle with pulse -->
@@ -26,11 +26,11 @@
 
       <!-- Animated breathing circle -->
       <div
-        :class="['breathing-circle w-full h-full flex items-center justify-center relative', phaseGlowClass]"
-        :style="{ transform: `scale(${scale})`, padding: '1rem' }"
+        class="breathing-circle w-full h-full flex items-center justify-center relative"
+        :style="{ transform: `scale(${scale})`, padding: '1rem', ...phaseGlowStyle }"
       >
         <!-- Gradient circle -->
-        <div :class="['absolute inset-0 rounded-full', phaseColorBgClass]"></div>
+        <div :class="['absolute inset-0 rounded-full', phaseColorBgClass]" :style="phaseBackgroundStyle"></div>
 
         <!-- Inner content -->
         <div class="relative z-10 text-center">
@@ -227,6 +227,46 @@ const fadeTransition = 'opacity 1.2s ease-out';
 const previousPhase = ref<BreathingPhase | null>(null);
 const fadingStartOpacity: Partial<Record<BreathingPhase, number>> = {};
 
+const phaseGlowStyle = computed(() => {
+  const glows: Record<BreathingPhase, string> = {
+    INHALE: '0 0 40px 8px rgba(34,197,94,0.35)',
+    INHALE_HOLD: '0 0 40px 8px rgba(245,158,11,0.35)',
+    EXHALE: '0 0 40px 8px rgba(59,130,246,0.35)',
+    EXHALE_HOLD: '0 0 40px 8px rgba(245,158,11,0.35)',
+    EXTENDED_INHALE_HOLD: '0 0 48px 10px rgba(239,68,68,0.35)',
+    EXTENDED_EXHALE_HOLD: '0 0 48px 10px rgba(239,68,68,0.35)',
+    SET_COMPLETE: '0 0 48px 10px rgba(16,185,129,0.35)',
+    SESSION_COMPLETE: '0 0 48px 10px rgba(16,185,129,0.35)',
+    PAUSED: '0 0 36px 8px rgba(100,116,139,0.35)',
+    IDLE: '0 0 32px 8px rgba(148,163,184,0.25)',
+  };
+
+  return {
+    boxShadow: glows[props.phase] ?? glows.IDLE,
+    transition: 'box-shadow 600ms ease',
+  };
+});
+
+const phaseBackgroundStyle = computed(() => {
+  const gradients: Record<BreathingPhase, string> = {
+    INHALE: 'linear-gradient(135deg, #34d399, #10b981 45%, #0f766e)',
+    INHALE_HOLD: 'linear-gradient(135deg, #fbbf24, #f59e0b 45%, #c2410c)',
+    EXHALE: 'linear-gradient(135deg, #60a5fa, #3b82f6 45%, #1d4ed8)',
+    EXHALE_HOLD: 'linear-gradient(135deg, #fbbf24, #f59e0b 45%, #c2410c)',
+    EXTENDED_INHALE_HOLD: 'linear-gradient(135deg, #f87171, #ef4444 45%, #b91c1c)',
+    EXTENDED_EXHALE_HOLD: 'linear-gradient(135deg, #f87171, #ef4444 45%, #b91c1c)',
+    SET_COMPLETE: 'linear-gradient(135deg, #34d399, #10b981 45%, #0f766e)',
+    SESSION_COMPLETE: 'linear-gradient(135deg, #34d399, #10b981 45%, #0f766e)',
+    PAUSED: 'linear-gradient(135deg, #cbd5e1, #94a3b8 45%, #475569)',
+    IDLE: 'linear-gradient(135deg, #cbd5e1, #94a3b8 45%, #475569)',
+  };
+
+  return {
+    background: gradients[props.phase] ?? gradients.IDLE,
+    transition: 'background 600ms ease',
+  };
+});
+
 function getRingStyle(ring: RingState): Record<string, string | number> {
   return {
     transition: ring.shouldFade ? fadeTransition : drawTransition,
@@ -257,7 +297,7 @@ function ringForPhase(phase: BreathingPhase): Ref<RingState> | null {
 
 watch(
   () => props.phase,
-  (newPhase, oldPhase) => {
+  (_newPhase, oldPhase) => {
     // Store the completed state of the previous phase for fade-out
     if (oldPhase) {
       const ring = ringForPhase(oldPhase);
@@ -281,15 +321,6 @@ watch(
           shouldFade: true,
         };
       }
-    }
-
-    const nextRing = newPhase ? ringForPhase(newPhase) : null;
-    if (nextRing) {
-      nextRing.value = {
-        dashoffset: circumference,
-        opacity: 0,
-        shouldFade: false,
-      };
     }
   }
 );
@@ -402,27 +433,6 @@ const phaseColorBgClass = computed(() => {
       return 'bg-gradient-to-br from-slate-400 via-slate-500 to-slate-700';
     default:
       return 'bg-gradient-to-br from-slate-500 via-slate-600 to-slate-800';
-  }
-});
-
-const phaseGlowClass = computed(() => {
-  switch (props.phase) {
-    case 'INHALE':
-      return 'glow-green';
-    case 'INHALE_HOLD':
-      return 'glow-amber';
-    case 'EXHALE':
-      return 'glow-blue';
-    case 'EXHALE_HOLD':
-      return 'glow-amber';
-    case 'EXTENDED_INHALE_HOLD':
-    case 'EXTENDED_EXHALE_HOLD':
-      return 'glow-red';
-    case 'SET_COMPLETE':
-    case 'SESSION_COMPLETE':
-      return 'glow-emerald';
-    default:
-      return '';
   }
 });
 </script>

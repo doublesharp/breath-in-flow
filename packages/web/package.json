@@ -34,6 +34,8 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@breath-in-flow/database": "workspace:*",
+    "@breath-in-flow/shared": "workspace:*",
     "@capacitor/android": "^7.4.4",
     "@capacitor/core": "^7.4.4",
     "@capacitor/ios": "^7.4.4",
@@ -46,8 +48,6 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@breath-in-flow/database": "workspace:*",
-    "@breath-in-flow/shared": "workspace:*",
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^7.4.4",
     "@types/node": "^20.10.0",

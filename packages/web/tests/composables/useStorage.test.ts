@@ -823,7 +823,7 @@ describe('useStorage', () => {
 
     it('should start with default theme', () => {
       const storage = useStorage();
-      expect(storage.getSoundTheme()).toBe('default');
+      expect(storage.getSoundTheme()).toBe('wood');
     });
 
     it('should set and get sound theme', () => {
@@ -867,7 +867,7 @@ describe('useStorage', () => {
     it('should expose soundTheme as reactive ref', () => {
       const storage = useStorage();
 
-      expect(storage.soundTheme.value).toBe('default');
+      expect(storage.soundTheme.value).toBe('wood');
 
       storage.setSoundTheme('wind');
       expect(storage.soundTheme.value).toBe('wind');
@@ -880,7 +880,7 @@ describe('useStorage', () => {
       expect(storage.getSoundTheme()).toBe('chimes');
 
       resetStorageForTesting();
-      expect(storage.getSoundTheme()).toBe('default');
+      expect(storage.getSoundTheme()).toBe('wood');
     });
 
     it('should handle all valid theme values', () => {

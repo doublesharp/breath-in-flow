@@ -249,7 +249,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       } else {
         // If second hold is EXHALE type, we can go straight to it (assuming we just finished an inhale hold?)
         // But if we just finished EXTENDED_INHALE_HOLD, we are full. If we need to EXHALE hold, we need to EXHALE first.
-        // For now, let's assume standard Wim Hof: Exhale Hold -> Inhale -> Inhale Hold.
+        // For now, let's assume standard Cyclic Hyperventilation: Exhale Hold -> Inhale -> Inhale Hold.
         // If the pattern is Inhale Hold -> Exhale -> Exhale Hold, we need an Exhale transition.
 
         // If we are full (INHALE_HOLD) and need to be empty (EXHALE_HOLD), we need to exhale.

@@ -1,10 +1,8 @@
-import { AppConfig } from '@breath-in-flow/shared';
 import type { CapacitorConfig } from '@capacitor/cli';
 
-
 const config: CapacitorConfig = {
-  appId: AppConfig.appId,
-  appName: AppConfig.appName,
+  appId: 'com.breathinflow.app',
+  appName: 'Breath in Flow',
   webDir: 'dist',
   server: {
     // For development with live reload
@@ -38,7 +36,7 @@ const config: CapacitorConfig = {
   ios: {
     // iOS specific settings
     contentInset: 'automatic',
-    scheme: AppConfig.appName,
+    scheme: 'Breath in Flow',
     backgroundColor: '#0f172a',
   },
   android: {

@@ -227,7 +227,7 @@ describe('useBreathingTimer', () => {
       expect(timer.phase.value).toBe('SET_COMPLETE');
     });
 
-    it('should handle recovery breath correctly (Wim Hof style)', () => {
+    it('should handle recovery breath correctly (Cyclic Hyperventilation style)', () => {
       config.extendedHoldEnabled = true;
       config.extendedHoldType = 'EXHALE';
       config.secondExtendedHoldEnabled = true;
