@@ -7,28 +7,46 @@
       <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
         <h1 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
           <div
-            class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-500 via-emerald-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/30"
+            class="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
+            style="
+              background: linear-gradient(145deg, #e3b25c 0%, #7fc3aa 45%, #c26a4f 100%);
+              box-shadow:
+                0 8px 24px -4px rgba(194, 106, 79, 0.35),
+                0 4px 12px -2px rgba(107, 181, 156, 0.28);
+            "
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 sm:w-6 sm:h-6" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="45" fill="white" opacity="0.9" />
-              <circle cx="50" cy="50" r="30" fill="white" opacity="0.3" />
-              <circle cx="50" cy="50" r="15" fill="white" opacity="0.5" />
+            <div class="absolute inset-0 bg-gradient-to-t from-white/10 to-transparent"></div>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 sm:w-6 sm:h-6 relative z-10" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="38" fill="none" stroke="white" stroke-width="3" opacity="0.4" />
+              <circle cx="50" cy="50" r="26" fill="white" opacity="0.9" />
+              <circle cx="50" cy="50" r="14" fill="white" opacity="0.5" />
             </svg>
           </div>
-          <span>{{ AppConfig.appName }}</span>
+          <span class="bg-gradient-to-r from-white via-slate-200 to-slate-300 bg-clip-text text-transparent">{{
+            AppConfig.appName
+          }}</span>
         </h1>
 
         <div class="flex items-center gap-2">
           <!-- Desktop Navigation -->
-          <nav class="hidden md:flex gap-1 p-1 bg-slate-800/50 rounded-xl">
+          <nav
+            class="hidden md:flex gap-1 p-1.5 rounded-2xl"
+            style="
+              background: linear-gradient(135deg, rgba(70, 60, 52, 0.6) 0%, rgba(47, 40, 34, 0.8) 100%);
+              border: 1px solid rgba(255, 255, 255, 0.06);
+            "
+          >
             <button
               @click="activeTab = 'practice'"
               :class="[
-                'px-4 py-2 rounded-lg font-medium transition-all duration-300',
-                activeTab === 'practice'
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-white/10',
+                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                activeTab === 'practice' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
+              :style="
+                activeTab === 'practice'
+                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
+                  : ''
+              "
             >
               <span class="flex items-center gap-2">
                 <svg
@@ -51,11 +69,14 @@
             <button
               @click="activeTab = 'history'"
               :class="[
-                'px-4 py-2 rounded-lg font-medium transition-all duration-300',
-                activeTab === 'history'
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-white/10',
+                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                activeTab === 'history' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
+              :style="
+                activeTab === 'history'
+                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
+                  : ''
+              "
             >
               <span class="flex items-center gap-2">
                 <svg
@@ -78,11 +99,14 @@
             <button
               @click="activeTab = 'configs'"
               :class="[
-                'px-4 py-2 rounded-lg font-medium transition-all duration-300',
-                activeTab === 'configs'
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-white/10',
+                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                activeTab === 'configs' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
+              :style="
+                activeTab === 'configs'
+                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
+                  : ''
+              "
             >
               <span class="flex items-center gap-2">
                 <svg
@@ -105,11 +129,14 @@
             <button
               @click="activeTab = 'analytics'"
               :class="[
-                'px-4 py-2 rounded-lg font-medium transition-all duration-300',
-                activeTab === 'analytics'
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-white/10',
+                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                activeTab === 'analytics' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
+              :style="
+                activeTab === 'analytics'
+                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
+                  : ''
+              "
             >
               <span class="flex items-center gap-2">
                 <svg
@@ -147,14 +174,25 @@
     </main>
 
     <!-- Mobile Bottom Navigation -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/10">
+    <nav
+      class="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.06]"
+      style="
+        background: linear-gradient(180deg, rgba(38, 32, 27, 0.95) 0%, rgba(32, 27, 22, 0.98) 100%);
+        backdrop-filter: blur(24px);
+      "
+    >
       <div class="flex justify-around items-center py-2 px-2 safe-area-bottom">
         <button
           @click="activeTab = 'practice'"
           :class="[
-            'flex flex-col items-center justify-center px-3 py-2 rounded-xl min-w-[60px] transition-all',
-            activeTab === 'practice' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-white',
+            'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
+            activeTab === 'practice' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
           ]"
+          :style="
+            activeTab === 'practice'
+              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
+              : ''
+          "
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -169,9 +207,14 @@
         <button
           @click="activeTab = 'history'"
           :class="[
-            'flex flex-col items-center justify-center px-3 py-2 rounded-xl min-w-[60px] transition-all',
-            activeTab === 'history' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-white',
+            'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
+            activeTab === 'history' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
           ]"
+          :style="
+            activeTab === 'history'
+              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
+              : ''
+          "
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -186,9 +229,14 @@
         <button
           @click="activeTab = 'configs'"
           :class="[
-            'flex flex-col items-center justify-center px-3 py-2 rounded-xl min-w-[60px] transition-all',
-            activeTab === 'configs' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-white',
+            'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
+            activeTab === 'configs' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
           ]"
+          :style="
+            activeTab === 'configs'
+              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
+              : ''
+          "
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -203,9 +251,14 @@
         <button
           @click="activeTab = 'analytics'"
           :class="[
-            'flex flex-col items-center justify-center px-3 py-2 rounded-xl min-w-[60px] transition-all',
-            activeTab === 'analytics' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-white',
+            'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
+            activeTab === 'analytics' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
           ]"
+          :style="
+            activeTab === 'analytics'
+              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
+              : ''
+          "
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -220,9 +273,9 @@
       </div>
     </nav>
 
-    <footer class="hidden md:block text-center py-6 text-slate-500 text-sm">
-      <p>Breathing exercises for everyone</p>
-      <p class="text-slate-600 mt-1">Designed with guidance from physical therapy expertise</p>
+    <footer class="hidden md:block text-center py-8 text-slate-500 text-sm">
+      <p class="text-slate-400">Breathing exercises for everyone</p>
+      <p class="text-slate-600 mt-1.5 text-xs tracking-wide">Designed with guidance from physical therapy expertise</p>
     </footer>
   </div>
 </template>
@@ -256,17 +309,17 @@ provide('clearSelectedConfig', clearSelectedConfig);
 .fade-enter-active,
 .fade-leave-active {
   transition:
-    opacity 0.3s ease,
-    transform 0.3s ease;
+    opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .fade-enter-from {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(16px);
 }
 
 .fade-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
+  transform: translateY(-8px);
 }
 </style>

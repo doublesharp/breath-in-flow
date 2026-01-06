@@ -115,7 +115,8 @@
 
       <div
         v-if="isRunning"
-        class="fixed inset-0 z-50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto"
+        class="fixed inset-0 z-50 overflow-y-auto"
+        style="background: linear-gradient(135deg, #1f1a15 0%, #2a241d 40%, #1f1a15 100%)"
       >
         <div class="min-h-screen p-4 sm:p-6 lg:p-8">
           <!-- Exit Button -->

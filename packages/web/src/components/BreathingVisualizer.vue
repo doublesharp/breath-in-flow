@@ -19,18 +19,24 @@
       ></div>
 
       <!-- Background circle with pulse -->
-      <div
-        class="absolute inset-8 rounded-full bg-slate-800/30 animate-pulse-glow"
-        :style="{ animationDuration: '3s' }"
-      ></div>
+      <div class="absolute inset-8 rounded-full bg-slate-800/20" style="backface-visibility: hidden"></div>
 
       <!-- Animated breathing circle -->
       <div
         class="breathing-circle w-full h-full flex items-center justify-center relative"
-        :style="{ transform: `scale(${scale})`, padding: '1rem', ...phaseGlowStyle }"
+        :style="{
+          transform: `translateZ(0) scale(${scale})`,
+          padding: '1rem',
+          ...phaseGlowStyle,
+          willChange: 'transform, box-shadow',
+          backfaceVisibility: 'hidden',
+        }"
       >
         <!-- Gradient circle -->
-        <div :class="['absolute inset-0 rounded-full', phaseColorBgClass]" :style="phaseBackgroundStyle"></div>
+        <div
+          :class="['absolute inset-0 rounded-full', phaseColorBgClass]"
+          :style="{ ...phaseBackgroundStyle, backfaceVisibility: 'hidden', willChange: 'background' }"
+        ></div>
 
         <!-- Inner content -->
         <div class="relative z-10 text-center">
@@ -105,7 +111,6 @@
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="inhaleRing.dashoffset"
-          filter="url(#progressGlow)"
           :style="getRingStyle(inhaleRing)"
         />
 
@@ -120,7 +125,6 @@
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="inhaleHoldRing.dashoffset"
-          filter="url(#progressGlow)"
           :style="getRingStyle(inhaleHoldRing)"
         />
 
@@ -135,7 +139,6 @@
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="exhaleRing.dashoffset"
-          filter="url(#progressGlow)"
           :style="getRingStyle(exhaleRing)"
         />
 
@@ -150,7 +153,6 @@
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="exhaleHoldRing.dashoffset"
-          filter="url(#progressGlow)"
           :style="getRingStyle(exhaleHoldRing)"
         />
 
@@ -165,7 +167,6 @@
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="extendedInhaleHoldRing.dashoffset"
-          filter="url(#progressGlow)"
           :style="getRingStyle(extendedInhaleHoldRing)"
         />
 
@@ -180,7 +181,6 @@
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="extendedExhaleHoldRing.dashoffset"
-          filter="url(#progressGlow)"
           :style="getRingStyle(extendedExhaleHoldRing)"
         />
       </svg>
@@ -228,22 +228,9 @@ const previousPhase = ref<BreathingPhase | null>(null);
 const fadingStartOpacity: Partial<Record<BreathingPhase, number>> = {};
 
 const phaseGlowStyle = computed(() => {
-  const glows: Record<BreathingPhase, string> = {
-    INHALE: '0 0 40px 8px rgba(34,197,94,0.35)',
-    INHALE_HOLD: '0 0 40px 8px rgba(245,158,11,0.35)',
-    EXHALE: '0 0 40px 8px rgba(59,130,246,0.35)',
-    EXHALE_HOLD: '0 0 40px 8px rgba(245,158,11,0.35)',
-    EXTENDED_INHALE_HOLD: '0 0 48px 10px rgba(239,68,68,0.35)',
-    EXTENDED_EXHALE_HOLD: '0 0 48px 10px rgba(239,68,68,0.35)',
-    SET_COMPLETE: '0 0 48px 10px rgba(16,185,129,0.35)',
-    SESSION_COMPLETE: '0 0 48px 10px rgba(16,185,129,0.35)',
-    PAUSED: '0 0 36px 8px rgba(100,116,139,0.35)',
-    IDLE: '0 0 32px 8px rgba(148,163,184,0.25)',
-  };
-
   return {
-    boxShadow: glows[props.phase] ?? glows.IDLE,
-    transition: 'box-shadow 600ms ease',
+    boxShadow: '0 0 32px 10px rgba(15, 23, 42, 0.22)',
+    transition: 'box-shadow 0s linear',
   };
 });
 
@@ -263,7 +250,7 @@ const phaseBackgroundStyle = computed(() => {
 
   return {
     background: gradients[props.phase] ?? gradients.IDLE,
-    transition: 'background 600ms ease',
+    transition: 'none',
   };
 });
 
