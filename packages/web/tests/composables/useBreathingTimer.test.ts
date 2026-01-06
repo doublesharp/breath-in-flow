@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { nextTick } from 'vue';
 import { mount } from '@vue/test-utils';
 import { useBreathingTimer } from '../../src/composables/useBreathingTimer';
 import { soundService } from '../../src/services/soundService';
@@ -359,6 +358,8 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldDuration: 15,
         targetSets: 0,
         soundEnabled: false,
+        soundTheme: 'wood',
+        ttsEnabled: false,
       };
       const timer = useBreathingTimer(baseConfig, { onExtendedHoldEnd });
 
@@ -393,6 +394,8 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldDuration: 15,
         targetSets: 0,
         soundEnabled: false,
+        soundTheme: 'wood',
+        ttsEnabled: false,
       };
       const timer = useBreathingTimer(baseConfig);
 
@@ -425,6 +428,8 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldDuration: 15,
         targetSets: 0,
         soundEnabled: false,
+        soundTheme: 'wood',
+        ttsEnabled: false,
       };
       const timer = useBreathingTimer(baseConfig);
 
@@ -582,6 +587,8 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldDuration: 15,
         targetSets: 0,
         soundEnabled: false,
+        soundTheme: 'wood',
+        ttsEnabled: false,
       };
       const timer = useBreathingTimer(baseConfig);
 
@@ -681,6 +688,8 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldDuration: 15,
         targetSets: 0,
         soundEnabled: false,
+        soundTheme: 'wood',
+        ttsEnabled: false,
       };
 
       const timer = useBreathingTimer(baseConfig);
@@ -797,6 +806,8 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldDuration: 15,
         targetSets: 0,
         soundEnabled: false,
+        soundTheme: 'wood',
+        ttsEnabled: false,
       };
       const timer = useBreathingTimer(baseConfig, { onExtendedHoldEnd });
 
@@ -964,6 +975,8 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldDuration: 15,
         targetSets: 0,
         soundEnabled: false,
+        soundTheme: 'wood',
+        ttsEnabled: false,
       };
 
       const timer = useBreathingTimer(baseConfig);
@@ -1049,7 +1062,6 @@ describe('useBreathingTimer', () => {
 
   describe('Edge Cases - Early Returns', () => {
     it('should not start if already running', () => {
-      const timer = useBreathingTimer(config);
       const onPhaseChangeMock = vi.fn();
       const timer2 = useBreathingTimer(config, { onPhaseChange: onPhaseChangeMock });
 

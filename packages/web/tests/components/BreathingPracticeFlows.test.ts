@@ -10,6 +10,12 @@ const completeSessionMock = vi.fn();
 const updateSessionMock = vi.fn();
 const createConfigMock = vi.fn();
 
+let speakMock: ReturnType<typeof vi.fn>;
+let loadVoicesMock: ReturnType<typeof vi.fn>;
+let setVoiceMock: ReturnType<typeof vi.fn>;
+let setTtsEnabledMock: ReturnType<typeof vi.fn>;
+let hasNativeSupportMock: ReturnType<typeof vi.fn>;
+
 vi.mock('@/composables/useStorage', () => {
   return {
     useStorage: () => ({
@@ -89,6 +95,31 @@ vi.mock('@/composables/useBreathingTimer', () => {
   };
 });
 
+vi.mock('@/services/ttsService', () => ({
+  ttsService: {
+    get speak() {
+      speakMock = speakMock ?? vi.fn();
+      return speakMock;
+    },
+    get loadVoices() {
+      loadVoicesMock = loadVoicesMock ?? vi.fn().mockResolvedValue([]);
+      return loadVoicesMock;
+    },
+    get setVoiceByUri() {
+      setVoiceMock = setVoiceMock ?? vi.fn();
+      return setVoiceMock;
+    },
+    get setEnabled() {
+      setTtsEnabledMock = setTtsEnabledMock ?? vi.fn();
+      return setTtsEnabledMock;
+    },
+    get hasNativeSupport() {
+      hasNativeSupportMock = hasNativeSupportMock ?? vi.fn().mockReturnValue(false);
+      return hasNativeSupportMock;
+    },
+  },
+}));
+
 describe('BreathingPractice flows', () => {
   beforeEach(() => {
     createSessionMock.mockReset();
@@ -97,6 +128,12 @@ describe('BreathingPractice flows', () => {
     completeSessionMock.mockReset();
     updateSessionMock.mockReset();
     createConfigMock.mockReset();
+
+    speakMock = vi.fn();
+    loadVoicesMock = vi.fn().mockResolvedValue([]);
+    setVoiceMock = vi.fn();
+    setTtsEnabledMock = vi.fn();
+    hasNativeSupportMock = vi.fn().mockReturnValue(false);
   });
 
   it('creates a session when starting practice and adds a set on set-complete', async () => {
@@ -122,9 +159,10 @@ describe('BreathingPractice flows', () => {
 
     expect(createSessionMock).toHaveBeenCalled();
     // simulate set complete via the mocked timer helper
-    wrapper.vm.timer.triggerSetComplete(1);
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { timer: { triggerSetComplete: (n?: number) => void } }).timer.triggerSetComplete(1);
     // wait for DOM to update
-    await wrapper.vm.$nextTick();
+    await (vm as { $nextTick: () => Promise<void> }).$nextTick();
     expect(addSetMock).toHaveBeenCalled();
   });
 
@@ -145,11 +183,9 @@ describe('BreathingPractice flows', () => {
     if (startBtn) await startBtn.trigger('click');
 
     // Call endExtendedHold which calls into the mocked timer.endExtendedHold
-    const endHoldBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().toLowerCase().includes('release hold'));
     // The release hold button only appears when phase is an EXTENDED_* state, so call the timer helper directly
-    wrapper.vm.timer.endExtendedHold();
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { timer: { endExtendedHold: () => void } }).timer.endExtendedHold();
 
     expect(addExtendedHoldMock).toHaveBeenCalled();
   });
@@ -169,23 +205,24 @@ describe('BreathingPractice flows', () => {
       .findAll('button')
       .find((b) => b.text().toLowerCase().includes('start practice'));
     if (startBtn) await startBtn.trigger('click');
-    wrapper.vm.timer.triggerSetComplete(1);
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { timer: { triggerSetComplete: (n?: number) => void } }).timer.triggerSetComplete(1);
     // wait for DOM update
-    await wrapper.vm.$nextTick();
+    await (vm as { $nextTick: () => Promise<void> }).$nextTick();
 
     const finishBtn = wrapper
       .findAll('button')
       .find((b) => b.text().toLowerCase().includes('finish session'));
     if (finishBtn) {
       await finishBtn.trigger('click');
-    } else if (typeof wrapper.vm.finishSession === 'function') {
+    } else if (typeof (vm as { finishSession?: () => void }).finishSession === 'function') {
       // fallback to calling the method directly
-      wrapper.vm.finishSession();
+      (vm as { finishSession?: () => void }).finishSession?.();
     }
 
     expect(completeSessionMock).toHaveBeenCalled();
     // after finish, currentSession should be null
-    expect(wrapper.vm.currentSession).toBeNull();
+    expect((vm as { currentSession?: unknown }).currentSession).toBeNull();
   });
 
   it('saves session notes when session complete', async () => {
@@ -203,9 +240,10 @@ describe('BreathingPractice flows', () => {
       .findAll('button')
       .find((b) => b.text().toLowerCase().includes('start practice'));
     if (startBtn) await startBtn.trigger('click');
-    wrapper.vm.timer.triggerSessionComplete();
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { timer: { triggerSessionComplete: () => void } }).timer.triggerSessionComplete();
     // wait for DOM update
-    await wrapper.vm.$nextTick();
+    await (vm as { $nextTick: () => Promise<void> }).$nextTick();
 
     // mock alert which the component calls after saving notes
     const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
@@ -219,10 +257,10 @@ describe('BreathingPractice flows', () => {
         .find((b) => b.text().toLowerCase().includes('save notes'));
       expect(saveBtn).toBeTruthy();
       if (saveBtn) await saveBtn.trigger('click');
-    } else if (typeof wrapper.vm.saveSessionNotes === 'function') {
+    } else if (typeof (vm as { saveSessionNotes?: () => void }).saveSessionNotes === 'function') {
       // set the value directly and call method
-      wrapper.vm.sessionNotes = 'Felt strong';
-      wrapper.vm.saveSessionNotes();
+      (vm as { sessionNotes?: string }).sessionNotes = 'Felt strong';
+      (vm as { saveSessionNotes?: () => void }).saveSessionNotes?.();
     }
 
     expect(updateSessionMock).toHaveBeenCalled();
@@ -241,7 +279,8 @@ describe('BreathingPractice flows', () => {
     await nextTick(); // Wait for component to render
 
     // Open config modal directly
-    wrapper.vm.showConfigModal = true;
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { showConfigModal?: boolean }).showConfigModal = true;
     await nextTick(); // Wait for modal DOM to render
 
     // Modal should be visible in document.body (Teleported)
@@ -297,9 +336,10 @@ describe('BreathingPractice flows', () => {
     });
 
     // Call the mocked timer helper directly via vm.timer
-    wrapper.vm.timer.triggerSetComplete(1);
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { timer: { triggerSetComplete: (n?: number) => void } }).timer.triggerSetComplete(1);
     // allow DOM updates
-    await wrapper.vm.$nextTick();
+    await (vm as { $nextTick: () => Promise<void> }).$nextTick();
 
     expect(addSetMock).not.toHaveBeenCalled();
   });
@@ -319,13 +359,16 @@ describe('BreathingPractice flows', () => {
       .find((b) => b.text().toLowerCase().includes('start practice'));
     if (startBtn) await startBtn.trigger('click');
     // call startNextSet method directly
-    wrapper.vm.startNextSet();
-    await wrapper.vm.$nextTick();
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { startNextSet: () => void }).startNextSet();
+    await (vm as { $nextTick: () => Promise<void> }).$nextTick();
 
     // currentSetData should be populated
-    expect(wrapper.vm.currentSetData).not.toBeNull();
+    expect((vm as { currentSetData?: unknown }).currentSetData).not.toBeNull();
     // timer currentSet should be > 1
-    expect(wrapper.vm.timer.currentSet.value).toBeGreaterThanOrEqual(1);
+    expect(
+      (vm as { timer: { currentSet: { value: number } } }).timer.currentSet.value
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it('resetExercise stops the timer and clears session and set data', async () => {
@@ -343,12 +386,13 @@ describe('BreathingPractice flows', () => {
       .find((b) => b.text().toLowerCase().includes('start practice'));
     if (startBtn) await startBtn.trigger('click');
     // call resetExercise
-    wrapper.vm.resetExercise();
-    await wrapper.vm.$nextTick();
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { resetExercise: () => void }).resetExercise();
+    await (vm as { $nextTick: () => Promise<void> }).$nextTick();
 
     // session and set data cleared
-    expect(wrapper.vm.currentSession).toBeNull();
-    expect(wrapper.vm.currentSetData).toBeNull();
+    expect((vm as { currentSession?: unknown }).currentSession).toBeNull();
+    expect((vm as { currentSetData?: unknown }).currentSetData).toBeNull();
   });
 
   it('saveSessionNotes does nothing when no session is active', async () => {
@@ -360,9 +404,10 @@ describe('BreathingPractice flows', () => {
     });
 
     // ensure no session
-    wrapper.vm.sessionNotes = 'test';
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { sessionNotes?: string }).sessionNotes = 'test';
     // call saveSessionNotes directly
-    wrapper.vm.saveSessionNotes();
+    (vm as { saveSessionNotes?: () => void }).saveSessionNotes?.();
 
     expect(updateSessionMock).not.toHaveBeenCalled();
   });
@@ -377,17 +422,18 @@ describe('BreathingPractice flows', () => {
     });
 
     // Set up a fake session
-    wrapper.vm.currentSession = { id: 'test-session', sets: [] };
-    await wrapper.vm.$nextTick();
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { currentSession?: unknown }).currentSession = { id: 'test-session', sets: [] };
+    await (vm as { $nextTick: () => Promise<void> }).$nextTick();
 
     // Call finishSession
-    wrapper.vm.finishSession();
-    await wrapper.vm.$nextTick();
+    (vm as { finishSession?: () => void }).finishSession?.();
+    await (vm as { $nextTick: () => Promise<void> }).$nextTick();
 
     // Should have called completeSession
     expect(completeSessionMock).toHaveBeenCalledWith('test-session');
     // Session should be cleared
-    expect(wrapper.vm.currentSession).toBeNull();
-    expect(wrapper.vm.currentSetData).toBeNull();
+    expect((vm as { currentSession?: unknown }).currentSession).toBeNull();
+    expect((vm as { currentSetData?: unknown }).currentSetData).toBeNull();
   });
 });

@@ -684,6 +684,33 @@
                 <SoundThemeSelector :sound-enabled="config.soundEnabled" />
               </div>
             </div>
+
+            <div class="mt-4 space-y-3">
+              <div class="flex items-center gap-3">
+                <button
+                  @click="config.ttsEnabled = !config.ttsEnabled"
+                  :class="['toggle', config.ttsEnabled ? 'toggle-enabled' : 'toggle-disabled']"
+                >
+                  <span :class="['toggle-knob', config.ttsEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled']" />
+                </button>
+                <span class="text-slate-300">Voice guidance (TTS)</span>
+                <span v-if="!isTtsAvailable" class="text-xs text-slate-400">(not available)</span>
+              </div>
+
+              <div v-if="config.ttsEnabled" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="form-label">Voice</label>
+                  <select v-model="config.ttsVoice" class="form-select" :disabled="!isTtsAvailable">
+                    <option v-for="voice in sortedVoices" :key="voice.voiceURI" :value="voice.voiceURI">
+                      {{ formatVoiceLabel(voice) }}
+                    </option>
+                  </select>
+                  <p v-if="!isTtsAvailable" class="text-xs text-slate-400 mt-2">
+                    Voice list unavailable on this platform.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Action Buttons -->
@@ -873,7 +900,10 @@ import {
   type BreathingConfig,
   type Session,
   type SessionSet,
+  type BreathingPhase,
+  type TimerState,
 } from '@breath-in-flow/shared';
+import { ttsService } from '../services/ttsService';
 
 const LAST_CONFIG_KEY = 'herb_breathing_last_config';
 
@@ -896,6 +926,32 @@ const config = reactive<BreathingConfig>({
   name: 'Quick Practice',
 });
 const configName = ref('');
+const ttsVoices = ref<SpeechSynthesisVoice[]>([]);
+const isTtsAvailable = computed(() => ttsVoices.value.length > 0 || ttsService.hasNativeSupport());
+const userLang = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : 'en';
+const userLangBase = userLang.split('-')[0];
+const sortedVoices = computed(() => {
+  const voices = [...ttsVoices.value];
+  const score = (voice: SpeechSynthesisVoice) => {
+    const lang = voice.lang?.toLowerCase() ?? '';
+    const base = lang.split('-')[0];
+    const exactMatch = lang === userLang ? 0 : 1;
+    const baseMatch = base === userLangBase ? 0 : 1;
+    const isEnglish = base === 'en' ? 0 : 1;
+    const isDefault = voice.default ? 0 : 1;
+    return [exactMatch, baseMatch, isEnglish, isDefault, voice.name?.toLowerCase() ?? '', lang];
+  };
+
+  return voices.sort((a, b) => {
+    const sa = score(a);
+    const sb = score(b);
+    for (let i = 0; i < sa.length; i += 1) {
+      if (sa[i] < sb[i]) return -1;
+      if (sa[i] > sb[i]) return 1;
+    }
+    return 0;
+  });
+});
 
 // Session state
 const currentSession = ref<Session | null>(null);
@@ -908,12 +964,14 @@ onMounted(() => {
   if (savedConfig) {
     try {
       const parsed = JSON.parse(savedConfig);
-      Object.assign(config, parsed);
+      Object.assign(config, { ...DEFAULT_BREATHING_CONFIG, ...parsed });
       configName.value = parsed.name || '';
     } catch {
       // Invalid saved config, use defaults
     }
   }
+
+  refreshVoices();
 });
 
 // Save config to localStorage whenever it changes
@@ -925,10 +983,26 @@ watch(
   { deep: true }
 );
 
+watch(
+  () => config.ttsEnabled,
+  (enabled) => {
+    ttsService.setEnabled(enabled);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => config.ttsVoice,
+  (voiceUri) => {
+    ttsService.setVoiceByUri(voiceUri);
+  },
+  { immediate: true }
+);
+
 // Timer
 const timer = useBreathingTimer(config, {
-  onPhaseChange: (_phase, _state) => {
-    // Phase changes are handled by the visualizer
+  onPhaseChange: (phase, state) => {
+    announcePhase(phase, state);
   },
   onRepetitionComplete: (rep, _state) => {
     if (currentSetData.value) {
@@ -980,7 +1054,7 @@ watch(
   () => selectedConfig?.value,
   (newConfig: BreathingConfig | null | undefined) => {
     if (newConfig) {
-      Object.assign(config, newConfig);
+      Object.assign(config, { ...DEFAULT_BREATHING_CONFIG, ...newConfig });
       configName.value = newConfig.name;
       // Update sound theme in storage so the selector updates
       if (newConfig.soundTheme) {
@@ -1123,6 +1197,72 @@ function saveSessionNotes() {
     storage.updateSession(currentSession.value.id!, { notes: sessionNotes.value });
     successMessage.value = 'Notes saved!';
     showSuccessNotification.value = true;
+  }
+}
+
+async function refreshVoices() {
+  const voices = await ttsService.loadVoices();
+  ttsVoices.value = voices;
+  const hasVoices = voices.length > 0;
+  if (config.ttsVoice && hasVoices && !voices.some((v) => v.voiceURI === config.ttsVoice)) {
+    config.ttsVoice = undefined;
+  }
+  if (!config.ttsVoice && hasVoices) {
+    const preferred = voices.find((v) => v.lang?.toLowerCase().startsWith('en'))?.voiceURI ?? voices[0].voiceURI;
+    config.ttsVoice = preferred;
+  }
+  if (config.ttsVoice) {
+    ttsService.setVoiceByUri(config.ttsVoice);
+  } else if (!hasVoices) {
+    ttsService.setVoiceByUri(null);
+  }
+}
+
+function getPhaseDurationSeconds(phase: BreathingPhase, state: TimerState): number {
+  switch (phase) {
+    case 'INHALE':
+      return config.inhaleTime;
+    case 'EXHALE':
+      return config.exhaleTime;
+    case 'INHALE_HOLD':
+      return config.inhaleHoldTime;
+    case 'EXHALE_HOLD':
+      return config.exhaleHoldTime;
+    case 'EXTENDED_INHALE_HOLD':
+      return state.isFirstExtendedHold ? config.extendedHoldDuration : config.secondExtendedHoldDuration;
+    case 'EXTENDED_EXHALE_HOLD':
+      return state.isFirstExtendedHold ? config.extendedHoldDuration : config.secondExtendedHoldDuration;
+    default:
+      return 0;
+  }
+}
+
+function formatVoiceLabel(voice: SpeechSynthesisVoice): string {
+  const parts: string[] = [];
+  if (voice.name) parts.push(voice.name);
+  if (voice.lang) parts.push(voice.lang);
+  if (voice.default) parts.push('default');
+  if (voice.localService === false) parts.push('online');
+  return parts.join(' • ') || 'Voice';
+}
+
+function announcePhase(phase: BreathingPhase, state: TimerState) {
+  if (!config.ttsEnabled) return;
+
+  const durationSeconds = getPhaseDurationSeconds(phase, state);
+  const isShort = durationSeconds <= 2;
+
+  const phrases: Partial<Record<BreathingPhase, string>> = {
+    INHALE: isShort ? 'In' : 'Breathe In',
+    EXHALE: isShort ? 'Out' : 'Relax Out',
+    INHALE_HOLD: 'Hold',
+    EXHALE_HOLD: 'Hold',
+    EXTENDED_INHALE_HOLD: 'Hold',
+    EXTENDED_EXHALE_HOLD: 'Hold',
+  };
+  const phrase = phrases[phase];
+  if (phrase) {
+    ttsService.speak(phrase);
   }
 }
 </script>

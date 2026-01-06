@@ -15,11 +15,11 @@ class FakeOscillator {
   connect(node: unknown) {
     this.connects.push(node);
   }
-  start(t?: number) {
+  start(_t?: number) {
     this.started = true;
     this.ctx._started.push(this);
   }
-  stop(t?: number) {
+  stop(_t?: number) {
     this.stopped = true;
     this.ctx._stopped.push(this);
   }
@@ -47,10 +47,10 @@ class FakeBufferSource {
   connect(node: unknown) {
     this.connects.push(node);
   }
-  start(t?: number) {
+  start(_t?: number) {
     this.started = true;
   }
-  stop(t?: number) {
+  stop(_t?: number) {
     this.stopped = true;
   }
 }

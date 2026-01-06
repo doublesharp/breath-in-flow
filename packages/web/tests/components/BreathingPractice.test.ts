@@ -1,5 +1,5 @@
 import { mount, shallowMount } from '@vue/test-utils';
-import { describe, it, expect, vi, beforeEach, afterEach, SpyInstance, MockInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { nextTick, ref } from 'vue';
 import BreathingPractice from '@/components/BreathingPractice.vue';
 
@@ -14,6 +14,14 @@ const completeSessionMock = vi.fn();
 const cancelSessionMock = vi.fn();
 const updateSessionMock = vi.fn();
 const createConfigMock = vi.fn();
+
+let speakMock: ReturnType<typeof vi.fn>;
+let loadVoicesMock: ReturnType<typeof vi.fn>;
+let setVoiceMock: ReturnType<typeof vi.fn>;
+let setTtsEnabledMock: ReturnType<typeof vi.fn>;
+let hasNativeSupportMock: ReturnType<typeof vi.fn>;
+
+let lastTimerOptions: Record<string, unknown> | undefined;
 
 vi.mock('@/composables/useStorage', () => ({
   useStorage: () => ({
@@ -33,32 +41,64 @@ vi.mock('@/composables/useStorage', () => ({
 
 vi.mock('@/composables/useBreathingTimer', () => {
   return {
-    useBreathingTimer: () => ({
-      // component expects refs like `phase.value` etc.
-      phase: ref('IDLE'),
-      currentTime: ref(0),
-      totalPhaseTime: ref(0),
-      isRunning,
-      breathingScale: ref(1.0),
-      currentRepetition: ref(1),
-      currentSet: ref(1),
-      extendedHoldElapsed: ref(0),
-      isFirstExtendedHold: ref(true),
-      start: startMock,
-      pause: pauseMock,
-      stop: vi.fn(),
-      isPaused: ref(false),
-    }),
+    useBreathingTimer: (_config: unknown, options: Record<string, unknown>) => {
+      lastTimerOptions = options;
+      return {
+        // component expects refs like `phase.value` etc.
+        phase: ref('IDLE'),
+        currentTime: ref(0),
+        totalPhaseTime: ref(0),
+        isRunning,
+        breathingScale: ref(1.0),
+        currentRepetition: ref(1),
+        currentSet: ref(1),
+        extendedHoldElapsed: ref(0),
+        isFirstExtendedHold: ref(true),
+        start: startMock,
+        pause: pauseMock,
+        stop: vi.fn(),
+        isPaused: ref(false),
+      };
+    },
   };
 });
 
-describe('BreathingPractice.vue', () => {
-  let alertSpy: MockInstance;
+vi.mock('@/services/ttsService', () => ({
+  ttsService: {
+    get speak() {
+      speakMock = speakMock ?? vi.fn();
+      return speakMock;
+    },
+    get loadVoices() {
+      loadVoicesMock = loadVoicesMock ?? vi.fn().mockResolvedValue([]);
+      return loadVoicesMock;
+    },
+    get setVoiceByUri() {
+      setVoiceMock = setVoiceMock ?? vi.fn();
+      return setVoiceMock;
+    },
+    get setEnabled() {
+      setTtsEnabledMock = setTtsEnabledMock ?? vi.fn();
+      return setTtsEnabledMock;
+    },
+    get hasNativeSupport() {
+      hasNativeSupportMock = hasNativeSupportMock ?? vi.fn().mockReturnValue(false);
+      return hasNativeSupportMock;
+    },
+  },
+}));
 
+describe('BreathingPractice.vue', () => {
   beforeEach(() => {
-    alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
     localStorage.clear();
     vi.clearAllMocks();
+    speakMock = vi.fn();
+    loadVoicesMock = vi.fn().mockResolvedValue([]);
+    setVoiceMock = vi.fn();
+    setTtsEnabledMock = vi.fn();
+    hasNativeSupportMock = vi.fn().mockReturnValue(false);
+    lastTimerOptions = undefined;
   });
 
   afterEach(() => {
@@ -98,7 +138,8 @@ describe('BreathingPractice.vue', () => {
     await nextTick(); // Wait for component to render with isRunning = false
 
     // Open the configuration modal directly
-    wrapper.vm.showConfigModal = true;
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { showConfigModal?: boolean }).showConfigModal = true;
     await nextTick(); // Wait for modal DOM to render
 
     // Modal and toggles are in document.body (Teleported)
@@ -150,14 +191,15 @@ describe('BreathingPractice.vue', () => {
     });
 
     // Set up a session
-    if (wrapper.vm.currentSession) {
-      wrapper.vm.currentSession = { id: 1 } as Record<string, unknown>;
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    if (vm.currentSession) {
+      vm.currentSession = { id: 1 } as Record<string, unknown>;
     }
 
-    const stopSpy = vi.spyOn(wrapper.vm.timer, 'stop');
+    const stopSpy = vi.spyOn((vm as { timer: unknown }).timer as { stop: () => void }, 'stop');
 
     // Call confirmExit to show modal
-    ((wrapper.vm as Record<string, unknown>).confirmExit as () => void)();
+    ((vm as Record<string, unknown>).confirmExit as () => void)();
     await nextTick();
 
     // The modal should be shown - we just verify stop wasn't called yet
@@ -169,10 +211,16 @@ describe('BreathingPractice.vue', () => {
   it('Start Next Set button calls timer.nextSet when in SET_COMPLETE', async () => {
     const wrapper = shallowMount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
 
-    if (wrapper.vm.timer && wrapper.vm.timer.state) {
-      wrapper.vm.timer.state.value.phase = 'SET_COMPLETE';
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    if (
+      (vm as { timer?: { state?: { value: { phase?: string } }; nextSet?: () => void } }).timer
+        ?.state
+    ) {
+      (
+        vm as { timer: { state: { value: { phase: string } }; nextSet?: () => void } }
+      ).timer.state.value.phase = 'SET_COMPLETE';
       // spy on nextSet
-      wrapper.vm.timer.nextSet = vi.fn();
+      (vm as { timer: { nextSet?: () => void } }).timer.nextSet = vi.fn();
 
       await nextTick();
 
@@ -180,7 +228,7 @@ describe('BreathingPractice.vue', () => {
       expect(btn.exists()).toBeTruthy();
       await btn.trigger('click');
 
-      expect(wrapper.vm.timer.nextSet).toHaveBeenCalled();
+      expect((vm as { timer: { nextSet?: () => void } }).timer.nextSet).toHaveBeenCalled();
     }
   });
 
@@ -193,11 +241,12 @@ describe('BreathingPractice.vue', () => {
     await nextTick(); // Wait for component to render
 
     // Open config modal directly
-    wrapper.vm.showConfigModal = true;
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { showConfigModal?: boolean }).showConfigModal = true;
     await nextTick(); // Wait for modal DOM to render
 
     // Set the config name
-    wrapper.vm.configName = 'My Preset';
+    (vm as { configName?: string }).configName = 'My Preset';
     await nextTick();
 
     // Find Save Preset button in document.body (Teleported)
@@ -245,10 +294,9 @@ describe('BreathingPractice.vue', () => {
     });
 
     // Call saveConfig which should show modal since default configName is empty
-    if (typeof (wrapper.vm as unknown as Record<string, unknown>).saveConfig === 'function') {
-      await (
-        (wrapper.vm as unknown as Record<string, unknown>).saveConfig as () => Promise<void>
-      )();
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    if (typeof vm.saveConfig === 'function') {
+      await (vm.saveConfig as () => Promise<void>)();
       await nextTick();
 
       // Check that error modal is visible in document.body (Teleport)
@@ -370,6 +418,29 @@ describe('BreathingPractice.vue', () => {
 
       // Verify component mounts and can access session notes feature
       expect(wrapper.exists()).toBe(true);
+    });
+
+    it('announces phases when TTS enabled', async () => {
+      isRunning.value = false;
+      const wrapper = mount(BreathingPractice, {
+        global: {
+          provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+          stubs: ['BreathingVisualizer'],
+        },
+      });
+
+      const vm = wrapper.vm as unknown as Record<string, unknown>;
+      (vm as { config: { ttsEnabled: boolean } }).config.ttsEnabled = true;
+      await nextTick();
+
+      const onPhaseChange = lastTimerOptions?.onPhaseChange as
+        | ((phase: string, state: unknown) => void)
+        | undefined;
+      expect(onPhaseChange).toBeDefined();
+      onPhaseChange?.('INHALE', {});
+      expect(speakMock).toHaveBeenCalledWith('Breathe In');
+
+      wrapper.unmount();
     });
   });
 });

@@ -51,6 +51,7 @@ function createTestConfigInput(
     secondExtendedHoldDuration: 30,
     soundEnabled: false,
     soundTheme: 'wood',
+    ttsEnabled: false,
     ...overrides,
   };
 }
@@ -494,6 +495,7 @@ describe('useStorage', () => {
           secondExtendedHoldDuration: 30,
           soundEnabled: false,
           soundTheme: 'wood',
+          ttsEnabled: false,
         })
       ).not.toThrow();
     });

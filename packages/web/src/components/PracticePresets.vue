@@ -302,6 +302,7 @@ const presets: Preset[] = [
     targetSets: 0,
     soundEnabled: true,
     soundTheme: 'subtle',
+    ttsEnabled: true,
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -316,6 +317,7 @@ const presets: Preset[] = [
     targetSets: 0,
     soundEnabled: true,
     soundTheme: 'chimes',
+    ttsEnabled: true,
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -336,6 +338,7 @@ const presets: Preset[] = [
     targetSets: 3,
     soundEnabled: true,
     soundTheme: 'wind',
+    ttsEnabled: true,
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -350,6 +353,7 @@ const presets: Preset[] = [
     targetSets: 0,
     soundEnabled: true,
     soundTheme: 'water',
+    ttsEnabled: true,
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -364,6 +368,7 @@ const presets: Preset[] = [
     targetSets: 0,
     soundEnabled: true,
     soundTheme: 'wood',
+    ttsEnabled: true,
   },
   {
     ...DEFAULT_BREATHING_CONFIG,
@@ -378,6 +383,7 @@ const presets: Preset[] = [
     targetSets: 1,
     soundEnabled: true,
     soundTheme: 'water',
+    ttsEnabled: true,
   },
 ];
 

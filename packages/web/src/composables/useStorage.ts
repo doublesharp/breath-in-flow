@@ -20,7 +20,10 @@ function loadFromStorage() {
   try {
     const storedConfigs = localStorage.getItem('breath-in-flow-configs');
     if (storedConfigs) {
-      configs.value = JSON.parse(storedConfigs);
+      configs.value = JSON.parse(storedConfigs).map((c: BreathingConfig) => ({
+        ...DEFAULT_BREATHING_CONFIG,
+        ...c,
+      }));
     }
 
     const storedSessions = localStorage.getItem('breath-in-flow-sessions');
@@ -87,6 +90,8 @@ export function useStorage() {
   function createConfig(input: CreateBreathingConfig): BreathingConfig {
     const config: BreathingConfig = {
       ...input,
+      ttsEnabled: input.ttsEnabled ?? DEFAULT_BREATHING_CONFIG.ttsEnabled,
+      ttsVoice: input.ttsVoice ?? DEFAULT_BREATHING_CONFIG.ttsVoice,
       id: uuidv4(),
       createdAt: new Date(),
       updatedAt: new Date(),

@@ -65,6 +65,10 @@ export const BreathingConfigSchema = z.object({
   soundEnabled: z.boolean().default(true),
   soundTheme: SoundThemeSchema.default('wood'),
 
+  // Voice guidance (TTS)
+  ttsEnabled: z.boolean().default(false),
+  ttsVoice: z.string().max(200).optional(),
+
   // Metadata
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
@@ -174,6 +178,8 @@ export const DEFAULT_BREATHING_CONFIG: CreateBreathingConfig = {
   targetSets: 0,
   soundEnabled: true,
   soundTheme: 'wood',
+  ttsEnabled: false,
+  ttsVoice: undefined,
 };
 
 export const INITIAL_TIMER_STATE: TimerState = {
