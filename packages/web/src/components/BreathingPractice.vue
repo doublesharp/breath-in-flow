@@ -29,12 +29,13 @@
             <div class="flex-1">
               <h3 class="text-xl font-bold text-white mb-2">Stop Session?</h3>
               <p class="text-slate-300 mb-6">
-                Are you sure you want to stop this session? Your progress will be saved, but the current set will be
-                cancelled.
+                Choose what to do with this in-progress session. You can keep going, save the
+                incomplete progress, or exit without saving.
               </p>
-              <div class="flex gap-3 justify-end">
+              <div class="flex flex-col sm:flex-row gap-3 justify-end">
                 <button @click="showStopConfirmation = false" class="btn-secondary">Cancel</button>
-                <button @click="confirmStopSession" class="btn-danger">Stop Session</button>
+                <button @click="saveIncompleteSession" class="btn-primary">Save Session</button>
+                <button @click="exitWithoutSavingSession" class="btn-danger">Exit</button>
               </div>
             </div>
           </div>
@@ -891,7 +892,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, inject, onMounted, computed } from 'vue';
+import { ref, reactive, watch, inject, onMounted, onUnmounted, computed } from 'vue';
+import { Capacitor } from '@capacitor/core';
+import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
 import { useBreathingTimer, useStorage } from '../composables';
@@ -1050,6 +1053,43 @@ const isToleranceExtendedHold = computed(() => {
   return mode === 'TOLERANCE';
 });
 
+const isNativePlatform = Capacitor.isNativePlatform();
+
+async function enableKeepAwake() {
+  if (!isNativePlatform) return;
+  try {
+    await KeepAwake.keepAwake();
+  } catch (error) {
+    // Fail silently; keep-awake is best-effort on native platforms
+    console.warn('KeepAwake.keepAwake failed', error);
+  }
+}
+
+async function allowSleep() {
+  if (!isNativePlatform) return;
+  try {
+    await KeepAwake.allowSleep();
+  } catch (error) {
+    console.warn('KeepAwake.allowSleep failed', error);
+  }
+}
+
+watch(
+  () => ({ running: timer.isRunning.value, paused: timer.isPaused.value }),
+  ({ running, paused }) => {
+    if (running && !paused) {
+      void enableKeepAwake();
+    } else {
+      void allowSleep();
+    }
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  void allowSleep();
+});
+
 // Watch for config changes from parent (when loading presets)
 watch(
   () => selectedConfig?.value,
@@ -1093,9 +1133,6 @@ function startExercise() {
 }
 
 function stopExercise() {
-  if (currentSession.value) {
-    storage.cancelSession(currentSession.value.id!);
-  }
   timer.stop();
   currentSession.value = null;
   currentSetData.value = null;
@@ -1105,8 +1142,35 @@ function confirmExit() {
   showStopConfirmation.value = true;
 }
 
-function confirmStopSession() {
+function persistPartialSetProgress() {
+  if (!currentSession.value || !currentSetData.value) return;
+
+  const session = storage.getSession(currentSession.value.id!);
+  const hasSetAlready = session?.sets.some((set) => set.setNumber === currentSetData.value?.setNumber);
+
+  if (!hasSetAlready) {
+    storage.addSetToSession(currentSession.value.id!, { ...currentSetData.value });
+  }
+}
+
+function exitWithoutSavingSession() {
   showStopConfirmation.value = false;
+
+  if (currentSession.value?.id) {
+    storage.deleteSession(currentSession.value.id);
+  }
+
+  stopExercise();
+}
+
+function saveIncompleteSession() {
+  showStopConfirmation.value = false;
+
+  if (currentSession.value?.id) {
+    persistPartialSetProgress();
+    storage.cancelSession(currentSession.value.id);
+  }
+
   stopExercise();
 }
 

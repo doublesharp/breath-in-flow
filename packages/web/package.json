@@ -36,10 +36,11 @@
   "dependencies": {
     "@breath-in-flow/database": "workspace:*",
     "@breath-in-flow/shared": "workspace:*",
+    "@capacitor-community/keep-awake": "^7.1.0",
+    "@capacitor-community/text-to-speech": "^5.0.0",
     "@capacitor/android": "^7.4.4",
     "@capacitor/core": "^7.4.4",
     "@capacitor/ios": "^7.4.4",
-    "@capacitor-community/text-to-speech": "^5.0.0",
     "chart.js": "^4.5.1",
     "date-fns": "^4.1.0",
     "electron-squirrel-startup": "^1.0.1",

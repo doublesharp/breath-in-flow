@@ -94,6 +94,9 @@ importers:
       '@breath-in-flow/shared':
         specifier: workspace:*
         version: link:../shared
+      '@capacitor-community/keep-awake':
+        specifier: ^7.1.0
+        version: 7.1.0(@capacitor/core@7.4.4)
       '@capacitor-community/text-to-speech':
         specifier: ^5.0.0
         version: 5.1.0(@capacitor/core@7.4.4)
@@ -228,6 +231,11 @@ packages:
 
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
+
+  '@capacitor-community/keep-awake@7.1.0':
+    resolution: {integrity: sha512-4Hj6OKnBd/DAOeiMnqBy74tg1rwC+qLYWQbWJmysMZm2e2nptz43hxaKu22Xlyyw5O71CwwskLCM0skDFMPpQQ==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
 
   '@capacitor-community/text-to-speech@5.1.0':
     resolution: {integrity: sha512-Pe8i2M6bSlTPR83UeP7H7SouCdvQ6cAMq+nMatCuXKAd9rdRmyzdkurNj7EsM0FyjfAmGInhv9yhmVd3jNWzQQ==}
@@ -3914,6 +3922,7 @@ packages:
   whatwg-encoding@2.0.0:
     resolution: {integrity: sha512-p41ogyeMUrw3jWclHWTQg1k05DSVXPLcVxRTYsXUk+ZooOCZLcoYgPZ/HL/D/N+uQPOtcp1me1WhBEaX02mhWg==}
     engines: {node: '>=12'}
+    deprecated: Use @exodus/bytes instead for a more spec-conformant and faster implementation
 
   whatwg-mimetype@3.0.0:
     resolution: {integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==}
@@ -4080,6 +4089,10 @@ snapshots:
       '@babel/helper-validator-identifier': 7.28.5
 
   '@bcoe/v8-coverage@0.2.3': {}
+
+  '@capacitor-community/keep-awake@7.1.0(@capacitor/core@7.4.4)':
+    dependencies:
+      '@capacitor/core': 7.4.4
 
   '@capacitor-community/text-to-speech@5.1.0(@capacitor/core@7.4.4)':
     dependencies:
