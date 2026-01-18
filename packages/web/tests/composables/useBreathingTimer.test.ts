@@ -279,6 +279,33 @@ describe('useBreathingTimer', () => {
       expect(timer.phase.value).toBe('SET_COMPLETE');
     });
 
+    it('starts recovery inhale before first EXTENDED_INHALE_HOLD', () => {
+      config.extendedHoldEnabled = true;
+      config.extendedHoldType = 'INHALE';
+      config.extendedHoldMode = 'TIMED';
+      config.extendedHoldDuration = 5;
+      config.repetitions = 1;
+      config.inhaleHoldTime = 0;
+      config.exhaleHoldTime = 0;
+      config.inhaleTime = 2;
+      config.exhaleTime = 2;
+
+      const timer = useBreathingTimer(config);
+      timer.start();
+
+      // Complete inhale + exhale to trigger first extended hold
+      vi.advanceTimersByTime(4500);
+
+      // Should insert recovery inhale before extended inhale hold
+      expect(timer.phase.value).toBe('INHALE');
+      expect(timer.isRecoveryBreath.value).toBe(true);
+
+      // After recovery inhale, should enter EXTENDED_INHALE_HOLD
+      vi.advanceTimersByTime(2100);
+      expect(timer.phase.value).toBe('EXTENDED_INHALE_HOLD');
+      expect(timer.isRecoveryBreath.value).toBe(false);
+    });
+
     it('handles second extended hold of type INHALE (recovery breath) after EXHALE hold', () => {
       config.extendedHoldEnabled = true;
       config.extendedHoldType = 'EXHALE';
@@ -311,7 +338,7 @@ describe('useBreathingTimer', () => {
       expect(timer.phase.value).toBe('INHALE');
     });
 
-    it('starts second extended EXHALE hold after finishing an INHALE extended hold', () => {
+    it('starts recovery exhale before second EXTENDED_EXHALE_HOLD after INHALE extended hold', () => {
       config.extendedHoldEnabled = true;
       config.extendedHoldType = 'INHALE';
       config.extendedHoldMode = 'TIMED';
@@ -332,10 +359,20 @@ describe('useBreathingTimer', () => {
 
       // Advance through a full inhale+exhale cycle to reach the extended inhale hold
       vi.advanceTimersByTime(4500); // inhale(2s) + exhale(2s) + buffer
+      expect(timer.phase.value).toBe('INHALE');
+      expect(timer.isRecoveryBreath.value).toBe(true);
+
+      // Complete recovery inhale
+      vi.advanceTimersByTime(2100);
       expect(timer.phase.value).toBe('EXTENDED_INHALE_HOLD');
 
       // End the first extended inhale hold and expect the second (EXHALE) hold to start
       timer.endExtendedHold();
+      expect(timer.phase.value).toBe('EXHALE');
+      expect(timer.isRecoveryExhale.value).toBe(true);
+
+      // Complete recovery exhale
+      vi.advanceTimersByTime(2100);
       expect(timer.phase.value).toBe('EXTENDED_EXHALE_HOLD');
     });
 
@@ -376,7 +413,7 @@ describe('useBreathingTimer', () => {
       expect(timer.phase.value).toBe('INHALE');
     });
 
-    it('after ending first extended INHALE hold and second is EXHALE, should start second hold', () => {
+    it('after ending first extended INHALE hold and second is EXHALE, should recover exhale first', () => {
       const baseConfig: BreathingConfig = {
         name: 'Test',
         inhaleTime: 2,
@@ -405,9 +442,10 @@ describe('useBreathingTimer', () => {
 
       timer.endExtendedHold();
 
-      // Should have moved to second extended hold (EXHALE)
+      // Should insert recovery exhale before second extended hold
       expect(timer.state.value.isFirstExtendedHold).toBe(false);
-      expect(['EXTENDED_EXHALE_HOLD', 'EXTENDED_EXHALE_HOLD']).toContain(timer.phase.value);
+      expect(timer.state.value.isRecoveryExhale).toBe(true);
+      expect(timer.phase.value).toBe('EXHALE');
     });
 
     it('should not end extended hold if not in extended hold phase', () => {
@@ -569,7 +607,7 @@ describe('useBreathingTimer', () => {
       expect(timer.phase.value).not.toBe('IDLE');
     });
 
-    it('increments extendedHoldElapsed in tolerance mode via skipPhase trick', async () => {
+    it('skipPhase ends tolerance extended hold', () => {
       const baseConfig: BreathingConfig = {
         name: 'Test',
         inhaleTime: 1,
@@ -581,7 +619,7 @@ describe('useBreathingTimer', () => {
         extendedHoldMode: 'TOLERANCE',
         extendedHoldType: 'EXHALE',
         extendedHoldDuration: 10,
-        secondExtendedHoldEnabled: true,
+        secondExtendedHoldEnabled: false,
         secondExtendedHoldMode: 'TIMED',
         secondExtendedHoldType: 'INHALE',
         secondExtendedHoldDuration: 15,
@@ -590,21 +628,51 @@ describe('useBreathingTimer', () => {
         soundTheme: 'wood',
         ttsEnabled: false,
       };
-      const timer = useBreathingTimer(baseConfig);
+      const onExtendedHoldEnd = vi.fn();
+      const timer = useBreathingTimer(baseConfig, { onExtendedHoldEnd });
 
       // Put the timer into an extended hold state
       timer.state.value.phase = 'EXTENDED_EXHALE_HOLD';
       timer.state.value.isFirstExtendedHold = true;
-      timer.state.value.extendedHoldElapsed = 0;
+      timer.state.value.extendedHoldElapsed = 4;
       timer.state.value.isRunning = true;
 
-      // Call skipPhase which will call tick() once and exercise tolerance branch
       timer.skipPhase();
 
-      // small advance to ensure any intervals resolve
-      vi.advanceTimersByTime(50);
+      expect(onExtendedHoldEnd).toHaveBeenCalled();
+    });
 
-      expect(timer.state.value.extendedHoldElapsed).toBeGreaterThan(0);
+    it('pauses and resumes tolerance extended hold without time jump', () => {
+      const baseConfig: BreathingConfig = {
+        ...DEFAULT_BREATHING_CONFIG,
+        inhaleTime: 1,
+        exhaleTime: 1,
+        inhaleHoldTime: 0,
+        exhaleHoldTime: 0,
+        repetitions: 1,
+        extendedHoldEnabled: true,
+        extendedHoldMode: 'TOLERANCE',
+        extendedHoldType: 'EXHALE',
+      };
+
+      const timer = useBreathingTimer(baseConfig);
+      timer.start();
+
+      // Advance to extended exhale hold
+      vi.advanceTimersByTime(2500);
+      expect(timer.phase.value).toBe('EXTENDED_EXHALE_HOLD');
+
+      vi.advanceTimersByTime(1500);
+      const elapsedBeforePause = timer.extendedHoldElapsed.value;
+
+      timer.pause();
+      vi.advanceTimersByTime(3000);
+
+      timer.resume();
+      vi.advanceTimersByTime(1000);
+
+      expect(timer.extendedHoldElapsed.value).toBeGreaterThan(elapsedBeforePause);
+      expect(timer.extendedHoldElapsed.value).toBeLessThan(elapsedBeforePause + 2.5);
     });
 
     it('increments extendedHoldElapsed for second (non-first) tolerance mode', () => {

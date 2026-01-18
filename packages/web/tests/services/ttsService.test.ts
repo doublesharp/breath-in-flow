@@ -80,4 +80,22 @@ describe('ttsService', () => {
     const utterance = speakMock.mock.calls[0][0] as SpeechSynthesisUtterance;
     expect(utterance.voice?.voiceURI).toBe('voice-en-us');
   });
+
+  it('speeds up guidance for short phases', async () => {
+    ttsService.setEnabled(true);
+    await ttsService.loadVoices();
+    ttsService.speak('Full Breath In', { targetDurationSeconds: 1 });
+
+    const utterance = speakMock.mock.calls[0][0] as SpeechSynthesisUtterance;
+    expect(utterance.rate).toBeCloseTo(1.25, 2);
+  });
+
+  it('slows guidance when there is ample time', async () => {
+    ttsService.setEnabled(true);
+    await ttsService.loadVoices();
+    ttsService.speak('Full Breath Out', { targetDurationSeconds: 5 });
+
+    const utterance = speakMock.mock.calls[0][0] as SpeechSynthesisUtterance;
+    expect(utterance.rate).toBeCloseTo(0.85, 2);
+  });
 });

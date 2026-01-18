@@ -1,6 +1,10 @@
 import { ref } from 'vue';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
 
+type SpeakOptions = {
+  targetDurationSeconds?: number;
+};
+
 class TtsService {
   private enabled = false;
   private selectedVoiceUri: string | null = null;
@@ -11,6 +15,25 @@ class TtsService {
   private hasWebSpeech = false;
   private hasNativeTts = false;
   private detectionDone = false;
+
+  private computeRate(text: string, targetDurationSeconds?: number): number {
+    const comfortableRate = 0.95;
+    if (!targetDurationSeconds || targetDurationSeconds <= 0) return comfortableRate;
+
+    const words = Math.max(text.trim().split(/\s+/).length, 1);
+    const baseWordsPerSecond = 2.4; // Typical pacing at rate 1.0
+    const baseDuration = words / baseWordsPerSecond;
+
+    const desiredRate = baseDuration / targetDurationSeconds;
+    const clampedRate = Math.min(Math.max(desiredRate, 0.8), 1.35);
+
+    // When the phase is longer than the phrase, bias slightly slower for a calmer cue
+    if (targetDurationSeconds >= baseDuration * 1.5) {
+      return Math.max(0.85, clampedRate * 0.92);
+    }
+
+    return clampedRate;
+  }
 
   private getSynth(): SpeechSynthesis | null {
     if (typeof window === 'undefined') return null;
@@ -50,7 +73,6 @@ class TtsService {
         this.voicesReady.value = true;
         return this.nativeVoicesCache;
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('Failed to load native TTS voices', err);
         this.hasNativeTts = true;
         this.voicesReady.value = true;
@@ -129,10 +151,12 @@ class TtsService {
     return this.hasNativeTts;
   }
 
-  public async speak(text: string) {
+  public async speak(text: string, options?: SpeakOptions) {
     if (!this.enabled || !text) return;
 
     this.detectCapabilities();
+
+    const rate = this.computeRate(text, options?.targetDurationSeconds);
 
     // Prefer Web Speech when present (desktop/web, some Android WebViews)
     if (this.hasWebSpeech) {
@@ -154,7 +178,7 @@ class TtsService {
         utterance.voice = voice;
       }
 
-      utterance.rate = 0.95;
+      utterance.rate = rate;
       utterance.pitch = 1;
       utterance.volume = 1;
 
@@ -173,7 +197,7 @@ class TtsService {
 
       await TextToSpeech.speak({
         text,
-        rate: 0.95,
+        rate,
         pitch: 1,
         volume: 1,
         lang:
@@ -182,7 +206,6 @@ class TtsService {
         category: 'ambient',
       });
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('Native TTS failed', err);
     }
   }

@@ -29,8 +29,8 @@
             <div class="flex-1">
               <h3 class="text-xl font-bold text-white mb-2">Stop Session?</h3>
               <p class="text-slate-300 mb-6">
-                Choose what to do with this in-progress session. You can keep going, save the
-                incomplete progress, or exit without saving.
+                Choose what to do with this in-progress session. You can keep going, save the incomplete progress, or
+                exit without saving.
               </p>
               <div class="flex flex-col sm:flex-row gap-3 justify-end">
                 <button @click="showStopConfirmation = false" class="btn-secondary">Cancel</button>
@@ -1029,7 +1029,7 @@ const timer = useBreathingTimer(config, {
       const targetDuration =
         mode === 'TIMED' ? (isFirst ? config.extendedHoldDuration : config.secondExtendedHoldDuration) : undefined;
 
-      storage.addExtendedHoldToSet(currentSession.value.id!, currentSession.value.sets.length, {
+      currentSetData.value.extendedHolds.push({
         type,
         mode,
         targetDuration,
@@ -1121,6 +1121,8 @@ function startExercise() {
   // Create new session
   currentSession.value = storage.createSession(config);
 
+  sessionNotes.value = '';
+
   // Create first set
   currentSetData.value = {
     setNumber: 1,
@@ -1136,6 +1138,7 @@ function stopExercise() {
   timer.stop();
   currentSession.value = null;
   currentSetData.value = null;
+  sessionNotes.value = '';
 }
 
 function confirmExit() {
@@ -1203,6 +1206,7 @@ function resetExercise() {
   timer.stop();
   currentSession.value = null;
   currentSetData.value = null;
+  sessionNotes.value = '';
 }
 
 function applyConfigAndClose() {
@@ -1315,11 +1319,9 @@ function announcePhase(phase: BreathingPhase, state: TimerState) {
   if (!config.ttsEnabled) return;
 
   const durationSeconds = getPhaseDurationSeconds(phase, state);
-  const isShort = durationSeconds <= 2;
-
   const phrases: Partial<Record<BreathingPhase, string>> = {
-    INHALE: isShort ? 'In' : 'Breathe In',
-    EXHALE: isShort ? 'Out' : 'Relax Out',
+    INHALE: 'Full Breath In',
+    EXHALE: 'Full Breath Out',
     INHALE_HOLD: 'Hold',
     EXHALE_HOLD: 'Hold',
     EXTENDED_INHALE_HOLD: 'Hold',
@@ -1327,7 +1329,7 @@ function announcePhase(phase: BreathingPhase, state: TimerState) {
   };
   const phrase = phrases[phase];
   if (phrase) {
-    ttsService.speak(phrase);
+    ttsService.speak(phrase, { targetDurationSeconds: durationSeconds });
   }
 }
 </script>

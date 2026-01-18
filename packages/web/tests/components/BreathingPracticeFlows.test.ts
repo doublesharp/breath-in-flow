@@ -187,7 +187,15 @@ describe('BreathingPractice flows', () => {
     const vm = wrapper.vm as unknown as Record<string, unknown>;
     (vm as { timer: { endExtendedHold: () => void } }).timer.endExtendedHold();
 
-    expect(addExtendedHoldMock).toHaveBeenCalled();
+    // Hold should be stored on the current set data, not persisted yet
+    const currentSetData = (vm as { currentSetData?: { extendedHolds?: unknown[] } }).currentSetData;
+    expect(currentSetData?.extendedHolds?.length ?? 0).toBe(1);
+    expect(addExtendedHoldMock).not.toHaveBeenCalled();
+
+    // Persist when set completes
+    (vm as { timer: { triggerSetComplete: (n?: number) => void } }).timer.triggerSetComplete(1);
+    await (vm as { $nextTick: () => Promise<void> }).$nextTick();
+    expect(addSetMock).toHaveBeenCalled();
   });
 
   it('finish session button calls completeSession and resets state', async () => {

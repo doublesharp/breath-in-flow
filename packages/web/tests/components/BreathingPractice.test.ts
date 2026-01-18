@@ -179,6 +179,31 @@ describe('BreathingPractice.vue', () => {
     wrapper.unmount();
   });
 
+  it('resets session notes when starting a new session', async () => {
+    isRunning.value = false;
+    createSessionMock.mockReturnValue({ id: 'sess-notes', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref({}),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    const vm = wrapper.vm as unknown as Record<string, unknown>;
+    (vm as { sessionNotes?: string }).sessionNotes = 'Old notes';
+    await nextTick();
+
+    (vm as { startExercise?: () => void }).startExercise?.();
+    await nextTick();
+
+    expect((vm as { sessionNotes?: string }).sessionNotes).toBe('');
+    wrapper.unmount();
+  });
+
   it('confirmExit does not stop session on cancel', async () => {
     const wrapper = mount(BreathingPractice, {
       global: {

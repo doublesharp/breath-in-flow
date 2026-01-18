@@ -152,6 +152,7 @@ export const TimerStateSchema = z.object({
   extendedHoldElapsed: z.number().default(0), // Time elapsed in extended hold
   isFirstExtendedHold: z.boolean().default(true), // First or second extended hold
   isRecoveryBreath: z.boolean().default(false), // Whether we are in a recovery breath (inhale before second hold)
+  isRecoveryExhale: z.boolean().default(false), // Whether we are in a recovery exhale (exhale before second hold)
 });
 
 export type TimerState = z.infer<typeof TimerStateSchema>;
@@ -193,6 +194,7 @@ export const INITIAL_TIMER_STATE: TimerState = {
   extendedHoldElapsed: 0,
   isFirstExtendedHold: true,
   isRecoveryBreath: false,
+  isRecoveryExhale: false,
 };
 
 // ============================================

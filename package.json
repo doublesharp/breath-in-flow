@@ -30,10 +30,10 @@
     "build:web": "./scripts/build.sh web"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^9.39.2",
     "@vue/eslint-config-prettier": "^10.2.0",
     "@vue/eslint-config-typescript": "^14.6.0",
-    "eslint": "^9.39.1",
+    "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "eslint-plugin-vue": "^10.6.2",
@@ -47,7 +47,8 @@
   },
   "pnpm": {
     "overrides": {
-      "sharp": "^0.33.2"
+      "sharp": "^0.33.2",
+      "electron-builder-squirrel-windows": "26.4.0"
     },
     "onlyBuiltDependencies": [
       " ",

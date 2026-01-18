@@ -37,6 +37,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
   const extendedHoldElapsed = computed(() => state.value.extendedHoldElapsed);
   const isFirstExtendedHold = computed(() => state.value.isFirstExtendedHold);
   const isRecoveryBreath = computed(() => state.value.isRecoveryBreath);
+  const isRecoveryExhale = computed(() => state.value.isRecoveryExhale);
 
   const phaseInfo = computed(() => getPhaseInfo(state.value.phase, config));
   const displayTime = computed(() => formatTime(state.value.currentTime));
@@ -79,19 +80,20 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     }
   }
 
+  function getExtendedHoldMode(isFirst: boolean) {
+    return isFirst ? config.extendedHoldMode : config.secondExtendedHoldMode;
+  }
+
+  function isToleranceExtendedHold(phase: BreathingPhase, isFirst: boolean) {
+    if (phase !== 'EXTENDED_INHALE_HOLD' && phase !== 'EXTENDED_EXHALE_HOLD') return false;
+    return getExtendedHoldMode(isFirst) === 'TOLERANCE';
+  }
+
   function tick() {
     if (state.value.isPaused) return;
 
     // Determine current extended hold mode
-    let isToleranceMode = false;
-    if (
-      state.value.phase === 'EXTENDED_INHALE_HOLD' ||
-      state.value.phase === 'EXTENDED_EXHALE_HOLD'
-    ) {
-      const isFirst = state.value.isFirstExtendedHold;
-      const mode = isFirst ? config.extendedHoldMode : config.secondExtendedHoldMode;
-      isToleranceMode = mode === 'TOLERANCE';
-    }
+    const isToleranceMode = isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold);
 
     // Handle extended hold tolerance mode (counting up)
     if (isToleranceMode) {
@@ -144,6 +146,13 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     // Handle recovery breath transition
     if (state.value.isRecoveryBreath && currentPhase === 'INHALE') {
       state.value = { ...state.value, isRecoveryBreath: false };
+      startExtendedHold();
+      return;
+    }
+
+    // Handle recovery exhale transition
+    if (state.value.isRecoveryExhale && currentPhase === 'EXHALE') {
+      state.value = { ...state.value, isRecoveryExhale: false };
       startExtendedHold();
       return;
     }
@@ -216,11 +225,17 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     const holdType = isFirst ? config.extendedHoldType : config.secondExtendedHoldType;
     const holdMode = isFirst ? config.extendedHoldMode : config.secondExtendedHoldMode;
     const holdDuration = isFirst ? config.extendedHoldDuration : config.secondExtendedHoldDuration;
+    const currentPhase = state.value.phase;
 
     state.value = { ...state.value, extendedHoldElapsed: 0 };
     options.onExtendedHoldStart?.(holdType, state.value);
 
     if (holdType === 'INHALE') {
+      if (currentPhase !== 'INHALE') {
+        state.value = { ...state.value, isRecoveryBreath: true };
+        setPhase('INHALE', config.inhaleTime);
+        return;
+      }
       if (holdMode === 'TIMED') {
         setPhase('EXTENDED_INHALE_HOLD', holdDuration);
       } else {
@@ -247,18 +262,11 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
         state.value = { ...state.value, isRecoveryBreath: true };
         setPhase('INHALE', config.inhaleTime);
       } else {
-        // If second hold is EXHALE type, we can go straight to it (assuming we just finished an inhale hold?)
-        // But if we just finished EXTENDED_INHALE_HOLD, we are full. If we need to EXHALE hold, we need to EXHALE first.
-        // For now, let's assume standard Cyclic Hyperventilation: Exhale Hold -> Inhale -> Inhale Hold.
-        // If the pattern is Inhale Hold -> Exhale -> Exhale Hold, we need an Exhale transition.
-
-        // If we are full (INHALE_HOLD) and need to be empty (EXHALE_HOLD), we need to exhale.
+        // If second hold is EXHALE type and we just finished an INHALE hold, add a recovery exhale.
         const justFinishedInhaleHold = state.value.phase === 'EXTENDED_INHALE_HOLD';
         if (justFinishedInhaleHold && config.secondExtendedHoldType === 'EXHALE') {
-          // We need a recovery exhale?
-          // For simplicity, let's just start the hold. The user can exhale quickly.
-          // Or we could add isRecoveryExhale logic.
-          startExtendedHold();
+          state.value = { ...state.value, isRecoveryExhale: true };
+          setPhase('EXHALE', config.exhaleTime);
         } else {
           startExtendedHold();
         }
@@ -344,7 +352,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     pausedPhase.value = null;
 
     // Adjust phase start time to account for pause duration
-    phaseStartTime = Date.now() - (state.value.totalPhaseTime - pausedTimeRemaining) * 1000;
+    const wasToleranceHold = isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold);
+    phaseStartTime = wasToleranceHold
+      ? Date.now() - pausedTimeRemaining * 1000
+      : Date.now() - (state.value.totalPhaseTime - pausedTimeRemaining) * 1000;
 
     startInterval();
     options.onPhaseChange?.(state.value.phase, state.value);
@@ -392,6 +403,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
   function skipPhase() {
     if (!state.value.isRunning || state.value.isPaused) return;
+    if (isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)) {
+      endExtendedHold();
+      return;
+    }
     state.value = { ...state.value, currentTime: 0 };
     tick();
   }
@@ -416,6 +431,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     extendedHoldElapsed,
     isFirstExtendedHold,
     isRecoveryBreath,
+    isRecoveryExhale,
 
     // Computed
     phaseInfo,
