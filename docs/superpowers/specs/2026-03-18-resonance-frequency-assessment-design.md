@@ -18,7 +18,21 @@ Resonance frequency breathing maximizes heart-rate variability by matching breat
 | 5.0 | 12.00     | 4.8        | 7.2        |
 | 4.5 | 13.33     | 5.3        | 8.0        |
 
-All trials: 2-minute duration, no hold times, inhale/exhale only. The 5-step protocol always runs in full (6.5, 6.0, 5.5, 5.0, 4.5). Rest periods between trials are always 2 minutes.
+All trials: no hold times, inhale/exhale only. The 5-step protocol always runs in full (6.5, 6.0, 5.5, 5.0, 4.5). Rest periods between trials are always 2 minutes.
+
+### Trial Duration: Repetition-Based
+
+Trials use a repetition count rather than a strict 120-second timer, since `useBreathingTimer` is rep-based. Repetitions per trial are computed as `Math.round(120 / secPerBreath)`:
+
+| BPM | Sec/Breath | Reps | Actual Duration |
+|-----|-----------|------|-----------------|
+| 6.5 | 9.23      | 13   | 119.99s         |
+| 6.0 | 10.00     | 12   | 120.00s         |
+| 5.5 | 10.91     | 11   | 120.01s         |
+| 5.0 | 12.00     | 10   | 120.00s         |
+| 4.5 | 13.33     | 9    | 119.97s         |
+
+These are close enough to 2 minutes that no timer modification is needed. The warmup uses the same formula with `warmupDurationSeconds`.
 
 ## Data Model
 
@@ -31,7 +45,7 @@ Represents one 2-minute breathing trial:
   rate: number              // BPM (6.5, 6.0, 5.5, 5.0, 4.5)
   inhaleTime: number        // seconds
   exhaleTime: number        // seconds
-  durationSeconds: 120      // always 2 min
+  repetitions: number       // Math.round(120 / (inhaleTime + exhaleTime))
 
   // Scoring (filled after all trials complete)
   comfortRating?: number              // 1-5
@@ -50,7 +64,7 @@ User-configurable warmup settings:
 {
   warmupDurationSeconds: number   // default 120 (2 min), user-configurable
   warmupRate: number              // default 6.0 BPM, user-configurable
-  restDurationSeconds: 120        // always 2 min, not configurable
+  restDurationSeconds: 120        // fixed, not user-configurable
 }
 ```
 
@@ -96,7 +110,8 @@ Used to suggest the best rate (not binding — user always makes final choice):
 - Waveform smoothness: verySmooth = +3, somewhatSmooth = +2, jagged = +1
 - Comfort: 5 = +3, 4 = +2, 3 = +1, 2 = 0, 1 = -1
 - Each symptom present: -1
-- Tie-breaker: prefer slower rate if no symptoms at that rate; otherwise prefer faster
+- If HR amplitude and waveform smoothness are not provided (user has no HR monitor), scoring uses only comfort and symptoms (max 3 points instead of 9)
+- Tie-breaker chain: (1) fewer symptoms, (2) if still tied and no symptoms on either, prefer slower rate, (3) if still tied and both have symptoms, prefer faster rate
 
 The app highlights the suggested rate but the user selects the final winner.
 
@@ -109,12 +124,16 @@ The app highlights the suggested rate but the user selects the final winner.
 ### Modified Files
 
 - `packages/shared/src/schemas.ts` — New Zod schemas for AssessmentTrial, AssessmentConfig, AssessmentResult.
-- `packages/web/src/composables/useStorage.ts` — New methods: `getAssessments()`, `saveAssessment(result)`.
+- `packages/web/src/composables/useStorage.ts` — New methods: `getAssessments()`, `saveAssessment(result)`. Must include date revival for `completedAt` field, following the existing pattern for session dates.
 - `packages/web/src/components/BreathingPractice.vue` — Add "Find My Resonance Frequency" button; conditionally render ResonanceAssessment instead of normal practice UI.
 
 ### No New Composable
 
 The state machine is a linear wizard — straightforward enough to manage within the component. It uses `useBreathingTimer` for warmup and trial breathing, and a simple `setInterval` for rest countdowns.
+
+### Timer Strategy
+
+The component holds a single reactive config object and mutates its `inhaleTime`, `exhaleTime`, and `repetitions` before calling `timer.start()` for each phase (warmup and each trial). The timer's `inhaleHoldTime` and `exhaleHoldTime` are always 0, and `targetSets` is always 1. Extended hold settings are disabled. The `onSessionComplete` callback triggers the auto-advance to the next phase.
 
 ### Reused Components
 
@@ -130,6 +149,28 @@ The state machine is a linear wizard — straightforward enough to manage within
 - **SCORING**: Scrollable list of 5 trial cards with rating inputs. "Calculate Result" button at bottom.
 - **RESULT**: Suggested rate highlighted. All rates listed with scores. Tap to select, "Save & Create Preset" to finalize.
 
+## Cancellation & Pause
+
+**Cancellation**: A back/cancel button is visible at all times. Tapping it shows a confirmation dialog ("Cancel assessment? All progress will be lost."). On confirm, partial data is discarded and the user returns to normal practice. No resume support — the user must restart the full assessment.
+
+**Pause**: Supported during WARMUP and TRIAL_BREATHING phases via the existing `useBreathingTimer` pause/resume. During TRIAL_REST, pause freezes the rest countdown. The pause button is hidden during INTRO, SCORING, and RESULT phases (not applicable).
+
+## Keep-Awake
+
+The assessment enables keep-awake (`KeepAwake.keepAwake()`) on entering WARMUP and disables it (`KeepAwake.allowSleep()`) on completion, cancellation, or error. This matches the existing BreathingPractice behavior.
+
+## TTS & Sound During Assessment
+
+- **Trial transitions**: TTS announces "Trial N starting at X breaths per minute" before each trial begins.
+- **Rest periods**: TTS announces "Rest quietly" at the start of each rest period. No tick sounds during rest.
+- **Warmup**: TTS announces "Warmup starting" at the beginning.
+- **Breathing phases**: Normal TTS phase cues ("Breathe in", "Breathe out") play during warmup and trial breathing, same as regular practice.
+- **Scoring/Result**: No TTS.
+
+## HR Monitoring Fields
+
+The HR amplitude and waveform smoothness fields are **optional** — they require an external heart rate monitor (e.g., Elite HRV). The scoring form includes guidance text: "If you used a heart rate monitor, rate the following based on what you observed. Skip these if you didn't use one." When these fields are omitted, the scoring algorithm uses only comfort and symptoms.
+
 ## Entry Point
 
 A "Find My Resonance Frequency" button in the Practice tab (in the config area or above the start button). Tapping it replaces the normal practice UI with `ResonanceAssessment.vue`. A back/cancel button returns to normal practice at any point.
@@ -144,7 +185,7 @@ A "Find My Resonance Frequency" button in the Practice tab (in the config area o
 
 On result confirmation, creates a `BreathingConfig`:
 
-- `name`: "My Resonance Frequency — X.X BPM"
+- `name`: "My Resonance Frequency — X.X BPM" (if a preset with this name already exists, it is overwritten/updated rather than duplicated)
 - `inhaleTime` / `exhaleTime`: from the selected trial
 - `inhaleHoldTime`: 0, `exhaleHoldTime`: 0
 - `repetitions`: 4
