@@ -24,15 +24,15 @@ All trials: no hold times, inhale/exhale only. The 5-step protocol always runs i
 
 Trials use a repetition count rather than a strict 120-second timer, since `useBreathingTimer` is rep-based. Repetitions per trial are computed as `Math.round(120 / secPerBreath)`:
 
-| BPM | Sec/Breath | Reps | Actual Duration |
-|-----|-----------|------|-----------------|
-| 6.5 | 9.23      | 13   | 119.99s         |
-| 6.0 | 10.00     | 12   | 120.00s         |
-| 5.5 | 10.91     | 11   | 120.01s         |
-| 5.0 | 12.00     | 10   | 120.00s         |
-| 4.5 | 13.33     | 9    | 119.97s         |
+| BPM | Inhale+Exhale | Reps | Actual Duration |
+|-----|--------------|------|-----------------|
+| 6.5 | 9.2s         | 13   | 119.6s          |
+| 6.0 | 10.0s        | 12   | 120.0s          |
+| 5.5 | 10.9s        | 11   | 119.9s          |
+| 5.0 | 12.0s        | 10   | 120.0s          |
+| 4.5 | 13.3s        | 9    | 119.7s          |
 
-These are close enough to 2 minutes that no timer modification is needed. The warmup uses the same formula with `warmupDurationSeconds`.
+Durations are computed from literal `inhaleTime + exhaleTime` (not theoretical secPerBreath). All are within 0.4s of 2 minutes — close enough that no timer modification is needed. The warmup uses the same formula with `warmupDurationSeconds`.
 
 ## Data Model
 
@@ -124,7 +124,7 @@ The app highlights the suggested rate but the user selects the final winner.
 ### Modified Files
 
 - `packages/shared/src/schemas.ts` — New Zod schemas for AssessmentTrial, AssessmentConfig, AssessmentResult.
-- `packages/web/src/composables/useStorage.ts` — New methods: `getAssessments()`, `saveAssessment(result)`. Must include date revival for `completedAt` field, following the existing pattern for session dates.
+- `packages/web/src/composables/useStorage.ts` — New methods: `getAssessments()`, `saveAssessment(result)`. The existing date revival keys in `useStorage.ts` already cover `completedAt`; no additional revival logic needed.
 - `packages/web/src/components/BreathingPractice.vue` — Add "Find My Resonance Frequency" button; conditionally render ResonanceAssessment instead of normal practice UI.
 
 ### No New Composable
@@ -133,7 +133,9 @@ The state machine is a linear wizard — straightforward enough to manage within
 
 ### Timer Strategy
 
-The component holds a single reactive config object and mutates its `inhaleTime`, `exhaleTime`, and `repetitions` before calling `timer.start()` for each phase (warmup and each trial). The timer's `inhaleHoldTime` and `exhaleHoldTime` are always 0, and `targetSets` is always 1. Extended hold settings are disabled. The `onSessionComplete` callback triggers the auto-advance to the next phase.
+The component holds a single reactive config object and mutates its `inhaleTime`, `exhaleTime`, and `repetitions` before calling `timer.start()` for each phase (warmup and each trial). The timer's `inhaleHoldTime` and `exhaleHoldTime` are always 0, and `targetSets` is always 1. Extended hold settings are disabled.
+
+After each phase completes, the `onSessionComplete` callback fires (which sets `isRunning = false` internally). The callback then mutates the config for the next phase and calls `timer.start()` — this works because `isRunning` is already `false` at that point.
 
 ### Reused Components
 
@@ -153,7 +155,7 @@ The component holds a single reactive config object and mutates its `inhaleTime`
 
 **Cancellation**: A back/cancel button is visible at all times. Tapping it shows a confirmation dialog ("Cancel assessment? All progress will be lost."). On confirm, partial data is discarded and the user returns to normal practice. No resume support — the user must restart the full assessment.
 
-**Pause**: Supported during WARMUP and TRIAL_BREATHING phases via the existing `useBreathingTimer` pause/resume. During TRIAL_REST, pause freezes the rest countdown. The pause button is hidden during INTRO, SCORING, and RESULT phases (not applicable).
+**Pause**: Supported during WARMUP and TRIAL_BREATHING phases via the existing `useBreathingTimer` pause/resume. During TRIAL_REST, the component manages a local `isPaused` ref; the `setInterval` callback checks this ref and skips the countdown decrement when paused. The pause button is hidden during INTRO, SCORING, and RESULT phases (not applicable).
 
 ## Keep-Awake
 
@@ -188,7 +190,7 @@ On result confirmation, creates a `BreathingConfig`:
 - `name`: "My Resonance Frequency — X.X BPM" (if a preset with this name already exists, it is overwritten/updated rather than duplicated)
 - `inhaleTime` / `exhaleTime`: from the selected trial
 - `inhaleHoldTime`: 0, `exhaleHoldTime`: 0
-- `repetitions`: 4
+- `repetitions`: computed as `Math.round(600 / (inhaleTime + exhaleTime))` for ~10 minutes of practice per set
 - `targetSets`: 0 (unlimited)
 - All extended hold settings: disabled
 - Sound/TTS: inherited from current config
