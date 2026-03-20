@@ -19,6 +19,13 @@ export {
   INITIAL_TIMER_STATE,
   PHASE_INFO,
   getPhaseInfo,
+  ASSESSMENT_TRIALS,
+  AssessmentSymptomSchema,
+  HrAmplitudeSchema,
+  WaveformSmoothnessSchema,
+  AssessmentTrialSchema,
+  AssessmentConfigSchema,
+  AssessmentResultSchema,
 } from './schemas.js';
 
 export type {
@@ -35,6 +42,12 @@ export type {
   CreateSession,
   TimerState,
   PhaseInfo,
+  AssessmentSymptom,
+  HrAmplitude,
+  WaveformSmoothness,
+  AssessmentTrial,
+  AssessmentConfig,
+  AssessmentResult,
 } from './schemas.js';
 
 // Timer

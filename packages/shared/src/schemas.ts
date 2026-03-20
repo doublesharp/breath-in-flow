@@ -33,11 +33,11 @@ export type ExtendedHoldType = z.infer<typeof ExtendedHoldTypeSchema>;
 export const ExtendedHoldModeSchema = z.enum(['TIMED', 'TOLERANCE']);
 export type ExtendedHoldMode = z.infer<typeof ExtendedHoldModeSchema>;
 
-export const BreathingConfigSchema = z.object({
+const BaseBreathingConfigSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().min(1, 'Name is required').max(100),
 
-  // Core breathing times (in seconds)
+  // Core breathing times (in seconds) - must be at least 1 to prevent infinite loops
   inhaleTime: z.number().min(1).max(60).default(4),
   inhaleHoldTime: z.number().min(0).max(60).default(0),
   exhaleTime: z.number().min(1).max(60).default(4),
@@ -74,13 +74,66 @@ export const BreathingConfigSchema = z.object({
   updatedAt: z.date().optional(),
 });
 
+// Apply refinements for validation
+export const BreathingConfigSchema = BaseBreathingConfigSchema.refine(
+  (data) => {
+    // If extended hold is enabled with TIMED mode, duration must be positive
+    if (data.extendedHoldEnabled && data.extendedHoldMode === 'TIMED') {
+      return data.extendedHoldDuration > 0;
+    }
+    return true;
+  },
+  {
+    message: 'Extended hold duration must be greater than 0 for TIMED mode',
+    path: ['extendedHoldDuration'],
+  }
+).refine(
+  (data) => {
+    // If second extended hold is enabled with TIMED mode, duration must be positive
+    if (data.secondExtendedHoldEnabled && data.secondExtendedHoldMode === 'TIMED') {
+      return data.secondExtendedHoldDuration > 0;
+    }
+    return true;
+  },
+  {
+    message: 'Second extended hold duration must be greater than 0 for TIMED mode',
+    path: ['secondExtendedHoldDuration'],
+  }
+);
+
 export type BreathingConfig = z.infer<typeof BreathingConfigSchema>;
 
-export const CreateBreathingConfigSchema = BreathingConfigSchema.omit({
+export const CreateBreathingConfigSchema = BaseBreathingConfigSchema.omit({
   id: true,
   createdAt: true,
   updatedAt: true,
-});
+})
+  .refine(
+    (data) => {
+      // If extended hold is enabled with TIMED mode, duration must be positive
+      if (data.extendedHoldEnabled && data.extendedHoldMode === 'TIMED') {
+        return data.extendedHoldDuration > 0;
+      }
+      return true;
+    },
+    {
+      message: 'Extended hold duration must be greater than 0 for TIMED mode',
+      path: ['extendedHoldDuration'],
+    }
+  )
+  .refine(
+    (data) => {
+      // If second extended hold is enabled with TIMED mode, duration must be positive
+      if (data.secondExtendedHoldEnabled && data.secondExtendedHoldMode === 'TIMED') {
+        return data.secondExtendedHoldDuration > 0;
+      }
+      return true;
+    },
+    {
+      message: 'Second extended hold duration must be greater than 0 for TIMED mode',
+      path: ['secondExtendedHoldDuration'],
+    }
+  );
 
 export type CreateBreathingConfig = z.infer<typeof CreateBreathingConfigSchema>;
 
@@ -318,3 +371,61 @@ export const PHASE_INFO: Record<BreathingPhase, PhaseInfo> = {
   SESSION_COMPLETE: getPhaseInfo('SESSION_COMPLETE'),
   PAUSED: getPhaseInfo('PAUSED'),
 };
+
+// ============================================
+// Resonance Frequency Assessment Schemas
+// ============================================
+
+export const ASSESSMENT_TRIALS = [
+  { rate: 6.5, inhaleTime: 3.7, exhaleTime: 5.5 },
+  { rate: 6.0, inhaleTime: 4.0, exhaleTime: 6.0 },
+  { rate: 5.5, inhaleTime: 4.4, exhaleTime: 6.5 },
+  { rate: 5.0, inhaleTime: 4.8, exhaleTime: 7.2 },
+  { rate: 4.5, inhaleTime: 5.3, exhaleTime: 8.0 },
+] as const;
+
+export const AssessmentSymptomSchema = z.enum([
+  'airHunger',
+  'dizziness',
+  'chestEffort',
+  'urgeToSigh',
+]);
+export type AssessmentSymptom = z.infer<typeof AssessmentSymptomSchema>;
+
+export const HrAmplitudeSchema = z.enum(['small', 'medium', 'large']);
+export type HrAmplitude = z.infer<typeof HrAmplitudeSchema>;
+
+export const WaveformSmoothnessSchema = z.enum(['jagged', 'somewhatSmooth', 'verySmooth']);
+export type WaveformSmoothness = z.infer<typeof WaveformSmoothnessSchema>;
+
+export const AssessmentTrialSchema = z.object({
+  rate: z.number(),
+  inhaleTime: z.number(),
+  exhaleTime: z.number(),
+  repetitions: z.number(),
+
+  // Scoring (filled after all trials)
+  comfortRating: z.number().min(1).max(5).optional(),
+  symptoms: z.array(AssessmentSymptomSchema).default([]),
+  hrAmplitude: HrAmplitudeSchema.optional(),
+  waveformSmoothness: WaveformSmoothnessSchema.optional(),
+  notes: z.string().max(500).optional(),
+});
+export type AssessmentTrial = z.infer<typeof AssessmentTrialSchema>;
+
+export const AssessmentConfigSchema = z.object({
+  warmupDurationSeconds: z.number().min(60).max(300).default(120),
+  warmupRate: z.number().min(4.5).max(7.0).default(6.0),
+  restDurationSeconds: z.number().default(120), // fixed at 120, not user-configurable
+});
+export type AssessmentConfig = z.infer<typeof AssessmentConfigSchema>;
+
+export const AssessmentResultSchema = z.object({
+  id: z.string().uuid(),
+  trials: z.array(AssessmentTrialSchema),
+  selectedRate: z.number(),
+  createdPresetId: z.string().uuid().optional(),
+  completedAt: z.date(),
+  config: AssessmentConfigSchema,
+});
+export type AssessmentResult = z.infer<typeof AssessmentResultSchema>;
