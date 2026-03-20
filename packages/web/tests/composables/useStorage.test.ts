@@ -817,6 +817,60 @@ describe('useStorage', () => {
     });
   });
 
+  describe('Assessment operations', () => {
+    beforeEach(() => {
+      localStorageMock.clear();
+      resetStorageForTesting();
+    });
+
+    it('should return empty array when no assessments exist', () => {
+      const storage = useStorage();
+      expect(storage.getAssessments()).toEqual([]);
+    });
+
+    it('should save and retrieve an assessment', () => {
+      const storage = useStorage();
+      const assessment = {
+        id: crypto.randomUUID(),
+        trials: [],
+        selectedRate: 5.5,
+        completedAt: new Date(),
+        config: {
+          warmupDurationSeconds: 120,
+          warmupRate: 6.0,
+          restDurationSeconds: 120,
+        },
+      };
+
+      storage.saveAssessment(assessment);
+      const results = storage.getAssessments();
+      expect(results).toHaveLength(1);
+      expect(results[0].selectedRate).toBe(5.5);
+      expect(results[0].id).toBe(assessment.id);
+    });
+
+    it('should persist assessments to localStorage', () => {
+      const storage = useStorage();
+      const assessment = {
+        id: crypto.randomUUID(),
+        trials: [],
+        selectedRate: 6.0,
+        completedAt: new Date(),
+        config: {
+          warmupDurationSeconds: 120,
+          warmupRate: 6.0,
+          restDurationSeconds: 120,
+        },
+      };
+
+      storage.saveAssessment(assessment);
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+        'breath-in-flow-assessments',
+        expect.any(String)
+      );
+    });
+  });
+
   describe('Sound Theme Operations', () => {
     beforeEach(() => {
       localStorageMock.clear();
