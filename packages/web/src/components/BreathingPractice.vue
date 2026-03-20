@@ -4,7 +4,7 @@
     <Teleport to="body">
       <!-- Stop Session Confirmation Modal -->
       <div
-        v-if="showStopConfirmation"
+        v-show="showStopConfirmation"
         class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         @click.self="showStopConfirmation = false"
       >
@@ -44,7 +44,7 @@
 
       <!-- Success Notification Modal -->
       <div
-        v-if="showSuccessNotification"
+        v-show="showSuccessNotification"
         class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         @click.self="showSuccessNotification = false"
       >
@@ -78,7 +78,7 @@
 
       <!-- Overwrite Confirmation Modal -->
       <div
-        v-if="showOverwriteConfirmation"
+        v-show="showOverwriteConfirmation"
         class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         @click.self="showOverwriteConfirmation = false"
       >
@@ -115,7 +115,7 @@
       </div>
 
       <div
-        v-if="isRunning"
+        v-if="isRunning && !showAssessment"
         class="fixed inset-0 z-50 overflow-y-auto"
         style="background: linear-gradient(135deg, #1f1a15 0%, #2a241d 40%, #1f1a15 100%)"
       >
@@ -192,7 +192,7 @@
                   </div>
                   <div class="stat-card">
                     <div class="text-3xl font-bold text-emerald-400">
-                      {{ currentSession?.completedSets || 0 }}
+                      {{ currentSession?.sets.length || 0 }}
                     </div>
                     <div class="text-sm text-slate-400 mt-1">Completed</div>
                   </div>
@@ -210,7 +210,7 @@
                 <p class="text-5xl font-mono font-bold text-indigo-400 animate-pulse-glow">
                   {{ formatTime(isToleranceExtendedHold ? timer.extendedHoldElapsed.value : timer.currentTime.value) }}
                 </p>
-                <button @click="endExtendedHold" class="mt-6 btn-warning btn-action">
+                <button @click="endExtendedHold" @keydown.space.prevent="endExtendedHold" @keydown.enter.prevent="endExtendedHold" class="mt-6 btn-warning btn-action" aria-label="Release hold (Press Space or Enter)">
                   <span class="flex items-center gap-2 justify-center">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -228,6 +228,7 @@
                     </svg>
                     Release Hold
                   </span>
+                  <span class="text-xs text-slate-400 mt-2 block">Press Space or Enter</span>
                 </button>
               </div>
 
@@ -431,13 +432,13 @@
       <!-- Configuration Modal -->
       <div
         v-if="showConfigModal"
-        class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
+        class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
         @click.self="showConfigModal = false"
       >
-        <div class="card-solid max-w-4xl w-full my-8 animate-scale-in max-h-[90vh] overflow-y-auto">
+        <div class="card-solid max-w-4xl w-full my-4 sm:my-8 animate-scale-in max-h-[95vh] sm:max-h-[90vh] overflow-y-auto !p-4 sm:!p-6">
           <!-- Modal Header -->
           <div
-            class="sticky top-0 bg-slate-800/95 backdrop-blur-sm -mx-6 -mt-6 px-6 py-4 mb-6 border-b border-slate-700/50 flex items-center justify-between z-10"
+            class="sticky top-0 bg-slate-800/95 backdrop-blur-sm -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 py-3 sm:py-4 mb-4 sm:mb-6 border-b border-slate-700/50 flex items-center justify-between z-10"
           >
             <div class="flex items-center gap-3">
               <div
@@ -702,12 +703,21 @@
               <div v-if="config.ttsEnabled" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label class="form-label">Voice</label>
-                  <select v-model="config.ttsVoice" class="form-select" :disabled="!isTtsAvailable">
-                    <option v-for="voice in sortedVoices" :key="voice.voiceURI" :value="voice.voiceURI">
-                      {{ formatVoiceLabel(voice) }}
-                    </option>
-                  </select>
-                  <p v-if="!isTtsAvailable" class="text-xs text-slate-400 mt-2">
+                  <div class="relative">
+                    <select v-model="config.ttsVoice" class="form-select" :disabled="!isTtsAvailable || loadingVoices">
+                      <option v-if="loadingVoices" value="">Loading voices...</option>
+                      <option v-else v-for="voice in sortedVoices" :key="voice.voiceURI" :value="voice.voiceURI">
+                        {{ formatVoiceLabel(voice) }}
+                      </option>
+                    </select>
+                    <div v-if="loadingVoices" class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <svg class="animate-spin h-4 w-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    </div>
+                  </div>
+                  <p v-if="!isTtsAvailable && !loadingVoices" class="text-xs text-slate-400 mt-2">
                     Voice list unavailable on this platform.
                   </p>
                 </div>
@@ -771,8 +781,19 @@
       </div>
     </Teleport>
 
+    <!-- Assessment Mode -->
+    <ResonanceAssessment
+      v-if="showAssessment"
+      :sound-enabled="config.soundEnabled"
+      :sound-theme="config.soundTheme"
+      :tts-enabled="config.ttsEnabled"
+      :tts-voice="config.ttsVoice"
+      @cancel="onAssessmentCancel"
+      @complete="onAssessmentComplete"
+    />
+
     <!-- Regular Configuration View (when not running) -->
-    <div class="space-y-4 sm:space-y-6">
+    <div v-else class="space-y-4 sm:space-y-6">
       <!-- Quick Start / Practice View - Always at Top -->
       <div class="card-solid !p-4 sm:!p-6">
         <BreathingVisualizer
@@ -857,6 +878,15 @@
               Start Practice
             </span>
           </button>
+          <button @click="showAssessment = true" class="btn-secondary btn-action">
+            <span class="flex items-center gap-2 justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Find My Resonance Frequency
+            </span>
+          </button>
         </div>
       </div>
 
@@ -897,6 +927,7 @@ import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
+import ResonanceAssessment from './ResonanceAssessment.vue';
 import { useBreathingTimer, useStorage } from '../composables';
 import {
   DEFAULT_BREATHING_CONFIG,
@@ -923,6 +954,25 @@ const showStopConfirmation = ref(false);
 const showSuccessNotification = ref(false);
 const successMessage = ref('');
 const showOverwriteConfirmation = ref(false);
+const loadingVoices = ref(false);
+const showAssessment = ref(false);
+
+function onAssessmentComplete(preset: BreathingConfig) {
+  showAssessment.value = false;
+  // Load the new preset as active config, but preserve current audio settings
+  const currentAudio = {
+    soundEnabled: config.soundEnabled,
+    soundTheme: config.soundTheme,
+    ttsEnabled: config.ttsEnabled,
+    ttsVoice: config.ttsVoice,
+  };
+  Object.assign(config, preset, currentAudio);
+  configName.value = preset.name;
+}
+
+function onAssessmentCancel() {
+  showAssessment.value = false;
+}
 
 // Configuration - start with defaults, will be overwritten by saved config
 const config = reactive<BreathingConfig>({
@@ -968,39 +1018,56 @@ onMounted(() => {
   if (savedConfig) {
     try {
       const parsed = JSON.parse(savedConfig);
-      Object.assign(config, { ...DEFAULT_BREATHING_CONFIG, ...parsed });
-      configName.value = parsed.name || '';
-    } catch {
-      // Invalid saved config, use defaults
+      // Validate config with Zod schema before applying
+      const validatedConfig = BreathingConfigSchema.parse({ ...DEFAULT_BREATHING_CONFIG, ...parsed });
+      Object.assign(config, validatedConfig);
+      configName.value = validatedConfig.name || '';
+    } catch (error) {
+      // Invalid saved config, use defaults and log error
+      console.warn('Invalid saved config in localStorage, using defaults:', error);
     }
   }
 
   refreshVoices();
 });
 
-// Save config to localStorage whenever it changes
+// Save config to localStorage whenever it changes (debounced to avoid excessive writes)
+let saveConfigTimeout: ReturnType<typeof setTimeout> | null = null;
 watch(
   config,
   (newConfig) => {
-    localStorage.setItem(LAST_CONFIG_KEY, JSON.stringify(newConfig));
+    if (saveConfigTimeout) {
+      clearTimeout(saveConfigTimeout);
+    }
+    saveConfigTimeout = setTimeout(() => {
+      localStorage.setItem(LAST_CONFIG_KEY, JSON.stringify(newConfig));
+      saveConfigTimeout = null;
+    }, 300);
   },
   { deep: true }
 );
 
-watch(
-  () => config.ttsEnabled,
-  (enabled) => {
-    ttsService.setEnabled(enabled);
-  },
-  { immediate: true }
+// Track TTS watchers for cleanup
+const ttsWatchStopHandles: (() => void)[] = [];
+
+ttsWatchStopHandles.push(
+  watch(
+    () => config.ttsEnabled,
+    (enabled) => {
+      ttsService.setEnabled(enabled);
+    },
+    { immediate: true }
+  )
 );
 
-watch(
-  () => config.ttsVoice,
-  (voiceUri) => {
-    ttsService.setVoiceByUri(voiceUri);
-  },
-  { immediate: true }
+ttsWatchStopHandles.push(
+  watch(
+    () => config.ttsVoice,
+    (voiceUri) => {
+      ttsService.setVoiceByUri(voiceUri);
+    },
+    { immediate: true }
+  )
 );
 
 // Timer
@@ -1055,22 +1122,34 @@ const isToleranceExtendedHold = computed(() => {
 
 const isNativePlatform = Capacitor.isNativePlatform();
 
+// Track keep-awake state to prevent race conditions
+let keepAwakePending = false;
+let keepAwakeActive = false;
+
 async function enableKeepAwake() {
-  if (!isNativePlatform) return;
+  if (!isNativePlatform || keepAwakePending) return;
+  keepAwakePending = true;
   try {
     await KeepAwake.keepAwake();
+    keepAwakeActive = true;
   } catch (error) {
     // Fail silently; keep-awake is best-effort on native platforms
     console.warn('KeepAwake.keepAwake failed', error);
+  } finally {
+    keepAwakePending = false;
   }
 }
 
 async function allowSleep() {
-  if (!isNativePlatform) return;
+  if (!isNativePlatform || keepAwakePending || !keepAwakeActive) return;
+  keepAwakePending = true;
   try {
     await KeepAwake.allowSleep();
+    keepAwakeActive = false;
   } catch (error) {
     console.warn('KeepAwake.allowSleep failed', error);
+  } finally {
+    keepAwakePending = false;
   }
 }
 
@@ -1086,8 +1165,17 @@ watch(
   { immediate: true }
 );
 
+// Cleanup watchers and services on unmount
 onUnmounted(() => {
   void allowSleep();
+  // Stop all TTS watchers
+  ttsWatchStopHandles.forEach((stop) => stop());
+  // Reset TTS service
+  ttsService.setEnabled(false);
+  // Clear any pending localStorage save timeout
+  if (saveConfigTimeout) {
+    clearTimeout(saveConfigTimeout);
+  }
 });
 
 // Watch for config changes from parent (when loading presets)
@@ -1114,7 +1202,8 @@ watch(
   () => timer.isRunning.value,
   (running: boolean) => {
     isRunning.value = running;
-  }
+  },
+  { immediate: true }
 );
 
 function startExercise() {
@@ -1163,6 +1252,12 @@ function exitWithoutSavingSession() {
     storage.deleteSession(currentSession.value.id);
   }
 
+  successMessage.value = 'Session cancelled';
+  showSuccessNotification.value = true;
+  setTimeout(() => {
+    showSuccessNotification.value = false;
+  }, 3000);
+
   stopExercise();
 }
 
@@ -1172,6 +1267,13 @@ function saveIncompleteSession() {
   if (currentSession.value?.id) {
     persistPartialSetProgress();
     storage.cancelSession(currentSession.value.id);
+
+    const setsCompleted = currentSession.value.sets.length;
+    successMessage.value = `Session saved with ${setsCompleted} set${setsCompleted !== 1 ? 's' : ''} completed`;
+    showSuccessNotification.value = true;
+    setTimeout(() => {
+      showSuccessNotification.value = false;
+    }, 3000);
   }
 
   stopExercise();
@@ -1222,7 +1324,7 @@ function saveConfig() {
 
   // Check if a saved preset with this name already exists
   const existingConfigs = storage.getAllConfigs();
-  const existingConfig = existingConfigs.find((c) => c.name.toLowerCase() === configName.value.trim().toLowerCase());
+  const existingConfig = existingConfigs?.find((c) => c.name.toLowerCase() === configName.value.trim().toLowerCase());
 
   if (existingConfig) {
     // Show confirmation modal to overwrite
@@ -1243,9 +1345,14 @@ function saveConfig() {
 function confirmOverwrite() {
   showOverwriteConfirmation.value = false;
 
+  // Guard against undefined configName
+  if (!configName.value) {
+    return;
+  }
+
   // Find and delete the existing config
   const existingConfigs = storage.getAllConfigs();
-  const existingConfig = existingConfigs.find((c) => c.name.toLowerCase() === configName.value.trim().toLowerCase());
+  const existingConfig = existingConfigs?.find((c) => c.name.toLowerCase() === configName.value.trim().toLowerCase());
 
   if (existingConfig?.id) {
     storage.deleteConfig(existingConfig.id);
@@ -1270,20 +1377,25 @@ function saveSessionNotes() {
 }
 
 async function refreshVoices() {
-  const voices = await ttsService.loadVoices();
-  ttsVoices.value = voices;
-  const hasVoices = voices.length > 0;
-  if (config.ttsVoice && hasVoices && !voices.some((v) => v.voiceURI === config.ttsVoice)) {
-    config.ttsVoice = undefined;
-  }
-  if (!config.ttsVoice && hasVoices) {
-    const preferred = voices.find((v) => v.lang?.toLowerCase().startsWith('en'))?.voiceURI ?? voices[0].voiceURI;
-    config.ttsVoice = preferred;
-  }
-  if (config.ttsVoice) {
-    ttsService.setVoiceByUri(config.ttsVoice);
-  } else if (!hasVoices) {
-    ttsService.setVoiceByUri(null);
+  loadingVoices.value = true;
+  try {
+    const voices = await ttsService.loadVoices();
+    ttsVoices.value = voices;
+    const hasVoices = voices.length > 0;
+    if (config.ttsVoice && hasVoices && !voices.some((v) => v.voiceURI === config.ttsVoice)) {
+      config.ttsVoice = undefined;
+    }
+    if (!config.ttsVoice && hasVoices) {
+      const preferred = voices.find((v) => v.lang?.toLowerCase().startsWith('en'))?.voiceURI ?? voices[0].voiceURI;
+      config.ttsVoice = preferred;
+    }
+    if (config.ttsVoice) {
+      ttsService.setVoiceByUri(config.ttsVoice);
+    } else if (!hasVoices) {
+      ttsService.setVoiceByUri(null);
+    }
+  } finally {
+    loadingVoices.value = false;
   }
 }
 
