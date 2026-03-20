@@ -18,7 +18,9 @@ Resonance frequency breathing maximizes heart-rate variability by matching breat
 | 5.0 | 12.00     | 4.8        | 7.2        |
 | 4.5 | 13.33     | 5.3        | 8.0        |
 
-All trials: no hold times, inhale/exhale only. The 5-step protocol always runs in full (6.5, 6.0, 5.5, 5.0, 4.5). Rest periods between trials are always 2 minutes.
+All trials: no hold times, inhale/exhale only. The inhale/exhale ratio is standardized at ~40:60 (longer exhalation), per the Lehrer/Shaffer practical guide recommendation. Note: recent research (Van Diest et al., 2024) found no significant HRV difference between 1:1 and 1:2 ratios at slow-paced breathing, but the longer exhalation is retained here to match the published clinical protocol.
+
+The 5-step protocol always runs in full (6.5, 6.0, 5.5, 5.0, 4.5). Rest periods between trials are always 2 minutes.
 
 ### Trial Duration: Repetition-Based
 
@@ -95,12 +97,12 @@ INTRO → WARMUP → TRIAL_BREATHING → TRIAL_REST → ... (×5 trials, ×4 res
 
 ### Phase Details
 
-1. **INTRO** — Protocol explanation, warmup duration/rate pickers, "Start Assessment" button.
+1. **INTRO** — Protocol explanation, warmup duration/rate pickers, "Start Assessment" button. Includes prominent breathing guidance: "Breathe through your nose. Keep breathing comfortable and shallow — do not breathe deeply. If you feel faint, dizzy, or your heart beats too hard, take shallower, smoother breaths." This matches Lehrer's explicit warning against overbreathing.
 2. **WARMUP** — Guided breathing at configured warmup rate using BreathingVisualizer + useBreathingTimer. Auto-advances when timer completes.
 3. **TRIAL_BREATHING** (×5) — 2-minute breathing at current trial rate. Header shows trial context (e.g., "Trial 3/5 — 5.5 BPM"). Uses BreathingVisualizer. Auto-advances to rest on completion.
 4. **TRIAL_REST** (×4, skipped after final trial) — 2-minute countdown. Simple rest screen with text "Rest quietly". Auto-advances to next trial.
 5. **SCORING** — All 5 trials displayed as cards. Each card: comfort rating (1-5), symptom toggles (air hunger, dizziness, chest effort, urge to sigh), HR amplitude (small/medium/large), waveform smoothness (jagged/somewhat smooth/very smooth), notes field. "Calculate Result" button computes suggestion.
-6. **RESULT** — Shows suggested rate with explanation, all rates listed with scores. User can confirm suggestion or override. "Save & Create Preset" button finalizes.
+6. **RESULT** — Shows suggested rate with explanation, all rates listed with scores. User can confirm suggestion or override. Includes guidance note: "If two rates scored similarly, the practical guide recommends confirming by comparing against the adjacent ±0.5 BPM rates. If the slower rate causes strain or air hunger, prefer the faster one." "Save & Create Preset" button finalizes.
 
 ## Scoring Algorithm
 
