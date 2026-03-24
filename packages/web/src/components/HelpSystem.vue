@@ -665,6 +665,7 @@ defineExpose({ showHelp });
 </script>
 
 <style scoped>
+@reference "tailwindcss";
 .help-trigger {
   @apply flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-300;
 }

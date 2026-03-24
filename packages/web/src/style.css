@@ -114,9 +114,11 @@ body {
   @apply bg-slate-500;
 }
 
-/* Enhanced glass morphism */
-.glass {
-  @apply backdrop-blur-2xl border border-white/[0.08];
+/* Enhanced glass morphism — registered as utility so @apply works */
+@utility glass {
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.12),
@@ -315,10 +317,17 @@ input[type='number']::-webkit-outer-spin-button {
 }
 
 /* Button base styles - refined and human */
-.btn {
-  @apply px-5 py-2.5 rounded-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900;
+@utility btn {
+  padding: 0.625rem 1.25rem;
+  border-radius: 1rem;
+  font-weight: 600;
   transition: all 0.3s ease;
   transform: translateY(0);
+}
+
+.btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(15 23 42), 0 0 0 4px rgb(59 130 246);
 }
 
 .btn:hover {
