@@ -13,6 +13,7 @@ describe('App.vue', () => {
           SessionHistory: true,
           PracticePresets: true,
           AnalyticsDashboard: true,
+          LabTab: true,
           HelpSystem: true,
         },
       },
@@ -22,6 +23,7 @@ describe('App.vue', () => {
 
     // Desktop nav buttons (rendered in header)
     expect(wrapper.findAll('button').some((b) => b.text().includes('Practice'))).toBeTruthy();
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Lab'))).toBeTruthy();
     expect(wrapper.findAll('button').some((b) => b.text().includes('History'))).toBeTruthy();
     expect(wrapper.findAll('button').some((b) => b.text().includes('Presets'))).toBeTruthy();
     expect(wrapper.findAll('button').some((b) => b.text().includes('Analytics'))).toBeTruthy();
@@ -32,6 +34,7 @@ describe('App.vue', () => {
       global: {
         stubs: {
           BreathingPractice: { template: '<div>Practice</div>' },
+          LabTab: { template: '<div>LabContent</div>' },
           SessionHistory: { template: '<div>History</div>' },
           PracticePresets: { template: '<div>Configs</div>' },
           AnalyticsDashboard: { template: '<div>Analytics</div>' },
@@ -41,6 +44,14 @@ describe('App.vue', () => {
     });
 
     const buttons = wrapper.findAll('button');
+
+    // Test Lab tab
+    const labBtn = buttons.find((b) => b.text().includes('Lab'));
+    if (labBtn) {
+      await labBtn.trigger('click');
+      await nextTick();
+      expect(wrapper.text()).toContain('LabContent');
+    }
 
     // Test History tab
     const historyBtn = buttons.find((b) => b.text().includes('History'));
@@ -72,6 +83,7 @@ describe('App.vue', () => {
       global: {
         stubs: {
           BreathingPractice: true,
+          LabTab: true,
           SessionHistory: true,
           PracticePresets: true,
           AnalyticsDashboard: true,
@@ -89,6 +101,7 @@ describe('App.vue', () => {
       global: {
         stubs: {
           BreathingPractice: true,
+          LabTab: true,
           SessionHistory: true,
           PracticePresets: true,
           AnalyticsDashboard: true,
@@ -137,6 +150,7 @@ describe('App.vue', () => {
       global: {
         stubs: {
           BreathingPractice: true,
+          LabTab: true,
           SessionHistory: true,
           PracticePresets: true,
           AnalyticsDashboard: true,

@@ -40,6 +40,17 @@ vi.mock('@/composables/useStorage', () => ({
   }),
 }));
 
+const hasAnyMeasurementsMock = vi.fn().mockResolvedValue(false);
+
+vi.mock('@/composables/useHrvStorage', () => ({
+  useHrvStorage: () => ({
+    hasAnyMeasurements: hasAnyMeasurementsMock,
+    saveMeasurement: vi.fn(),
+    getMeasurements: vi.fn().mockResolvedValue([]),
+    getLatestAssessment: vi.fn().mockResolvedValue(null),
+  }),
+}));
+
 vi.mock('@/composables/useBreathingTimer', () => {
   return {
     useBreathingTimer: (_config: unknown, options: Record<string, unknown>) => {
@@ -471,5 +482,29 @@ describe('BreathingPractice.vue', () => {
 
       wrapper.unmount();
     });
+  });
+
+  it('shows Lab CTA when no HRV data exists', async () => {
+    localStorage.removeItem('lab-cta-dismissed');
+    hasAnyMeasurementsMock.mockResolvedValue(false);
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref(null),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    // Wait for async onMounted to resolve
+    await nextTick();
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 10));
+    await nextTick();
+
+    expect(wrapper.text()).toContain('Discover Your Optimal Breathing Rate');
+    wrapper.unmount();
   });
 });

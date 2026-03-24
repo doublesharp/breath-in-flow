@@ -115,7 +115,7 @@
       </div>
 
       <div
-        v-if="isRunning && !showAssessment"
+        v-if="isRunning"
         class="fixed inset-0 z-50 overflow-y-auto"
         style="background: linear-gradient(135deg, #1f1a15 0%, #2a241d 40%, #1f1a15 100%)"
       >
@@ -781,19 +781,26 @@
       </div>
     </Teleport>
 
-    <!-- Assessment Mode -->
-    <ResonanceAssessment
-      v-if="showAssessment"
-      :sound-enabled="config.soundEnabled"
-      :sound-theme="config.soundTheme"
-      :tts-enabled="config.ttsEnabled"
-      :tts-voice="config.ttsVoice"
-      @cancel="onAssessmentCancel"
-      @complete="onAssessmentComplete"
-    />
-
     <!-- Regular Configuration View (when not running) -->
-    <div v-else class="space-y-4 sm:space-y-6">
+    <div class="space-y-4 sm:space-y-6">
+      <!-- Lab CTA -->
+      <div v-if="showLabCta && !labCtaDismissed" class="rounded-2xl p-4 border border-emerald-500/20 bg-emerald-500/5 mb-4">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-sm font-semibold text-emerald-400">Discover Your Optimal Breathing Rate</h3>
+            <p class="text-xs text-white/50 mt-1">Measure your HRV and find your resonance frequency in the Lab</p>
+          </div>
+          <button @click="dismissLabCta" class="text-white/30 hover:text-white/60 p-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <button @click="$emit('switch-tab', 'lab')" class="mt-3 text-sm font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+          Go to Lab →
+        </button>
+      </div>
+
       <!-- Quick Start / Practice View - Always at Top -->
       <div class="card-solid !p-4 sm:!p-6">
         <BreathingVisualizer
@@ -878,15 +885,6 @@
               Start Practice
             </span>
           </button>
-          <button @click="showAssessment = true" class="btn-secondary btn-action">
-            <span class="flex items-center gap-2 justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Find My Resonance Frequency
-            </span>
-          </button>
         </div>
       </div>
 
@@ -927,8 +925,8 @@ import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
-import ResonanceAssessment from './ResonanceAssessment.vue';
 import { useBreathingTimer, useStorage } from '../composables';
+import { useHrvStorage } from '../composables/useHrvStorage';
 import {
   DEFAULT_BREATHING_CONFIG,
   formatTime,
@@ -955,23 +953,18 @@ const showSuccessNotification = ref(false);
 const successMessage = ref('');
 const showOverwriteConfirmation = ref(false);
 const loadingVoices = ref(false);
-const showAssessment = ref(false);
+// Lab CTA state
+const showLabCta = ref(false);
+const labCtaDismissed = ref(localStorage.getItem('lab-cta-dismissed') === 'true');
 
-function onAssessmentComplete(preset: BreathingConfig) {
-  showAssessment.value = false;
-  // Load the new preset as active config, but preserve current audio settings
-  const currentAudio = {
-    soundEnabled: config.soundEnabled,
-    soundTheme: config.soundTheme,
-    ttsEnabled: config.ttsEnabled,
-    ttsVoice: config.ttsVoice,
-  };
-  Object.assign(config, preset, currentAudio);
-  configName.value = preset.name;
-}
+const emit = defineEmits<{
+  'switch-tab': [tab: string];
+}>();
 
-function onAssessmentCancel() {
-  showAssessment.value = false;
+function dismissLabCta() {
+  showLabCta.value = false;
+  labCtaDismissed.value = true;
+  localStorage.setItem('lab-cta-dismissed', 'true');
 }
 
 // Configuration - start with defaults, will be overwritten by saved config
@@ -1013,7 +1006,7 @@ const currentSetData = ref<SessionSet | null>(null);
 const sessionNotes = ref('');
 
 // Load last used config on mount
-onMounted(() => {
+onMounted(async () => {
   const savedConfig = localStorage.getItem(LAST_CONFIG_KEY);
   if (savedConfig) {
     try {
@@ -1029,6 +1022,17 @@ onMounted(() => {
   }
 
   refreshVoices();
+
+  // Check if Lab CTA should be shown
+  if (!labCtaDismissed.value) {
+    try {
+      const hrvStorageInstance = useHrvStorage();
+      const hasData = await hrvStorageInstance.hasAnyMeasurements();
+      showLabCta.value = !hasData;
+    } catch {
+      // IndexedDB may not be available
+    }
+  }
 });
 
 // Save config to localStorage whenever it changes (debounced to avoid excessive writes)

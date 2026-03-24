@@ -86,6 +86,27 @@
               </span>
             </button>
             <button
+              @click="activeTab = 'lab'"
+              :class="[
+                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                activeTab === 'lab' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
+              ]"
+              :style="
+                activeTab === 'lab'
+                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
+                  : ''
+              "
+              :aria-current="activeTab === 'lab' ? 'page' : undefined"
+              aria-label="HRV Lab"
+            >
+              <span class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+                <span>Lab</span>
+              </span>
+            </button>
+            <button
               @click="activeTab = 'history'"
               :class="[
                 'px-4 py-2 rounded-xl font-medium transition-all duration-400',
@@ -191,7 +212,8 @@
 
     <main class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <transition name="fade" mode="out-in">
-        <BreathingPractice v-if="activeTab === 'practice'" key="practice" />
+        <BreathingPractice v-if="activeTab === 'practice'" key="practice" @switch-tab="(tab) => activeTab = tab" />
+        <LabTab v-else-if="activeTab === 'lab'" key="lab" />
         <SessionHistory v-else-if="activeTab === 'history'" key="history" />
         <PracticePresets v-else-if="activeTab === 'configs'" key="configs" @load-config="loadConfig" />
         <AnalyticsDashboard v-else-if="activeTab === 'analytics'" key="analytics" />
@@ -230,6 +252,25 @@
             />
           </svg>
           <span class="text-xs mt-1 font-medium">Practice</span>
+        </button>
+        <button
+          @click="activeTab = 'lab'"
+          :class="[
+            'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
+            activeTab === 'lab' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
+          ]"
+          :style="
+            activeTab === 'lab'
+              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
+              : ''
+          "
+          :aria-current="activeTab === 'lab' ? 'page' : undefined"
+          aria-label="HRV Lab"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </svg>
+          <span class="text-xs mt-1 font-medium">Lab</span>
         </button>
         <button
           @click="activeTab = 'history'"
@@ -319,10 +360,11 @@ import BreathingPractice from './components/BreathingPractice.vue';
 import SessionHistory from './components/SessionHistory.vue';
 import PracticePresets from './components/PracticePresets.vue';
 import AnalyticsDashboard from './components/AnalyticsDashboard.vue';
+import LabTab from './components/LabTab.vue';
 import HelpSystem from './components/HelpSystem.vue';
 import { AppConfig, type BreathingConfig } from '@breath-in-flow/shared';
 
-const activeTab = ref<'practice' | 'history' | 'configs' | 'analytics'>('practice');
+const activeTab = ref<'practice' | 'lab' | 'history' | 'configs' | 'analytics'>('practice');
 const selectedConfig = ref<BreathingConfig | null>(null);
 
 function loadConfig(config: BreathingConfig) {
