@@ -60,3 +60,9 @@ export {
 } from './timer.js';
 
 export type { BreathingTimerCallbacks } from './timer.js';
+
+// DSP utilities
+export * from './dsp/index.js';
+
+// HRV Analysis Engine
+export * from './hrv/index.js';

@@ -1,0 +1,192 @@
+import { describe, it, expect } from 'vitest';
+import {
+  BiquadFilter,
+  SOSFilter,
+  createLowpassFilter,
+  createHighpassFilter,
+  createBandpassFilter,
+} from '../../src/dsp/filters.js';
+
+/**
+ * Generate a composite sinusoidal signal.
+ * Returns N samples at the given sample rate combining multiple frequency components.
+ */
+function generateSineSignal(
+  frequencies: number[],
+  amplitudes: number[],
+  sampleRateHz: number,
+  numSamples: number,
+): number[] {
+  const signal: number[] = [];
+  for (let n = 0; n < numSamples; n++) {
+    let sample = 0;
+    for (let f = 0; f < frequencies.length; f++) {
+      sample +=
+        amplitudes[f] * Math.sin((2 * Math.PI * frequencies[f] * n) / sampleRateHz);
+    }
+    signal.push(sample);
+  }
+  return signal;
+}
+
+/**
+ * Compute the RMS power of a signal.
+ */
+function rms(signal: number[]): number {
+  if (signal.length === 0) return 0;
+  const sumSq = signal.reduce((acc, val) => acc + val * val, 0);
+  return Math.sqrt(sumSq / signal.length);
+}
+
+describe('BiquadFilter', () => {
+  it('produces output for each sample', () => {
+    const filter = new BiquadFilter([1, 0, 0], [1, 0, 0]);
+    expect(filter.filter(1)).toBe(1);
+    expect(filter.filter(2)).toBe(2);
+  });
+
+  it('reset clears internal state', () => {
+    const filter = new BiquadFilter([0.5, 0.5, 0], [1, 0, 0]);
+    filter.filter(1);
+    filter.filter(1);
+    filter.reset();
+    // After reset, behavior should match fresh filter
+    const freshFilter = new BiquadFilter([0.5, 0.5, 0], [1, 0, 0]);
+    const resetResult = filter.filter(1);
+    const freshResult = freshFilter.filter(1);
+    expect(resetResult).toBeCloseTo(freshResult);
+  });
+});
+
+describe('SOSFilter', () => {
+  it('filterBatch matches sequential filter() calls', () => {
+    const fs = 1000;
+    const filter1 = createLowpassFilter(100, fs);
+    const filter2 = createLowpassFilter(100, fs);
+    const signal = [1, -1, 0.5, -0.5, 0.25, -0.25, 0, 0.1, -0.1, 0];
+
+    const batchResult = filter1.filterBatch(signal);
+    const sequentialResult = signal.map((s) => filter2.filter(s));
+
+    batchResult.forEach((val, i) => {
+      expect(val).toBeCloseTo(sequentialResult[i], 10);
+    });
+  });
+
+  it('reset clears state so repeated filterBatch gives same result', () => {
+    const filter = createLowpassFilter(100, 1000);
+    const signal = [1, 2, 3, 4, 5, 4, 3, 2, 1];
+
+    const result1 = filter.filterBatch(signal);
+    filter.reset();
+    const result2 = filter.filterBatch(signal);
+
+    result1.forEach((val, i) => {
+      expect(val).toBeCloseTo(result2[i], 10);
+    });
+  });
+});
+
+describe('createLowpassFilter', () => {
+  it('attenuates high frequencies while passing low frequencies', () => {
+    const fs = 1000; // 1 kHz sample rate
+    const cutoff = 10; // 10 Hz cutoff
+    const numSamples = 2000;
+
+    // Signal with 1 Hz (pass) and 50 Hz (stop) components of equal amplitude
+    const signal = generateSineSignal([1, 50], [1, 1], fs, numSamples);
+
+    const filter = createLowpassFilter(cutoff, fs);
+    const filtered = filter.filterBatch(signal);
+
+    // Skip transient (first 500 samples)
+    const steadyState = filtered.slice(500);
+
+    // Generate a pure 1 Hz signal to compare against
+    const lowFreqOnly = generateSineSignal([1], [1], fs, numSamples).slice(500);
+    const lowFreqRms = rms(lowFreqOnly);
+    const filteredRms = rms(steadyState);
+
+    // Filtered signal should be close to 1 Hz amplitude (not much attenuation)
+    // and much less than input (which had 2x amplitude)
+    expect(filteredRms).toBeGreaterThan(0.5 * lowFreqRms);
+    // High frequency should be significantly attenuated (filtered RMS < 75% of input RMS)
+    expect(filteredRms).toBeLessThan(0.75 * rms(signal.slice(500)));
+  });
+
+  it('passes DC component largely unchanged', () => {
+    const fs = 1000;
+    const filter = createLowpassFilter(50, fs);
+    // Process many samples of DC = 1
+    const dcSignal = new Array(1000).fill(1);
+    const filtered = filter.filterBatch(dcSignal);
+    // Steady-state output should be close to 1
+    const steadyState = filtered.slice(500);
+    const avg = steadyState.reduce((a, b) => a + b, 0) / steadyState.length;
+    expect(avg).toBeCloseTo(1, 1);
+  });
+});
+
+describe('createHighpassFilter', () => {
+  it('attenuates low frequencies while passing high frequencies', () => {
+    const fs = 1000;
+    const cutoff = 10; // 10 Hz cutoff
+    const numSamples = 2000;
+
+    // Signal with 1 Hz (stop) and 100 Hz (pass) components of equal amplitude
+    const signal = generateSineSignal([1, 100], [1, 1], fs, numSamples);
+
+    const filter = createHighpassFilter(cutoff, fs);
+    const filtered = filter.filterBatch(signal);
+
+    const steadyState = filtered.slice(500);
+    const filteredRms = rms(steadyState);
+
+    // Generate pure 100 Hz signal
+    const highFreqOnly = generateSineSignal([100], [1], fs, numSamples).slice(500);
+    const highFreqRms = rms(highFreqOnly);
+
+    // Filtered signal should preserve high frequency component
+    expect(filteredRms).toBeGreaterThan(0.5 * highFreqRms);
+    // Low frequency should be attenuated
+    expect(filteredRms).toBeLessThan(0.75 * rms(signal.slice(500)));
+  });
+
+  it('blocks DC component', () => {
+    const fs = 1000;
+    const filter = createHighpassFilter(5, fs);
+    const dcSignal = new Array(1000).fill(1);
+    const filtered = filter.filterBatch(dcSignal);
+    // Steady-state output should be near zero for DC
+    const steadyState = filtered.slice(500);
+    const avg = Math.abs(
+      steadyState.reduce((a, b) => a + b, 0) / steadyState.length,
+    );
+    expect(avg).toBeLessThan(0.1);
+  });
+});
+
+describe('createBandpassFilter', () => {
+  it('passes only the target frequency band', () => {
+    const fs = 1000;
+    const numSamples = 3000;
+
+    // Three frequency components: 1 Hz (below), 20 Hz (in band), 100 Hz (above)
+    const signal = generateSineSignal([1, 20, 100], [1, 1, 1], fs, numSamples);
+
+    const filter = createBandpassFilter(10, 40, fs);
+    const filtered = filter.filterBatch(signal);
+
+    const steadyState = filtered.slice(1000);
+    const filteredRms = rms(steadyState);
+
+    // Compare to only the 20 Hz component
+    const bandOnly = generateSineSignal([20], [1], fs, numSamples).slice(1000);
+    const bandRms = rms(bandOnly);
+
+    // Filtered signal should capture most of the 20 Hz component
+    expect(filteredRms).toBeGreaterThan(0.3 * bandRms);
+    // But should be significantly less than the full 3-component signal
+    expect(filteredRms).toBeLessThan(0.8 * rms(signal.slice(1000)));
+  });
+});
