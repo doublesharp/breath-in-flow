@@ -11,19 +11,23 @@ describe('GarminService', () => {
   const mockStorage: Record<string, string> = {};
 
   beforeEach(() => {
-    // Mock localStorage
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key: string) => {
-      return mockStorage[key] || null;
-    });
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key: string, value: string) => {
-      mockStorage[key] = value;
-    });
-    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation((key: string) => {
-      delete mockStorage[key];
-    });
-
     // Clear storage before each test
     Object.keys(mockStorage).forEach((key) => delete mockStorage[key]);
+
+    // Mock localStorage using Object.defineProperty for happy-dom compatibility
+    const localStorageMock = {
+      getItem: vi.fn((key: string) => mockStorage[key] ?? null),
+      setItem: vi.fn((key: string, value: string) => { mockStorage[key] = value; }),
+      removeItem: vi.fn((key: string) => { delete mockStorage[key]; }),
+      clear: vi.fn(() => { Object.keys(mockStorage).forEach((key) => delete mockStorage[key]); }),
+      get length() { return Object.keys(mockStorage).length; },
+      key: vi.fn((index: number) => Object.keys(mockStorage)[index] ?? null),
+    };
+    Object.defineProperty(window, 'localStorage', {
+      value: localStorageMock,
+      writable: true,
+      configurable: true,
+    });
 
     // Create fresh instance
     service = new GarminService();

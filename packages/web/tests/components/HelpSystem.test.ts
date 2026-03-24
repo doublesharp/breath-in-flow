@@ -13,7 +13,9 @@ describe('HelpSystem.vue', () => {
     await wrapper.vm.$nextTick();
 
     // Modal should be present
-    expect(document.body.innerHTML).toContain('Help & Guide');
+    // happy-dom may render '&' as '&amp;' in innerHTML
+    const html = document.body.innerHTML;
+    expect(html.includes('Help & Guide') || html.includes('Help &amp; Guide')).toBe(true);
 
     // Switch tab - click second tab button
     const tabButtons = document.body.querySelectorAll('.help-tab');
