@@ -26,6 +26,10 @@ vi.mock('../../src/services/scgService', () => ({
   scgService: { start: vi.fn(), stop: vi.fn(), setCallbacks: vi.fn() },
 }));
 
+vi.mock('../../src/services/sensorFusion', () => ({
+  sensorFusionService: { start: vi.fn(), stop: vi.fn(), reset: vi.fn(), setCallbacks: vi.fn(), addPPGSample: vi.fn(), addSCGSample: vi.fn(), getQuality: vi.fn(() => 0) },
+}));
+
 describe('ResonanceAssessment', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -73,8 +77,18 @@ describe('ResonanceAssessment', () => {
       expect(sensorSection.exists()).toBe(true);
       expect(sensorSection.text()).toContain('Heart Rate Measurement');
       expect(sensorSection.text()).toContain('Manual Scoring');
-      expect(sensorSection.text()).toContain('Camera (Finger PPG)');
-      expect(sensorSection.text()).toContain('Accelerometer (Chest)');
+      expect(sensorSection.text()).toContain('Dual Sensor (Best Accuracy)');
+      expect(sensorSection.text()).toContain('Camera Only (Finger PPG)');
+      expect(sensorSection.text()).toContain('Accelerometer Only (Chest)');
+    });
+
+    it('shows the dual sensor mode option in INTRO phase', () => {
+      const wrapper = mount(ResonanceAssessment);
+      const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
+      const buttons = sensorSection.findAll('button');
+      // 4 modes: none, dual, camera, accelerometer
+      expect(buttons).toHaveLength(4);
+      expect(buttons[1].text()).toContain('Dual Sensor (Best Accuracy)');
     });
 
     it('defaults to none (Manual Scoring) sensor mode', () => {
@@ -85,6 +99,7 @@ describe('ResonanceAssessment', () => {
       expect(buttons[0].classes()).toContain('border-emerald-500');
       expect(buttons[1].classes()).not.toContain('border-emerald-500');
       expect(buttons[2].classes()).not.toContain('border-emerald-500');
+      expect(buttons[3].classes()).not.toContain('border-emerald-500');
     });
   });
 

@@ -89,7 +89,7 @@
           <div v-if="selectedSensorMode !== 'none' && phase === 'TRIAL_BREATHING'" class="flex flex-col items-center gap-6 py-8">
             <SignalQualityIndicator :quality="sensorQuality" :sensor-type="selectedSensorMode === 'camera' ? 'ppg' : 'scg'" />
             <div class="text-sm text-white/60 text-center">
-              {{ selectedSensorMode === 'camera' ? 'Keep your finger covering the camera lens' : 'Keep the phone flat on your chest' }}
+              {{ sensorInstructions }}
             </div>
             <div class="text-sm text-white/40">Follow the audio breathing cues</div>
             <div class="text-2xl font-mono text-white">{{ formatTime(timer.currentTime.value) }}</div>
@@ -434,6 +434,8 @@ import {
 } from '@breath-in-flow/shared';
 import { ppgService } from '../services/ppgService';
 import { scgService } from '../services/scgService';
+import { sensorFusionService } from '../services/sensorFusion';
+import type { FusedIBISample } from '../services/sensorFusion';
 import { ttsService } from '../services/ttsService';
 import { scoreTrial, findSuggestedRate } from '../utils/assessmentScoring';
 import { v4 as uuidv4 } from 'uuid';
@@ -455,7 +457,7 @@ const emit = defineEmits<{
 // ======================== Types ========================
 
 type AssessmentPhase = 'INTRO' | 'WARMUP' | 'TRIAL_BREATHING' | 'TRIAL_REST' | 'SCORING' | 'RESULT';
-type SensorMode = 'none' | 'camera' | 'accelerometer';
+type SensorMode = 'none' | 'camera' | 'accelerometer' | 'dual';
 
 // ======================== Sensor Mode ========================
 
@@ -463,8 +465,9 @@ const selectedSensorMode = ref<SensorMode>('none');
 
 const sensorModes = [
   { value: 'none' as const, label: 'Manual Scoring', description: 'Score trials manually using an external HRV app or subjective observation' },
-  { value: 'camera' as const, label: 'Camera (Finger PPG)', description: 'Place finger over camera lens \u2014 audio-only breathing guidance' },
-  { value: 'accelerometer' as const, label: 'Accelerometer (Chest)', description: 'Place phone on chest \u2014 audio-only breathing guidance' },
+  { value: 'dual' as const, label: 'Dual Sensor (Best Accuracy)', description: 'Phone screen-down on chest, finger on rear camera \u2014 audio-only guidance' },
+  { value: 'camera' as const, label: 'Camera Only (Finger PPG)', description: 'Place finger over rear camera lens \u2014 audio-only guidance' },
+  { value: 'accelerometer' as const, label: 'Accelerometer Only (Chest)', description: 'Place phone flat on chest \u2014 audio-only guidance' },
 ];
 
 // ======================== Scoring UI Options ========================
@@ -588,6 +591,15 @@ const selectedTrialAnalysis = computed(() => {
   return trialAnalyses.value[idx];
 });
 
+const sensorInstructions = computed(() => {
+  switch (selectedSensorMode.value) {
+    case 'dual': return 'Phone flat on chest (screen down), finger covering rear camera';
+    case 'camera': return 'Keep your finger covering the camera lens';
+    case 'accelerometer': return 'Keep the phone flat on your chest';
+    default: return '';
+  }
+});
+
 // ======================== HRV Helpers ========================
 
 function getHrDataForTrial(index: number) {
@@ -626,24 +638,48 @@ async function startSensor() {
   if (selectedSensorMode.value === 'none') return;
 
   currentTrialIBIs.value = [];
-  const callbacks = {
-    onIBI: (sample: IBISample) => currentTrialIBIs.value.push(sample),
-    onQualityChange: (q: number) => { sensorQuality.value = q; },
-  };
 
-  if (selectedSensorMode.value === 'camera') {
-    await ppgService.start(callbacks);
-  } else {
-    scgService.setCallbacks(callbacks);
+  if (selectedSensorMode.value === 'dual') {
+    sensorFusionService.reset();
+    sensorFusionService.setCallbacks({
+      onFusedIBI: (sample: FusedIBISample) => currentTrialIBIs.value.push(sample),
+      onQualityChange: (q: number) => { sensorQuality.value = q; },
+    });
+
+    // Start both sensors, routing through fusion
+    await ppgService.start({
+      onIBI: (sample) => sensorFusionService.addPPGSample(sample),
+      onQualityChange: () => {}, // fusion handles quality
+    });
+    scgService.setCallbacks({
+      onIBI: (sample) => sensorFusionService.addSCGSample(sample),
+      onQualityChange: () => {},
+    });
     await scgService.start();
+  } else {
+    const callbacks = {
+      onIBI: (sample: IBISample) => currentTrialIBIs.value.push(sample),
+      onQualityChange: (q: number) => { sensorQuality.value = q; },
+    };
+
+    if (selectedSensorMode.value === 'camera') {
+      await ppgService.start(callbacks);
+    } else {
+      scgService.setCallbacks(callbacks);
+      await scgService.start();
+    }
   }
 }
 
 function stopSensorAndAnalyze() {
   if (selectedSensorMode.value === 'none') return;
 
-  // Stop sensor
-  if (selectedSensorMode.value === 'camera') {
+  // Stop sensor(s)
+  if (selectedSensorMode.value === 'dual') {
+    ppgService.stop();
+    scgService.stop();
+    sensorFusionService.reset();
+  } else if (selectedSensorMode.value === 'camera') {
     ppgService.stop();
   } else {
     scgService.stop();
@@ -774,9 +810,16 @@ function confirmCancel() {
   timer.stop();
   clearRestInterval();
   disableKeepAwake();
-  // Stop any active sensor
-  if (selectedSensorMode.value === 'camera') ppgService.stop();
-  else if (selectedSensorMode.value === 'accelerometer') scgService.stop();
+  // Stop any active sensor(s)
+  if (selectedSensorMode.value === 'dual') {
+    ppgService.stop();
+    scgService.stop();
+    sensorFusionService.reset();
+  } else if (selectedSensorMode.value === 'camera') {
+    ppgService.stop();
+  } else if (selectedSensorMode.value === 'accelerometer') {
+    scgService.stop();
+  }
   showCancelConfirm.value = false;
   emit('cancel');
 }
@@ -860,8 +903,15 @@ onUnmounted(() => {
   timer.stop();
   clearRestInterval();
   disableKeepAwake();
-  // Stop any active sensor
-  if (selectedSensorMode.value === 'camera') ppgService.stop();
-  else if (selectedSensorMode.value === 'accelerometer') scgService.stop();
+  // Stop any active sensor(s)
+  if (selectedSensorMode.value === 'dual') {
+    ppgService.stop();
+    scgService.stop();
+    sensorFusionService.reset();
+  } else if (selectedSensorMode.value === 'camera') {
+    ppgService.stop();
+  } else if (selectedSensorMode.value === 'accelerometer') {
+    scgService.stop();
+  }
 });
 </script>
