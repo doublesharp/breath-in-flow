@@ -13,13 +13,18 @@ The resonance frequency assessment currently requires users to manually score tr
 - Provide rich real-time visualizations (charts, waveforms, spectral plots)
 - Make the app a standalone product — no external devices or apps needed
 
-## Key Constraint: One Sensor at a Time
+## Sensor Modes
 
-Camera PPG requires the user's finger on the camera lens. Accelerometer SCG requires the phone flat on the chest. These cannot run simultaneously — they use the same physical device in different positions.
+**Simultaneous dual-sensor mode ("phone-on-chest"):**
+Phone placed screen-down flat on the chest, finger covering the rear camera lens. Both sensors run simultaneously on the same heartbeats:
+- Rear camera + flash → PPG from fingertip (flash illuminates finger from below)
+- Accelerometer → SCG from chest wall vibrations
+- Audio-only breathing guidance (screen is face-down)
+- Real-time sensor fusion: cross-validate IBI detections per beat for highest accuracy
 
-**Sensor modes:**
-- **Single-sensor (default):** User picks ONE sensor per assessment run — camera PPG or accelerometer SCG. Audio-only breathing guidance during trials (can't see screen).
-- **Dual-sensor (optional):** User runs the full 5-trial assessment TWICE (once per sensor). The app fuses results at the analysis level — comparing HRV metrics across both runs for higher-confidence scoring.
+**Single-sensor modes:**
+- **Camera only:** Finger on rear camera (any position). Audio-only guidance.
+- **Accelerometer only:** Phone flat on chest. Audio-only guidance.
 - **No sensor:** Manual scoring mode (existing behavior) for users who use an external app like Elite HRV.
 
 ## Architecture Overview
@@ -33,8 +38,13 @@ Camera PPG requires the user's finger on the camera lens. Accelerometer SCG requ
 │  └──────┬───────┘     └────────┬─────────┘              │
 │         │ IBI stream           │ IBI stream              │
 │         └──────────┬───────────┘                         │
-│           (one at a time)                                │
 │                    ▼                                     │
+│         ┌──────────────────┐                             │
+│         │  Real-Time       │ (dual mode: cross-validate  │
+│         │  Sensor Fusion   │  per-beat from both sensors)│
+│         └────────┬─────────┘                             │
+│                  │ fused IBI stream                      │
+│                  ▼                                       │
 │         ┌──────────────────┐                             │
 │         │  HRV Analysis    │                             │
 │         │  Engine          │                             │
@@ -42,9 +52,8 @@ Camera PPG requires the user's finger on the camera lens. Accelerometer SCG requ
 │                  │ HRV metrics                           │
 │                  ▼                                       │
 │  ┌───────────────────────────────────────────────┐       │
-│  │  Results     │  Visualizations │  Assessment  │       │
-│  │  Fusion      │  (charts)       │  Integration │       │
-│  │  (dual-run)  │                 │              │       │
+│  │  Visualizations         │  Assessment         │       │
+│  │  (charts, plots)        │  Integration        │       │
 │  └───────────────────────────────────────────────┘       │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -324,43 +333,38 @@ interface SCGService {
 - More susceptible to motion artifacts than PPG
 - Lower accuracy than PPG in general, but no finger-on-camera needed
 
-## Sub-Project 5: Results Fusion (Dual-Run Mode)
+## Sub-Project 5: Real-Time Sensor Fusion
 
-Since camera PPG and accelerometer SCG cannot run simultaneously (same device, different positions), fusion happens at the **results level** — comparing HRV metrics from two separate assessment runs.
+In dual-sensor mode (phone-on-chest, finger-on-camera), both PPG and SCG run simultaneously on the same heartbeats. Fusion happens in real-time per beat.
 
-### Location: `packages/shared/src/hrv/resultsFusion.ts`
+### Location: `packages/web/src/services/sensorFusion.ts`
 
-### How Dual-Run Mode Works
+### How It Works
 
-1. User completes a full 5-trial assessment with **sensor A** (e.g., camera PPG)
-2. User completes a second full 5-trial assessment with **sensor B** (e.g., accelerometer SCG)
-3. The app fuses results per-trial: for each breathing rate, it has two independent HRV analyses
-4. Fusion produces higher-confidence scoring by cross-validating metrics across sensors
-
-### Fusion Strategy: Confidence-Weighted Averaging
+Both sensor services emit IBI samples independently. The fusion service collects both streams and cross-validates:
 
 ```typescript
-interface FusedTrialResult {
-  rate: number;                    // BPM
-  ppgAnalysis?: HRVAnalysis;       // From PPG assessment run
-  scgAnalysis?: HRVAnalysis;       // From SCG assessment run
-  fusedMetrics: {
-    lfPower: number;               // Weighted average
-    peakToTroughAmplitude: number;
-    waveformSmoothness: number;
-    phaseSynchrony: number;
-    confidence: number;            // Higher when sensors agree
-  };
+interface FusedIBISample extends IBISample {
+  source: 'ppg' | 'scg' | 'fused';
+  ppgInterval?: number;
+  scgInterval?: number;
+  confidence: number;    // 0-1, higher when sensors agree
 }
 ```
 
-**Algorithm:**
-1. For each trial rate, if both sensor runs have data:
-   - Weight each metric by its run's signal quality score
-   - If metrics agree within 25%: average them, confidence = high (0.8-1.0)
-   - If metrics disagree by >25%: use higher-quality run's data, confidence = medium (0.5-0.8)
-2. If only one sensor run exists: use it directly, confidence = signal quality score
-3. Cross-validate: if both sensors independently agree on the best rate, confidence boost
+### Algorithm (per beat window)
+
+1. When a PPG or SCG peak is detected, open a **±100ms matching window**
+2. If both sensors detect a beat within the window:
+   - If intervals agree within 30ms: quality-weighted average, confidence = high
+   - If intervals disagree by >30ms: use higher-quality source, confidence = medium
+3. If only one sensor detects a beat: use it if quality > 0.5, confidence = low
+4. If neither detects within expected window (based on running HR): flag as artifact
+5. **Cross-validation bonus**: when sensors consistently agree (>5 consecutive matched beats), signal quality assessment gets a confidence boost
+
+### Results-Level Fusion (also retained)
+
+The `resultsFusion.ts` in the shared package still supports fusing HRV analysis results from separate runs — useful for comparing a PPG-only run vs SCG-only run after the fact.
 
 ## Sub-Project 6: HRV Visualizations
 
