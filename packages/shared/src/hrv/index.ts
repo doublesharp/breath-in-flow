@@ -3,6 +3,7 @@ export * from './preprocessing.js';
 export * from './timeDomain.js';
 export * from './frequencyDomain.js';
 export * from './resonanceMetrics.js';
+export * from './resultsFusion.js';
 
 import { mean } from '../dsp/statistics.js';
 import type { IBISample, HRVAnalysis, ResonanceMetrics } from './types.js';

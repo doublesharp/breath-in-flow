@@ -18,6 +18,14 @@ vi.mock('../../src/services/soundService', () => ({
   soundService: { playClick: vi.fn(), setEnabled: vi.fn(), setTheme: vi.fn() },
 }));
 
+vi.mock('../../src/services/ppgService', () => ({
+  ppgService: { start: vi.fn(), stop: vi.fn(), setCallbacks: vi.fn() },
+}));
+
+vi.mock('../../src/services/scgService', () => ({
+  scgService: { start: vi.fn(), stop: vi.fn(), setCallbacks: vi.fn() },
+}));
+
 describe('ResonanceAssessment', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -56,6 +64,28 @@ describe('ResonanceAssessment', () => {
     await wrapper.find('[data-testid="start-btn"]').trigger('click');
     await wrapper.find('[data-testid="cancel-btn"]').trigger('click');
     expect(wrapper.text()).toContain('Cancel assessment');
+  });
+
+  describe('Sensor mode selection', () => {
+    it('renders sensor mode selector in INTRO phase', () => {
+      const wrapper = mount(ResonanceAssessment);
+      const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
+      expect(sensorSection.exists()).toBe(true);
+      expect(sensorSection.text()).toContain('Heart Rate Measurement');
+      expect(sensorSection.text()).toContain('Manual Scoring');
+      expect(sensorSection.text()).toContain('Camera (Finger PPG)');
+      expect(sensorSection.text()).toContain('Accelerometer (Chest)');
+    });
+
+    it('defaults to none (Manual Scoring) sensor mode', () => {
+      const wrapper = mount(ResonanceAssessment);
+      const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
+      // The first button (Manual Scoring) should have the selected class
+      const buttons = sensorSection.findAll('button');
+      expect(buttons[0].classes()).toContain('border-emerald-500');
+      expect(buttons[1].classes()).not.toContain('border-emerald-500');
+      expect(buttons[2].classes()).not.toContain('border-emerald-500');
+    });
   });
 
   describe('Scoring phase', () => {

@@ -47,6 +47,24 @@
             </div>
           </div>
 
+          <!-- Sensor Selection -->
+          <div class="mb-6 space-y-3" data-testid="sensor-selection">
+            <label class="text-sm font-medium text-white/80">Heart Rate Measurement</label>
+            <div class="grid grid-cols-1 gap-2">
+              <button
+                v-for="mode in sensorModes" :key="mode.value"
+                @click="selectedSensorMode = mode.value"
+                :class="['p-3 rounded-lg border text-left transition-all',
+                  selectedSensorMode === mode.value
+                    ? 'border-emerald-500 bg-emerald-500/10'
+                    : 'border-white/10 bg-white/5']"
+              >
+                <div class="font-medium text-white">{{ mode.label }}</div>
+                <div class="text-xs text-white/50 mt-1">{{ mode.description }}</div>
+              </button>
+            </div>
+          </div>
+
           <!-- Action Buttons -->
           <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
             <button data-testid="cancel-btn" @click="requestCancel" class="btn-secondary">
@@ -67,8 +85,18 @@
             {{ phaseHeaderText }}
           </h2>
 
-          <!-- Breathing Visualizer -->
-          <div data-testid="breathing-visualizer">
+          <!-- Sensor-active trial view (replaces BreathingVisualizer) -->
+          <div v-if="selectedSensorMode !== 'none' && phase === 'TRIAL_BREATHING'" class="flex flex-col items-center gap-6 py-8">
+            <SignalQualityIndicator :quality="sensorQuality" :sensor-type="selectedSensorMode === 'camera' ? 'ppg' : 'scg'" />
+            <div class="text-sm text-white/60 text-center">
+              {{ selectedSensorMode === 'camera' ? 'Keep your finger covering the camera lens' : 'Keep the phone flat on your chest' }}
+            </div>
+            <div class="text-sm text-white/40">Follow the audio breathing cues</div>
+            <div class="text-2xl font-mono text-white">{{ formatTime(timer.currentTime.value) }}</div>
+          </div>
+
+          <!-- Breathing Visualizer (default / warmup / no sensor) -->
+          <div v-else data-testid="breathing-visualizer">
             <BreathingVisualizer
               :phase="timer.phase.value"
               :current-time="timer.currentTime.value"
@@ -145,6 +173,40 @@
             class="card-solid"
           >
             <h3 class="text-lg font-bold text-white mb-4">{{ trial.rate }} BPM</h3>
+
+            <!-- HRV Chart (when sensor data available) -->
+            <div v-if="trialAnalyses[index]" class="mb-4">
+              <div v-if="expandedTrialHrv[index]">
+                <HrOscillation
+                  :hr-data="getHrDataForTrial(index)"
+                  :breathing-rate-b-p-m="trial.rate"
+                  :trial-duration-seconds="120"
+                  :peak-to-trough-amplitude="trialAnalyses[index]!.resonance.peakToTroughAmplitude"
+                  :waveform-smoothness="trialAnalyses[index]!.resonance.waveformSmoothness"
+                  :height="150"
+                />
+                <div class="mt-2 grid grid-cols-3 gap-2 text-center">
+                  <div class="bg-white/5 rounded-lg p-2">
+                    <div class="text-xs text-white/50">LF Power</div>
+                    <div class="text-sm font-semibold text-blue-400">{{ Math.round(trialAnalyses[index]!.frequencyDomain.lfPower) }} ms²</div>
+                  </div>
+                  <div class="bg-white/5 rounded-lg p-2">
+                    <div class="text-xs text-white/50">Amplitude</div>
+                    <div class="text-sm font-semibold text-amber-400">{{ trialAnalyses[index]!.resonance.peakToTroughAmplitude.toFixed(1) }} BPM</div>
+                  </div>
+                  <div class="bg-white/5 rounded-lg p-2">
+                    <div class="text-xs text-white/50">Smoothness</div>
+                    <div class="text-sm font-semibold text-purple-400">{{ trialAnalyses[index]!.resonance.waveformSmoothness.toFixed(2) }}</div>
+                  </div>
+                </div>
+              </div>
+              <button
+                @click="expandedTrialHrv[index] = !expandedTrialHrv[index]"
+                class="mt-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+              >
+                {{ expandedTrialHrv[index] ? 'Hide HRV data' : 'Show HRV data' }}
+              </button>
+            </div>
 
             <!-- Comfort Rating -->
             <div data-testid="comfort-rating" class="mb-4">
@@ -263,6 +325,24 @@
             <p class="text-sm text-slate-400">Score: {{ trialScores.find(s => s.rate === selectedRate)?.score ?? 0 }}</p>
           </div>
 
+          <!-- HRV Trial Comparison (when sensor data available) -->
+          <template v-if="hasAnyHrvData">
+            <TrialComparison
+              :trials="trialComparisonData"
+              :selected-rate="selectedRate"
+            />
+
+            <template v-if="selectedTrialAnalysis">
+              <FrequencySpectrum
+                :spectrum="selectedTrialAnalysis.frequencyDomain.spectrum"
+                :lf-peak="selectedTrialAnalysis.frequencyDomain.lfPeak"
+                :hf-peak="selectedTrialAnalysis.frequencyDomain.hfPeak"
+                :lf-power="selectedTrialAnalysis.frequencyDomain.lfPower"
+                :hf-power="selectedTrialAnalysis.frequencyDomain.hfPower"
+              />
+            </template>
+          </template>
+
           <!-- All Trial Scores -->
           <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
             <button
@@ -331,12 +411,17 @@ import { ref, reactive, computed, onUnmounted } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
+import HrOscillation from './hrv/HrOscillation.vue';
+import TrialComparison from './hrv/TrialComparison.vue';
+import FrequencySpectrum from './hrv/FrequencySpectrum.vue';
+import SignalQualityIndicator from './hrv/SignalQualityIndicator.vue';
 import { useBreathingTimer } from '../composables/useBreathingTimer';
 import { useStorage } from '../composables/useStorage';
 import {
   ASSESSMENT_TRIALS,
   DEFAULT_BREATHING_CONFIG,
   formatTime,
+  analyzeHRV,
   type BreathingConfig,
   type AssessmentTrial,
   type AssessmentConfig,
@@ -344,7 +429,11 @@ import {
   type AssessmentSymptom,
   type HrAmplitude,
   type WaveformSmoothness,
+  type IBISample,
+  type HRVAnalysis,
 } from '@breath-in-flow/shared';
+import { ppgService } from '../services/ppgService';
+import { scgService } from '../services/scgService';
 import { ttsService } from '../services/ttsService';
 import { scoreTrial, findSuggestedRate } from '../utils/assessmentScoring';
 import { v4 as uuidv4 } from 'uuid';
@@ -366,6 +455,17 @@ const emit = defineEmits<{
 // ======================== Types ========================
 
 type AssessmentPhase = 'INTRO' | 'WARMUP' | 'TRIAL_BREATHING' | 'TRIAL_REST' | 'SCORING' | 'RESULT';
+type SensorMode = 'none' | 'camera' | 'accelerometer';
+
+// ======================== Sensor Mode ========================
+
+const selectedSensorMode = ref<SensorMode>('none');
+
+const sensorModes = [
+  { value: 'none' as const, label: 'Manual Scoring', description: 'Score trials manually using an external HRV app or subjective observation' },
+  { value: 'camera' as const, label: 'Camera (Finger PPG)', description: 'Place finger over camera lens \u2014 audio-only breathing guidance' },
+  { value: 'accelerometer' as const, label: 'Accelerometer (Chest)', description: 'Place phone on chest \u2014 audio-only breathing guidance' },
+];
 
 // ======================== Scoring UI Options ========================
 
@@ -433,6 +533,15 @@ const timer = useBreathingTimer(timerConfig, {
 const restTimeRemaining = ref(120);
 let restIntervalId: ReturnType<typeof setInterval> | null = null;
 
+// ======================== Sensor / IBI State ========================
+
+const currentTrialIBIs = ref<IBISample[]>([]);
+const trialAnalyses = ref<(HRVAnalysis | null)[]>([null, null, null, null, null]);
+const sensorQuality = ref(0);
+
+// Expanded HRV panels in SCORING phase
+const expandedTrialHrv = reactive<boolean[]>([false, false, false, false, false]);
+
 // ======================== Computed ========================
 
 const currentTrial = computed(() => trials.value[currentTrialIndex.value]);
@@ -442,9 +551,9 @@ const isBreathingPhase = computed(
 );
 
 const phaseHeaderText = computed(() => {
-  if (phase.value === 'WARMUP') return `Warmup — ${assessmentConfig.warmupRate} BPM`;
+  if (phase.value === 'WARMUP') return `Warmup \u2014 ${assessmentConfig.warmupRate} BPM`;
   if (phase.value === 'TRIAL_BREATHING')
-    return `Trial ${currentTrialIndex.value + 1}/5 — ${currentTrial.value.rate} BPM`;
+    return `Trial ${currentTrialIndex.value + 1}/5 \u2014 ${currentTrial.value.rate} BPM`;
   return '';
 });
 
@@ -458,6 +567,95 @@ const trialScores = computed(() =>
     score: scoreTrial(t),
   }))
 );
+
+const hasAnyHrvData = computed(() =>
+  trialAnalyses.value.some((a) => a !== null)
+);
+
+const trialComparisonData = computed(() =>
+  trials.value
+    .map((t, i) => {
+      const analysis = trialAnalyses.value[i];
+      if (!analysis) return null;
+      return { rate: t.rate, analysis };
+    })
+    .filter((x): x is { rate: number; analysis: HRVAnalysis } => x !== null)
+);
+
+const selectedTrialAnalysis = computed(() => {
+  const idx = trials.value.findIndex((t) => t.rate === selectedRate.value);
+  if (idx < 0) return null;
+  return trialAnalyses.value[idx];
+});
+
+// ======================== HRV Helpers ========================
+
+function getHrDataForTrial(index: number) {
+  const analysis = trialAnalyses.value[index];
+  if (!analysis) return [];
+  return analysis.raw.timestamps.map((t, i) => ({
+    time: t,
+    hr: analysis.raw.instantaneousHR[i],
+  }));
+}
+
+function autoPopulateScoring() {
+  for (let i = 0; i < trials.value.length; i++) {
+    const analysis = trialAnalyses.value[i];
+    if (!analysis) continue;
+
+    const trial = trials.value[i];
+    const amp = analysis.resonance.peakToTroughAmplitude;
+    const smooth = analysis.resonance.waveformSmoothness;
+
+    // Map amplitude to category
+    if (amp >= 15) trial.hrAmplitude = 'large';
+    else if (amp >= 5) trial.hrAmplitude = 'medium';
+    else trial.hrAmplitude = 'small';
+
+    // Map smoothness to category
+    if (smooth >= 0.7) trial.waveformSmoothness = 'verySmooth';
+    else if (smooth >= 0.3) trial.waveformSmoothness = 'somewhatSmooth';
+    else trial.waveformSmoothness = 'jagged';
+  }
+}
+
+// ======================== Sensor Start/Stop ========================
+
+async function startSensor() {
+  if (selectedSensorMode.value === 'none') return;
+
+  currentTrialIBIs.value = [];
+  const callbacks = {
+    onIBI: (sample: IBISample) => currentTrialIBIs.value.push(sample),
+    onQualityChange: (q: number) => { sensorQuality.value = q; },
+  };
+
+  if (selectedSensorMode.value === 'camera') {
+    await ppgService.start(callbacks);
+  } else {
+    scgService.setCallbacks(callbacks);
+    await scgService.start();
+  }
+}
+
+function stopSensorAndAnalyze() {
+  if (selectedSensorMode.value === 'none') return;
+
+  // Stop sensor
+  if (selectedSensorMode.value === 'camera') {
+    ppgService.stop();
+  } else {
+    scgService.stop();
+  }
+
+  // Analyze collected IBI data
+  if (currentTrialIBIs.value.length >= 10) {
+    const trial = trials.value[currentTrialIndex.value];
+    const analysis = analyzeHRV(currentTrialIBIs.value, trial.rate);
+    trialAnalyses.value[currentTrialIndex.value] = analysis;
+  }
+}
 
 // ======================== Keep Awake ========================
 
@@ -503,16 +701,20 @@ function handlePhaseComplete() {
   if (phase.value === 'WARMUP') {
     startTrial(0);
   } else if (phase.value === 'TRIAL_BREATHING') {
+    // Stop sensor and analyze IBI data
+    stopSensorAndAnalyze();
+
     if (currentTrialIndex.value < 4) {
       startRest();
     } else {
       disableKeepAwake();
+      autoPopulateScoring();
       phase.value = 'SCORING';
     }
   }
 }
 
-function startTrial(index: number) {
+async function startTrial(index: number) {
   currentTrialIndex.value = index;
   const trial = trials.value[index];
   timerConfig.inhaleTime = trial.inhaleTime;
@@ -520,6 +722,10 @@ function startTrial(index: number) {
   timerConfig.repetitions = trial.repetitions;
   phase.value = 'TRIAL_BREATHING';
   ttsService.speak(`Trial ${index + 1} starting at ${trial.rate} breaths per minute`);
+
+  // Start sensor for IBI collection
+  await startSensor();
+
   timer.start();
 }
 
@@ -568,6 +774,9 @@ function confirmCancel() {
   timer.stop();
   clearRestInterval();
   disableKeepAwake();
+  // Stop any active sensor
+  if (selectedSensorMode.value === 'camera') ppgService.stop();
+  else if (selectedSensorMode.value === 'accelerometer') scgService.stop();
   showCancelConfirm.value = false;
   emit('cancel');
 }
@@ -597,7 +806,7 @@ function calculateResult() {
 
 function saveResult() {
   const selected = trials.value.find((t) => t.rate === selectedRate.value)!;
-  const presetName = `My Resonance Frequency — ${selectedRate.value} BPM`;
+  const presetName = `My Resonance Frequency \u2014 ${selectedRate.value} BPM`;
   const existingConfigs = storage.getAllConfigs();
   const existing = existingConfigs.find((c) => c.name.startsWith('My Resonance Frequency'));
 
@@ -651,5 +860,8 @@ onUnmounted(() => {
   timer.stop();
   clearRestInterval();
   disableKeepAwake();
+  // Stop any active sensor
+  if (selectedSensorMode.value === 'camera') ppgService.stop();
+  else if (selectedSensorMode.value === 'accelerometer') scgService.stop();
 });
 </script>
