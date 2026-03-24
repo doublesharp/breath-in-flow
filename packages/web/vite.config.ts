@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
+import tailwindcss from '@tailwindcss/vite';
 import electron from 'vite-plugin-electron';
 import renderer from 'vite-plugin-electron-renderer';
 import { resolve, dirname } from 'node:path';
@@ -12,6 +13,7 @@ const configDir = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [
     vue(),
+    tailwindcss(),
     // Only include Electron plugins when building for Electron
     ...(isElectron
       ? [
