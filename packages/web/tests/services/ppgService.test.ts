@@ -67,6 +67,10 @@ function resetService() {
   (ppgService as unknown as Record<string, unknown>).frameCount = 0;
   (ppgService as unknown as Record<string, unknown>).lastFrameTime = 0;
   (ppgService as unknown as Record<string, unknown>).signalQuality = 0;
+  (ppgService as unknown as Record<string, unknown>).adaptiveFilterFrameCount = 0;
+  (ppgService as unknown as Record<string, unknown>).recentIBIsMs = [];
+  (ppgService as unknown as Record<string, unknown>).currentLowCut = 0.5;
+  (ppgService as unknown as Record<string, unknown>).currentHighCut = 4.0;
   // Reset filter and peak detector
   (ppgService as unknown as { bandpassFilter: { reset: () => void } }).bandpassFilter.reset();
   (ppgService as unknown as { peakDetector: { reset: () => void } }).peakDetector.reset();
@@ -92,10 +96,11 @@ function generateSyntheticPPG(
 
   for (let i = 0; i < nSamples; i++) {
     const t = i / sampleRateHz;
-    // Simulate PPG: DC offset (simulating red channel ~180) + pulsatile component
-    const pulsatile = 10 * Math.sin(2 * Math.PI * heartRateHz * t);
+    // Simulate PPG: DC offset (simulating green channel ~150) + pulsatile component
+    // Real PPG amplitude ~2-5% of DC level, so ~3-8 units out of 150
+    const pulsatile = 15 * Math.sin(2 * Math.PI * heartRateHz * t);
     // Add some harmonics for realism
-    const harmonic = 2 * Math.sin(2 * Math.PI * heartRateHz * 2 * t);
+    const harmonic = 5 * Math.sin(2 * Math.PI * heartRateHz * 2 * t);
     const value = 180 + pulsatile + harmonic;
     values.push(value);
     timestamps.push(startTime + t * 1000); // ms

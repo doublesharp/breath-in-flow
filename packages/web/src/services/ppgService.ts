@@ -58,7 +58,7 @@ class PPGService {
       thresholdFactor: 0.6,
       adaptiveWindow: 15,
       adaptiveRefractory: true,
-      minProminence: 0.3,
+      minProminence: 0.15,
     });
   }
 
