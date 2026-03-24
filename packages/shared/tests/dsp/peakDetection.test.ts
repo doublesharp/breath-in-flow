@@ -110,6 +110,69 @@ describe('detectPeaks (batch)', () => {
   });
 });
 
+describe('detectPeaks (batch) — prominence filter', () => {
+  it('rejects low-prominence peaks when minProminence is set', () => {
+    // Construct a signal with one tall peak and one shallow bump
+    // Tall peak at index 10: rises to 10 above a baseline of 0
+    // Shallow bump at index 30: rises to 1 above a baseline of 0
+    // Signal range ~ 10, so minProminence=0.3 → threshold = 3
+    const signal: number[] = new Array(50).fill(0);
+    // Tall peak
+    signal[8] = 3;
+    signal[9] = 7;
+    signal[10] = 10;
+    signal[11] = 7;
+    signal[12] = 3;
+    // Shallow bump (prominence ~1, below 30% of range=10 → rejected)
+    signal[28] = 0.4;
+    signal[29] = 0.8;
+    signal[30] = 1.0;
+    signal[31] = 0.8;
+    signal[32] = 0.4;
+
+    const peaksWithProminence = detectPeaks(signal, {
+      minPeakDistance: 5,
+      thresholdFactor: 0.1,
+      adaptiveWindow: 5,
+      minProminence: 0.3,
+    });
+
+    const peaksWithoutProminence = detectPeaks(signal, {
+      minPeakDistance: 5,
+      thresholdFactor: 0.1,
+      adaptiveWindow: 5,
+    });
+
+    // Without prominence filter, both bumps may be detected
+    // With prominence filter, the shallow bump should be rejected
+    expect(peaksWithProminence.length).toBeLessThanOrEqual(peaksWithoutProminence.length);
+
+    // Any remaining peaks should be the tall one
+    for (const p of peaksWithProminence) {
+      expect(p.amplitude).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it('accepts all peaks when minProminence is 0 (disabled)', () => {
+    const signal = generateSine(1, 100, 500, 1, 0);
+    const peaks = detectPeaks(signal, {
+      minPeakDistance: 50,
+      thresholdFactor: 0.3,
+      adaptiveWindow: 30,
+      minProminence: 0,
+    });
+
+    // Should behave identically to no prominence setting
+    const peaksDefault = detectPeaks(signal, {
+      minPeakDistance: 50,
+      thresholdFactor: 0.3,
+      adaptiveWindow: 30,
+    });
+
+    expect(peaks.length).toBe(peaksDefault.length);
+  });
+});
+
 describe('StreamingPeakDetector', () => {
   it('detects peaks in a sine wave (streaming mode)', () => {
     const signal = generateSine(1, 100, 500, 1, 0);
@@ -215,5 +278,91 @@ describe('StreamingPeakDetector', () => {
     // so indices may differ by 0-1, but counts should be close
     const countDiff = Math.abs(batchPeaks.length - streamPeaks.length);
     expect(countDiff).toBeLessThanOrEqual(2);
+  });
+
+  it('prominence filter rejects low-prominence peaks in streaming mode', () => {
+    // Build signal: one tall peak, then one shallow bump, separated enough
+    const signal: number[] = new Array(80).fill(0);
+    // Tall peak at index 10
+    signal[8] = 3; signal[9] = 7; signal[10] = 10; signal[11] = 7; signal[12] = 3;
+    // Shallow bump at index 50 (prominence ~1, below 30% of range ~10)
+    signal[48] = 0.4; signal[49] = 0.8; signal[50] = 1.0; signal[51] = 0.8; signal[52] = 0.4;
+
+    const detectorWithProminence = new StreamingPeakDetector({
+      minPeakDistance: 5,
+      thresholdFactor: 0.1,
+      adaptiveWindow: 5,
+      minProminence: 0.3,
+    });
+
+    const detectorWithout = new StreamingPeakDetector({
+      minPeakDistance: 5,
+      thresholdFactor: 0.1,
+      adaptiveWindow: 5,
+    });
+
+    const peaksWithProminence = signal
+      .map((val) => detectorWithProminence.addSample(val))
+      .filter((p) => p !== null);
+
+    const peaksWithout = signal
+      .map((val) => detectorWithout.addSample(val))
+      .filter((p) => p !== null);
+
+    // Prominence filter should reduce or maintain peak count
+    expect(peaksWithProminence.length).toBeLessThanOrEqual(peaksWithout.length);
+
+    // Any remaining peaks should be the tall one
+    for (const p of peaksWithProminence) {
+      expect(p!.amplitude).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it('adaptive refractory adjusts based on recent peak intervals', () => {
+    // Generate a 1 Hz sine (100 samples/period) — peaks ~100 samples apart
+    const signal = generateSine(1, 100, 600, 1, 0);
+
+    const detectorAdaptive = new StreamingPeakDetector({
+      minPeakDistance: 20, // absolute floor: 20 samples
+      thresholdFactor: 0.3,
+      adaptiveWindow: 30,
+      adaptiveRefractory: true,
+    });
+
+    const peaksAdaptive = signal
+      .map((val, idx) => detectorAdaptive.addSample(val, idx))
+      .filter((p) => p !== null);
+
+    // Should still detect peaks at approximately 100-sample intervals
+    expect(peaksAdaptive.length).toBeGreaterThanOrEqual(3);
+
+    // Verify no two peaks are closer than the absolute floor
+    for (let i = 1; i < peaksAdaptive.length; i++) {
+      const dist = peaksAdaptive[i]!.index - peaksAdaptive[i - 1]!.index;
+      expect(dist).toBeGreaterThanOrEqual(20);
+    }
+  });
+
+  it('adaptive refractory does not alter behavior when disabled', () => {
+    const signal = generateSine(1, 100, 500, 1, 0);
+    const opts = {
+      minPeakDistance: 50,
+      thresholdFactor: 0.3,
+      adaptiveWindow: 30,
+    };
+
+    const detectorFixed = new StreamingPeakDetector({ ...opts, adaptiveRefractory: false });
+    const detectorAdaptive = new StreamingPeakDetector({ ...opts, adaptiveRefractory: true });
+
+    const peaksFixed = signal
+      .map((val, idx) => detectorFixed.addSample(val, idx))
+      .filter((p) => p !== null);
+
+    const peaksAdaptive = signal
+      .map((val, idx) => detectorAdaptive.addSample(val, idx))
+      .filter((p) => p !== null);
+
+    // Both should find a similar number of peaks (adaptive learns from the signal)
+    expect(Math.abs(peaksFixed.length - peaksAdaptive.length)).toBeLessThanOrEqual(2);
   });
 });

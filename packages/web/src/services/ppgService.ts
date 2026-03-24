@@ -37,12 +37,19 @@ class PPGService {
   private lastFrameTime: number = 0;
   private frameCount: number = 0;
 
+  // Adaptive bandpass state
+  private adaptiveFilterFrameCount: number = 0;
+  private recentIBIsMs: number[] = []; // Recent IBI values for adaptive filter
+  private currentLowCut: number = 0.5;
+  private currentHighCut: number = 4.0;
+
   // Configuration
   private readonly SAMPLE_RATE = 30; // fps
   private readonly BUFFER_SIZE = 300; // 10 seconds at 30fps
   private readonly MIN_PEAK_DISTANCE_SAMPLES = 9; // 300ms at 30fps ≈ 200 BPM max
   private readonly FRAME_INTERVAL_MS = 1000 / 30; // ~33ms between frames
   private readonly QUALITY_CHECK_INTERVAL = 30; // frames between quality checks
+  private readonly ADAPTIVE_FILTER_INTERVAL = 300; // frames between adaptive filter updates (~10s)
 
   constructor() {
     this.bandpassFilter = createBandpassFilter(0.5, 4.0, this.SAMPLE_RATE, 2);
@@ -50,6 +57,8 @@ class PPGService {
       minPeakDistance: this.MIN_PEAK_DISTANCE_SAMPLES,
       thresholdFactor: 0.6,
       adaptiveWindow: 15,
+      adaptiveRefractory: true,
+      minProminence: 0.3,
     });
   }
 
@@ -157,6 +166,10 @@ class PPGService {
     this.lastPeakTimestamp = null;
     this.frameCount = 0;
     this.lastFrameTime = 0;
+    this.adaptiveFilterFrameCount = 0;
+    this.recentIBIsMs = [];
+    this.currentLowCut = 0.5;
+    this.currentHighCut = 4.0;
     this.bandpassFilter.reset();
     this.peakDetector.reset();
 
@@ -204,6 +217,12 @@ class PPGService {
             quality: this.signalQuality,
           };
           this.callbacks.onIBI?.(ibiSample);
+
+          // Track recent IBIs for adaptive bandpass filter
+          this.recentIBIsMs.push(interval);
+          if (this.recentIBIsMs.length > 10) {
+            this.recentIBIsMs.shift();
+          }
         }
       }
 
@@ -211,6 +230,54 @@ class PPGService {
     }
 
     return ibiSample;
+  }
+
+  /**
+   * Update the adaptive bandpass filter based on estimated heart rate.
+   * Called every ADAPTIVE_FILTER_INTERVAL frames (~10 seconds at 30fps).
+   *
+   * Aboy++-inspired: narrows the passband around the actual heart rate
+   * to reject more motion and ambient noise.
+   */
+  private updateAdaptiveFilter(): void {
+    if (this.recentIBIsMs.length < 3) {
+      // Not enough data — revert to defaults if we drifted
+      if (this.currentLowCut !== 0.5 || this.currentHighCut !== 4.0) {
+        this.currentLowCut = 0.5;
+        this.currentHighCut = 4.0;
+        this.bandpassFilter = createBandpassFilter(
+          this.currentLowCut,
+          this.currentHighCut,
+          this.SAMPLE_RATE,
+          2,
+        );
+      }
+      return;
+    }
+
+    // Estimate HR from mean IBI
+    const meanIBI =
+      this.recentIBIsMs.reduce((sum, v) => sum + v, 0) / this.recentIBIsMs.length;
+    const hrHz = 1000 / meanIBI; // convert ms to Hz
+
+    // Adjust cutoffs: low = HR * 0.5, high = HR * 2.5, clamped to [0.5, 4.0]
+    const newLowCut = Math.max(0.5, hrHz * 0.5);
+    const newHighCut = Math.min(4.0, hrHz * 2.5);
+
+    // Only rebuild if cutoffs changed meaningfully (>0.05 Hz)
+    if (
+      Math.abs(newLowCut - this.currentLowCut) > 0.05 ||
+      Math.abs(newHighCut - this.currentHighCut) > 0.05
+    ) {
+      this.currentLowCut = newLowCut;
+      this.currentHighCut = newHighCut;
+      this.bandpassFilter = createBandpassFilter(
+        this.currentLowCut,
+        this.currentHighCut,
+        this.SAMPLE_RATE,
+        2,
+      );
+    }
   }
 
   private captureFrame(timestamp: number): void {
@@ -246,17 +313,30 @@ class PPGService {
     const imageData = this.ctx.getImageData(roiX, roiY, roiW, roiH);
     const pixels = imageData.data;
 
-    // Compute average red channel intensity
+    // Compute average green and red channel intensities (RGBA layout: R=0, G=1, B=2, A=3)
     let redSum = 0;
+    let greenSum = 0;
     const pixelCount = roiW * roiH;
     for (let i = 0; i < pixels.length; i += 4) {
-      redSum += pixels[i]; // red channel
+      redSum += pixels[i];     // red channel
+      greenSum += pixels[i + 1]; // green channel
     }
     const redAvg = pixelCount > 0 ? redSum / pixelCount : 0;
+    const greenAvg = pixelCount > 0 ? greenSum / pixelCount : 0;
 
-    this.processSignalSample(redAvg, timestamp);
+    // Use green channel as primary PPG signal (strongest with flash/torch)
+    // Red channel available for future cross-validation
+    void redAvg; // retained for potential cross-validation use
+    this.processSignalSample(greenAvg, timestamp);
 
     this.frameCount++;
+    this.adaptiveFilterFrameCount++;
+
+    // Periodically update adaptive bandpass filter
+    if (this.adaptiveFilterFrameCount >= this.ADAPTIVE_FILTER_INTERVAL) {
+      this.updateAdaptiveFilter();
+      this.adaptiveFilterFrameCount = 0;
+    }
 
     // Periodically assess signal quality
     if (this.frameCount % this.QUALITY_CHECK_INTERVAL === 0 && this.rawBuffer.length >= 30) {
@@ -311,6 +391,10 @@ class PPGService {
     this.lastPeakTimestamp = null;
     this.frameCount = 0;
     this.lastFrameTime = 0;
+    this.adaptiveFilterFrameCount = 0;
+    this.recentIBIsMs = [];
+    this.currentLowCut = 0.5;
+    this.currentHighCut = 4.0;
     this.signalQuality = 0;
     this.bandpassFilter.reset();
     this.peakDetector.reset();
