@@ -261,9 +261,96 @@ describe('scgService', () => {
         expect(sample.quality).toBeLessThanOrEqual(1);
       }
     });
+
+    it('uses 5 Hz high-pass cutoff — low-frequency drift does not prevent IBI detection', async () => {
+      // Feed a signal where a 2 Hz respiratory drift is added to the cardiac spikes.
+      // With a 5 Hz HP filter the respiratory component should be attenuated enough
+      // that heartbeats are still detected.
+      await scgService.start();
+
+      const SAMPLE_RATE = 100;
+      const INTERVAL_MS = 1000 / SAMPLE_RATE;
+      const HEART_RATE = 60;
+      const DURATION = 10;
+      const samplesPerBeat = Math.round((60 / HEART_RATE) * SAMPLE_RATE);
+      const totalSamples = Math.round(DURATION * SAMPLE_RATE);
+
+      const samples: { x: number; y: number; z: number }[] = [];
+      for (let i = 0; i < totalSamples; i++) {
+        const t = i / SAMPLE_RATE;
+        // 2 Hz respiratory drift (below the 5 Hz HP cutoff → filtered out)
+        const drift = 0.3 * Math.sin(2 * Math.PI * 2 * t);
+        const isBeat = i % samplesPerBeat === 0;
+        const cardiac = isBeat ? 1.5 : 0;
+        const noise = (Math.random() - 0.5) * 0.02;
+        samples.push({ x: 0, y: 0, z: cardiac + drift + noise });
+      }
+
+      for (const s of samples) {
+        dispatchMotionEvent(s, INTERVAL_MS);
+      }
+
+      expect(ibiSamples.length).toBeGreaterThanOrEqual(5);
+      for (const sample of ibiSamples) {
+        expect(sample.interval).toBeGreaterThanOrEqual(700);
+        expect(sample.interval).toBeLessThanOrEqual(1300);
+      }
+    });
   });
 
-  // ─── 5. Motion detection & quality ────────────────────────────────────────
+  // ─── 5. Template matching ──────────────────────────────────────────────────
+
+  describe('template matching', () => {
+    it('does not discard legitimate peaks after template is built', async () => {
+      // Run enough beats to trigger template construction (needs ≥5 peaks),
+      // then continue; the IBI count should keep growing.
+      await scgService.start();
+
+      const SAMPLE_RATE = 100;
+      const INTERVAL_MS = 1000 / SAMPLE_RATE;
+      const HEART_RATE = 60;
+
+      // Phase 1: 8 seconds — builds initial template (≥5 peaks)
+      const { samples: phase1 } = generateSCGSequence(HEART_RATE, 8, SAMPLE_RATE);
+      for (const s of phase1) {
+        dispatchMotionEvent(s, INTERVAL_MS);
+      }
+      const countAfterPhase1 = ibiSamples.length;
+      expect(countAfterPhase1).toBeGreaterThanOrEqual(4);
+
+      // Phase 2: 6 more seconds — template should accept matching peaks
+      const { samples: phase2 } = generateSCGSequence(HEART_RATE, 6, SAMPLE_RATE);
+      for (const s of phase2) {
+        dispatchMotionEvent(s, INTERVAL_MS);
+      }
+
+      // More peaks should have been detected in phase 2
+      expect(ibiSamples.length).toBeGreaterThan(countAfterPhase1);
+    });
+
+    it('IBI detection remains accurate after template construction', async () => {
+      await scgService.start();
+
+      const SAMPLE_RATE = 100;
+      const INTERVAL_MS = 1000 / SAMPLE_RATE;
+      const HEART_RATE = 60;
+      const DURATION = 20; // long enough to build + use template
+
+      const { samples } = generateSCGSequence(HEART_RATE, DURATION, SAMPLE_RATE);
+      for (const s of samples) {
+        dispatchMotionEvent(s, INTERVAL_MS);
+      }
+
+      expect(ibiSamples.length).toBeGreaterThanOrEqual(5);
+      // All detected IBIs should still be physiologically plausible
+      for (const sample of ibiSamples) {
+        expect(sample.interval).toBeGreaterThanOrEqual(700);
+        expect(sample.interval).toBeLessThanOrEqual(1300);
+      }
+    });
+  });
+
+  // ─── 6. Motion detection & quality ────────────────────────────────────────
 
   describe('motion detection', () => {
     it('drops quality to 0 when high-variance motion is detected', async () => {
@@ -298,7 +385,7 @@ describe('scgService', () => {
     });
   });
 
-  // ─── 6. Cleanup / stop() ─────────────────────────────────────────────────
+  // ─── 7. Cleanup / stop() ─────────────────────────────────────────────────
 
   describe('stop()', () => {
     it('removes the devicemotion event listener so no further IBI events fire', async () => {
@@ -337,7 +424,7 @@ describe('scgService', () => {
     });
   });
 
-  // ─── 7. Sample rate handling ──────────────────────────────────────────────
+  // ─── 8. Sample rate handling ──────────────────────────────────────────────
 
   describe('sample rate detection', () => {
     it('uses the event.interval field to detect sample rate', async () => {

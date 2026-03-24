@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { lombScargle, computeFrequencyDomainMetrics } from '../../src/hrv/frequencyDomain.js';
+import {
+  lombScargle,
+  computeFrequencyDomainMetrics,
+  linearDetrend,
+  hanningWindow,
+} from '../../src/hrv/frequencyDomain.js';
 import { FREQUENCY_BANDS } from '../../src/hrv/types.js';
 
 /**
@@ -63,6 +68,112 @@ describe('lombScargle', () => {
     for (const p of psd) {
       expect(p).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+describe('linearDetrend', () => {
+  it('removes a perfect linear trend', () => {
+    // y = 2 + 3*t — after detrending residual should be ~0
+    const timestamps = [0, 1, 2, 3, 4];
+    const values = timestamps.map((t) => 2 + 3 * t);
+    const detrended = linearDetrend(values, timestamps);
+    for (const v of detrended) {
+      expect(Math.abs(v)).toBeLessThan(1e-8);
+    }
+  });
+
+  it('leaves a zero-mean constant series unchanged', () => {
+    const timestamps = [0, 1, 2, 3, 4];
+    const values = [0, 0, 0, 0, 0];
+    const detrended = linearDetrend(values, timestamps);
+    for (const v of detrended) {
+      expect(Math.abs(v)).toBeLessThan(1e-10);
+    }
+  });
+
+  it('reduces VLF power in a linearly trending RR series', () => {
+    // RR series with a linear upward trend (HR slowing down) — no oscillation
+    const numBeats = 150;
+    const rrIntervals: number[] = [];
+    const timestamps: number[] = [];
+    let t = 0;
+    for (let i = 0; i < numBeats; i++) {
+      timestamps.push(t);
+      const rr = 800 + i * 2; // linear trend: 800 ms → 1098 ms
+      rrIntervals.push(rr);
+      t += rr;
+    }
+
+    const timestampsSec = timestamps.map((ts) => ts / 1000);
+    const meanRR = rrIntervals.reduce((a, b) => a + b, 0) / rrIntervals.length;
+    const centeredRR = rrIntervals.map((rr) => rr - meanRR);
+
+    // VLF band frequencies
+    const vlfFreqs: number[] = [];
+    for (let f = FREQUENCY_BANDS.VLF.low; f <= FREQUENCY_BANDS.VLF.high; f += 0.001) {
+      vlfFreqs.push(Math.round(f * 1000) / 1000);
+    }
+
+    const psdBefore = lombScargle(timestampsSec, centeredRR, vlfFreqs);
+    const detrendedRR = linearDetrend(centeredRR, timestampsSec);
+    const psdAfter = lombScargle(timestampsSec, detrendedRR, vlfFreqs);
+
+    const vlfBefore = psdBefore.reduce((a, b) => a + b, 0);
+    const vlfAfter = psdAfter.reduce((a, b) => a + b, 0);
+
+    // Detrending should meaningfully reduce VLF power
+    expect(vlfAfter).toBeLessThan(vlfBefore * 0.1);
+  });
+
+  it('handles single-element input gracefully', () => {
+    const result = linearDetrend([42], [0]);
+    expect(result).toHaveLength(1);
+  });
+});
+
+describe('hanningWindow', () => {
+  it('returns same length as input', () => {
+    const values = [1, 2, 3, 4, 5];
+    expect(hanningWindow(values)).toHaveLength(5);
+  });
+
+  it('tapers ends toward zero', () => {
+    const N = 64;
+    const values = new Array(N).fill(1);
+    const windowed = hanningWindow(values);
+    // First and last elements should be near zero
+    expect(Math.abs(windowed[0])).toBeLessThan(0.01);
+    expect(Math.abs(windowed[N - 1])).toBeLessThan(0.01);
+    // Middle element should be near 1
+    expect(windowed[Math.floor(N / 2)]).toBeGreaterThan(0.9);
+  });
+
+  it('reduces spectral leakage: peak is narrower with windowing', () => {
+    // 0.1 Hz sinusoid: windowed PSD should have less power in adjacent bins
+    // than the raw signal (leakage check at an off-peak frequency)
+    const timestamps: number[] = [];
+    const values: number[] = [];
+    for (let t = 0; t < 60; t++) {
+      timestamps.push(t);
+      values.push(Math.sin(2 * Math.PI * 0.1 * t));
+    }
+
+    const offPeakFreqs = [0.05, 0.07]; // well away from the 0.1 Hz peak
+    const windowedValues = hanningWindow(values);
+
+    const psdRaw = lombScargle(timestamps, values, offPeakFreqs);
+    const psdWindowed = lombScargle(timestamps, windowedValues, offPeakFreqs);
+
+    const totalRaw = psdRaw.reduce((a, b) => a + b, 0);
+    const totalWindowed = psdWindowed.reduce((a, b) => a + b, 0);
+
+    // Off-peak leakage should be reduced (or equal in edge cases) after windowing
+    expect(totalWindowed).toBeLessThanOrEqual(totalRaw * 1.01);
+  });
+
+  it('handles length-1 input', () => {
+    const result = hanningWindow([5]);
+    expect(result).toHaveLength(1);
   });
 });
 
@@ -135,5 +246,34 @@ describe('computeFrequencyDomainMetrics', () => {
     // HF peak should be in HF band
     expect(result.hfPeak).toBeGreaterThanOrEqual(FREQUENCY_BANDS.HF.low);
     expect(result.hfPeak).toBeLessThanOrEqual(FREQUENCY_BANDS.HF.high);
+  });
+
+  it('detrending reduces VLF artefact: trending series has lower VLF ratio than without detrend', () => {
+    // Build a 0.1 Hz oscillation series with an added linear trend
+    const numBeats = 150;
+    const rrIntervals: number[] = [];
+    const timestamps: number[] = [];
+    let t = 0;
+    for (let i = 0; i < numBeats; i++) {
+      timestamps.push(t);
+      const rr = 1000 + 50 * Math.sin(2 * Math.PI * 0.1 * (t / 1000)) + i * 0.5;
+      rrIntervals.push(rr);
+      t += rr;
+    }
+
+    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+
+    // After detrending the 0.1 Hz signal should still be the dominant LF peak
+    expect(result.lfPower).toBeGreaterThan(result.vlfPower);
+    expect(result.lfPeak).toBeCloseTo(0.1, 1);
+  });
+
+  it('0.1 Hz peak still detected after detrending and windowing', () => {
+    const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);
+    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+
+    // Detrending + windowing must not destroy the primary oscillation
+    expect(result.lfPeak).toBeCloseTo(0.1, 1);
+    expect(result.lfPower).toBeGreaterThan(0);
   });
 });

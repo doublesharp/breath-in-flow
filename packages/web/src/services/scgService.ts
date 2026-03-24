@@ -6,7 +6,11 @@
  * produces the dominant peak in the Z-axis acceleration signal.
  *
  * Signal pipeline (per sample):
- *   raw Z-axis → high-pass 1 Hz → low-pass 25 Hz → RMS envelope → peak detector
+ *   raw Z-axis → high-pass 5 Hz → low-pass 25 Hz → Hilbert envelope → peak detector
+ *
+ * Research basis: Zheng et al. 2024 achieves 97.3% sensitivity using 7–30 Hz
+ * bandpass; we use 5 Hz HP as a compromise to retain some lower cardiac content
+ * while still rejecting respiratory artifacts (1–5 Hz).
  *
  * Timing note: the service maintains a synthetic elapsed-time counter
  * incremented by event.interval each sample.  This makes it both accurate on
@@ -19,7 +23,6 @@ import {
   createLowpassFilter,
   StreamingPeakDetector,
   assessIBIQuality,
-  rms,
   standardDeviation,
   type IBISample,
 } from '@breath-in-flow/shared';
@@ -49,14 +52,28 @@ const DEFAULT_INTERVAL_MS = 1000 / DEFAULT_SAMPLE_RATE_HZ;
 /** Number of initial events used to estimate the device sample rate. */
 const RATE_ESTIMATION_EVENTS = 10;
 
-/** High-pass cutoff: removes gravity and slow respiratory drift. */
-const HP_CUTOFF_HZ = 1;
+/**
+ * High-pass cutoff: removes respiratory artifacts (1–5 Hz) while preserving
+ * cardiac SCG content.  Research (Zheng et al. 2024) uses 7 Hz; we use 5 Hz
+ * as a compromise.
+ */
+const HP_CUTOFF_HZ = 5;
 
 /** Low-pass cutoff: removes high-frequency electronic noise. */
 const LP_CUTOFF_HZ = 25;
 
-/** RMS envelope window in seconds. */
-const RMS_WINDOW_SECONDS = 0.05;
+/** Hilbert FIR half-length N (total taps = 2N+1 = 17). */
+const HILBERT_N = 8;
+
+/**
+ * Envelope smoothing window in seconds.
+ * A 150 ms moving average merges ringing bumps caused by the bandpass filter
+ * responding to a sharp cardiac transient, producing one clean envelope peak
+ * per heartbeat.  The ringing frequency of a 5 Hz HP filter (~5 Hz, ~200 ms
+ * period) requires a window of at least half a period (100 ms) to average out;
+ * 150 ms provides comfortable margin.
+ */
+const ENVELOPE_SMOOTH_SECONDS = 0.15;
 
 /** Maximum plausible heart rate (limits minimum peak distance in samples). */
 const MAX_HEART_RATE_BPM = 200;
@@ -100,9 +117,14 @@ class SCGService {
   // Synthetic elapsed-time clock (ms since start(), advanced by event.interval)
   private elapsedMs: number = 0;
 
-  // RMS envelope window
-  private rmsBuffer: number[] = [];
-  private rmsWindowSamples: number = Math.round(DEFAULT_SAMPLE_RATE_HZ * RMS_WINDOW_SECONDS);
+  // Hilbert FIR coefficients (computed once per sample-rate change)
+  private hilbertCoeffs: number[] = [];
+  // Circular buffer for Hilbert FIR delay line
+  private hilbertBuffer: number[] = [];
+
+  // Envelope smoothing (moving average post-Hilbert)
+  private envelopeBuffer: number[] = [];
+  private envelopeSmoothSamples: number = Math.round(DEFAULT_SAMPLE_RATE_HZ * ENVELOPE_SMOOTH_SECONDS);
 
   // Motion quality monitoring
   private rawAccBuffer: number[] = [];
@@ -114,6 +136,21 @@ class SCGService {
   private lastPeakElapsedMs: number | null = null;
   private lastPeakDetectionElapsedMs: number | null = null;
   private recentIBIs: number[] = [];
+
+  // Template matching state
+  private template: number[] | null = null;
+  private templateMatchCount = 0;
+  private readonly TEMPLATE_UPDATE_INTERVAL = 20;
+  private readonly TEMPLATE_NCC_THRESHOLD = 0.5;
+  private TEMPLATE_WINDOW_SAMPLES: number = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.1); // ±100ms
+
+  // Circular buffer of recent filtered samples for template extraction
+  private filteredHistory: number[] = [];
+  private filteredHistoryMaxLen: number = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.5);
+
+  // Detected peak sample indices since start (for template extraction)
+  private detectedPeakSampleIndices: number[] = [];
+  private sampleIndex: number = 0;
 
   // Quality
   private currentQuality = 0;
@@ -232,42 +269,73 @@ class SCGService {
     const afterHP = this.hpFilter!.filter(z);
     const filtered = this.lpFilter!.filter(afterHP);
 
-    // ── 5. RMS envelope ──
-    this.rmsBuffer.push(Math.abs(filtered));
-    if (this.rmsBuffer.length > this.rmsWindowSamples) {
-      this.rmsBuffer.shift();
+    // Store filtered sample in history ring buffer for template extraction
+    this.filteredHistory.push(filtered);
+    if (this.filteredHistory.length > this.filteredHistoryMaxLen) {
+      this.filteredHistory.shift();
     }
-    const envelope = rms(this.rmsBuffer);
+    this.sampleIndex++;
+
+    // ── 5. Hilbert envelope + smoothing ──
+    const instantEnvelope = this.hilbertEnvelope(filtered);
+
+    // Moving-average smoothing merges ringing bumps caused by the bandpass
+    // filter responding to a sharp cardiac transient, yielding one clean
+    // envelope peak per heartbeat.
+    this.envelopeBuffer.push(instantEnvelope);
+    if (this.envelopeBuffer.length > this.envelopeSmoothSamples) {
+      this.envelopeBuffer.shift();
+    }
+    const envelope =
+      this.envelopeBuffer.reduce((s, v) => s + v, 0) / this.envelopeBuffer.length;
 
     // ── 6. Peak detection ──
     const peak = this.peakDetector!.addSample(envelope, this.elapsedMs);
 
     if (peak) {
-      this.lastPeakDetectionElapsedMs = this.elapsedMs;
+      const currentSampleIndex = this.sampleIndex;
 
-      if (this.lastPeakElapsedMs !== null) {
-        const ibi = this.elapsedMs - this.lastPeakElapsedMs;
+      // Template validation: only apply after we have a template
+      const accepted = this.validatePeakWithTemplate(currentSampleIndex);
 
-        // Physiological sanity check: 200 BPM (300 ms) to 30 BPM (2000 ms)
-        if (ibi >= 300 && ibi <= 2000) {
-          this.recentIBIs.push(ibi);
-          if (this.recentIBIs.length > MAX_RECENT_IBIS) {
-            this.recentIBIs.shift();
+      if (accepted) {
+        this.lastPeakDetectionElapsedMs = this.elapsedMs;
+        this.detectedPeakSampleIndices.push(currentSampleIndex);
+
+        if (this.lastPeakElapsedMs !== null) {
+          const ibi = this.elapsedMs - this.lastPeakElapsedMs;
+
+          // Physiological sanity check: 200 BPM (300 ms) to 30 BPM (2000 ms)
+          if (ibi >= 300 && ibi <= 2000) {
+            this.recentIBIs.push(ibi);
+            if (this.recentIBIs.length > MAX_RECENT_IBIS) {
+              this.recentIBIs.shift();
+            }
+
+            const quality = this.computeQuality();
+            this.updateQuality(quality);
+
+            const sample: IBISample = {
+              timestamp: this.elapsedMs,
+              interval: ibi,
+              quality,
+            };
+            this.callbacks.onIBI?.(sample);
           }
+        }
 
-          const quality = this.computeQuality();
-          this.updateQuality(quality);
+        this.lastPeakElapsedMs = this.elapsedMs;
 
-          const sample: IBISample = {
-            timestamp: this.elapsedMs,
-            interval: ibi,
-            quality,
-          };
-          this.callbacks.onIBI?.(sample);
+        // Build/update template after enough initial peaks
+        const totalPeaks = this.detectedPeakSampleIndices.length;
+        if (totalPeaks === 5) {
+          // Build initial template from the first 5 peaks
+          this.rebuildTemplate();
+        } else if (totalPeaks > 5 && totalPeaks % this.TEMPLATE_UPDATE_INTERVAL === 0) {
+          // Periodically update template with recent good matches
+          this.rebuildTemplate();
         }
       }
-
-      this.lastPeakElapsedMs = this.elapsedMs;
     }
 
     // ── 7. Continuous quality monitoring ──
@@ -287,6 +355,146 @@ class SCGService {
     ) {
       this.updateQuality(0);
     }
+  }
+
+  // ─── Hilbert envelope ────────────────────────────────────────────────────────
+
+  /**
+   * Computes the Hilbert-transform envelope of the incoming sample stream.
+   *
+   * Uses a causal 17-tap FIR discrete Hilbert transformer (N=8) windowed with
+   * a Hanning window.  The envelope at each sample is:
+   *   envelope[n] = sqrt(x[n-N]² + xHilbert[n]²)
+   *
+   * @param sample - latest filtered sample
+   * @returns instantaneous envelope amplitude
+   */
+  private hilbertEnvelope(sample: number): number {
+    // Push into delay line
+    this.hilbertBuffer.push(sample);
+    if (this.hilbertBuffer.length > 2 * HILBERT_N + 1) {
+      this.hilbertBuffer.shift();
+    }
+
+    if (this.hilbertBuffer.length < 2 * HILBERT_N + 1) {
+      return Math.abs(sample);
+    }
+
+    // Apply Hilbert FIR to get the quadrature component
+    const coeffs = this.hilbertCoeffs;
+    let quadrature = 0;
+    for (let k = 0; k < coeffs.length; k++) {
+      quadrature += coeffs[k] * this.hilbertBuffer[k];
+    }
+
+    // The in-phase component is delayed by N samples to match Hilbert latency
+    const inPhase = this.hilbertBuffer[HILBERT_N];
+
+    return Math.sqrt(inPhase * inPhase + quadrature * quadrature);
+  }
+
+  /**
+   * Build the 17-tap discrete Hilbert FIR coefficients with Hanning window.
+   *   h[n] = 2/(π*(n-N)) for odd (n-N), 0 for even (n-N)
+   *   windowed by w[n] = 0.5 * (1 - cos(2π*n / (2N)))
+   */
+  private buildHilbertCoeffs(): void {
+    const N = HILBERT_N;
+    const taps = 2 * N + 1;
+    this.hilbertCoeffs = new Array(taps).fill(0);
+    for (let n = 0; n < taps; n++) {
+      const k = n - N; // centre at 0
+      if (k !== 0 && k % 2 !== 0) {
+        const hanning = 0.5 * (1 - Math.cos((2 * Math.PI * n) / (2 * N)));
+        this.hilbertCoeffs[n] = (2 / (Math.PI * k)) * hanning;
+      }
+    }
+  }
+
+  // ─── Template matching ───────────────────────────────────────────────────────
+
+  /**
+   * Compute the normalised cross-correlation between two equal-length vectors.
+   * Returns a value in [-1, 1]; negative means anti-correlated.
+   */
+  private normalizedCrossCorrelation(a: number[], b: number[]): number {
+    if (a.length !== b.length || a.length === 0) return 0;
+    let dot = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    const denom = Math.sqrt(normA * normB);
+    return denom > 1e-12 ? dot / denom : 0;
+  }
+
+  /**
+   * Update / set the template by averaging the waveform segments around the
+   * most recent `count` detected peaks.
+   */
+  private rebuildTemplate(): void {
+    const W = this.TEMPLATE_WINDOW_SAMPLES;
+    const recentPeaks = this.detectedPeakSampleIndices.slice(-5);
+    const segments: number[][] = [];
+
+    for (const peakIdx of recentPeaks) {
+      const segment = this.extractSegmentAroundSample(peakIdx, W);
+      if (segment !== null) segments.push(segment);
+    }
+
+    if (segments.length === 0) return;
+
+    const len = segments[0].length;
+    const avg = new Array(len).fill(0);
+    for (const seg of segments) {
+      for (let i = 0; i < len; i++) {
+        avg[i] += seg[i] / segments.length;
+      }
+    }
+    this.template = avg;
+  }
+
+  /**
+   * Extract a ±W sample window from filteredHistory centred on `peakSampleIdx`.
+   * Returns null if insufficient history is available.
+   */
+  private extractSegmentAroundSample(peakSampleIdx: number, W: number): number[] | null {
+    // filteredHistory holds the last filteredHistoryMaxLen samples.
+    // The most recent sample is at sampleIndex - 1.
+    const oldestAvailable = this.sampleIndex - this.filteredHistory.length;
+    const startIdx = peakSampleIdx - W;
+    const endIdx = peakSampleIdx + W;
+
+    if (startIdx < oldestAvailable || endIdx >= this.sampleIndex) return null;
+
+    const result: number[] = [];
+    for (let idx = startIdx; idx <= endIdx; idx++) {
+      const histPos = idx - oldestAvailable;
+      result.push(this.filteredHistory[histPos]);
+    }
+    return result;
+  }
+
+  /**
+   * Validate a candidate peak against the current template.
+   * Returns true if the peak should be accepted (no template yet → always accept).
+   */
+  private validatePeakWithTemplate(peakSampleIdx: number): boolean {
+    if (this.template === null) return true;
+
+    const W = this.TEMPLATE_WINDOW_SAMPLES;
+    const segment = this.extractSegmentAroundSample(peakSampleIdx, W);
+    if (segment === null) return true; // not enough history — accept
+
+    const ncc = this.normalizedCrossCorrelation(this.template, segment);
+    if (ncc >= this.TEMPLATE_NCC_THRESHOLD) {
+      this.templateMatchCount++;
+      return true;
+    }
+    return false;
   }
 
   // ─── Internal helpers ────────────────────────────────────────────────────────
@@ -352,14 +560,30 @@ class SCGService {
     this.hpFilter = createHighpassFilter(HP_CUTOFF_HZ, fs);
     this.lpFilter = createLowpassFilter(LP_CUTOFF_HZ, fs);
 
-    this.rmsWindowSamples = Math.max(1, Math.round(fs * RMS_WINDOW_SECONDS));
     this.motionWindowSamples = Math.max(1, Math.round(fs * MOTION_VARIANCE_WINDOW_SECONDS));
+
+    this.TEMPLATE_WINDOW_SAMPLES = Math.round(fs * 0.1); // ±100 ms
+    this.filteredHistoryMaxLen = Math.max(
+      2 * this.TEMPLATE_WINDOW_SAMPLES + 1,
+      Math.round(fs * 0.5),
+    );
+
+    // Rebuild Hilbert coefficients for the (potentially new) sample rate
+    this.buildHilbertCoeffs();
+    this.hilbertBuffer = [];
+
+    // Envelope smoothing window
+    this.envelopeSmoothSamples = Math.max(1, Math.round(fs * ENVELOPE_SMOOTH_SECONDS));
+    this.envelopeBuffer = [];
 
     const minPeakDistance = Math.floor(fs * (60 / MAX_HEART_RATE_BPM));
     this.peakDetector = new StreamingPeakDetector({
       minPeakDistance,
       thresholdFactor: 0.6,
       adaptiveWindow: Math.max(10, Math.round(fs * 0.5)),
+      // Reject secondary ringing bumps: a valid cardiac peak must be at least
+      // 25% of the running signal range above its surrounding valley.
+      minProminence: 0.25,
     });
   }
 
@@ -410,14 +634,16 @@ class SCGService {
     this.hpFilter = null;
     this.lpFilter = null;
     this.peakDetector = null;
-    this.rmsBuffer = [];
+    this.hilbertBuffer = [];
+    this.hilbertCoeffs = [];
+    this.envelopeBuffer = [];
+    this.envelopeSmoothSamples = Math.round(DEFAULT_SAMPLE_RATE_HZ * ENVELOPE_SMOOTH_SECONDS);
     this.rawAccBuffer = [];
     this.rateEstimationTimestamps = [];
     this.rateEstimated = false;
     this.sampleRateHz = DEFAULT_SAMPLE_RATE_HZ;
     this.lastIntervalMs = DEFAULT_INTERVAL_MS;
     this.elapsedMs = 0;
-    this.rmsWindowSamples = Math.round(DEFAULT_SAMPLE_RATE_HZ * RMS_WINDOW_SECONDS);
     this.motionWindowSamples = Math.round(
       DEFAULT_SAMPLE_RATE_HZ * MOTION_VARIANCE_WINDOW_SECONDS,
     );
@@ -425,6 +651,13 @@ class SCGService {
     this.lastPeakDetectionElapsedMs = null;
     this.recentIBIs = [];
     this.currentQuality = 0;
+    this.template = null;
+    this.templateMatchCount = 0;
+    this.filteredHistory = [];
+    this.filteredHistoryMaxLen = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.5);
+    this.detectedPeakSampleIndices = [];
+    this.sampleIndex = 0;
+    this.TEMPLATE_WINDOW_SAMPLES = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.1);
   }
 }
 

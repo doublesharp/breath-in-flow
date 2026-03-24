@@ -66,6 +66,50 @@ export function lombScargle(
 }
 
 /**
+ * Linear detrending: fit y = a + b*t via least squares and subtract.
+ * Removes slow HR trends that create spurious VLF power.
+ */
+export function linearDetrend(values: number[], timestamps: number[]): number[] {
+  const N = values.length;
+  if (N < 2) return values.slice();
+
+  // Least-squares fit: minimise sum((y_i - a - b*t_i)^2)
+  let sumT = 0;
+  let sumY = 0;
+  let sumTT = 0;
+  let sumTY = 0;
+
+  for (let i = 0; i < N; i++) {
+    sumT += timestamps[i];
+    sumY += values[i];
+    sumTT += timestamps[i] * timestamps[i];
+    sumTY += timestamps[i] * values[i];
+  }
+
+  const denom = N * sumTT - sumT * sumT;
+  if (Math.abs(denom) < 1e-12) {
+    // Degenerate: all timestamps equal — just subtract mean
+    const m = sumY / N;
+    return values.map((v) => v - m);
+  }
+
+  const b = (N * sumTY - sumT * sumY) / denom;
+  const a = (sumY - b * sumT) / N;
+
+  return values.map((v, i) => v - (a + b * timestamps[i]));
+}
+
+/**
+ * Hanning window: reduces spectral leakage for short recordings.
+ * w[n] = 0.5 * (1 - cos(2π*n / (N-1)))
+ */
+export function hanningWindow(values: number[]): number[] {
+  const N = values.length;
+  if (N <= 1) return values.slice();
+  return values.map((v, i) => v * 0.5 * (1 - Math.cos((2 * Math.PI * i) / (N - 1))));
+}
+
+/**
  * Generates a uniform frequency grid from start to end (inclusive) with given step.
  */
 function generateFrequencyGrid(start: number, end: number, step: number): number[] {
@@ -121,6 +165,12 @@ function findPeakFrequency(
 /**
  * Computes frequency-domain HRV metrics using the Lomb-Scargle periodogram.
  *
+ * Pre-processing pipeline (Bailón et al. 2010; Task Force 1996):
+ *   1. Mean subtraction
+ *   2. Linear detrending  — removes slow HR drift → reduces spurious VLF
+ *   3. Hanning windowing  — reduces spectral leakage for short recordings
+ *   4. Variance correction — preserves total power estimate after windowing
+ *
  * @param rrIntervals - RR intervals in ms
  * @param timestamps  - timestamps in ms (same length as rrIntervals)
  */
@@ -147,9 +197,23 @@ export function computeFrequencyDomainMetrics(
   // Convert timestamps to seconds
   const timestampsSec = timestamps.map((t) => t / 1000);
 
-  // Mean-subtract RR intervals
+  // ── 1. Mean subtraction ──
   const meanRR = mean(rrIntervals);
   const centeredRR = rrIntervals.map((rr) => rr - meanRR);
+
+  // ── 2. Linear detrending ──
+  const detrendedRR = linearDetrend(centeredRR, timestampsSec);
+
+  // ── 3. Hanning windowing ──
+  const windowedRR = hanningWindow(detrendedRR);
+
+  // ── 4. Variance correction ──
+  // Preserve power estimate: scale windowed signal so its variance matches
+  // the detrended signal's variance before windowing.
+  const detrendedVar = detrendedRR.reduce((s, v) => s + v * v, 0) / detrendedRR.length;
+  const windowedVar = windowedRR.reduce((s, v) => s + v * v, 0) / windowedRR.length;
+  const correctionFactor = windowedVar > 1e-12 ? Math.sqrt(detrendedVar / windowedVar) : 1;
+  const processedRR = windowedRR.map((v) => v * correctionFactor);
 
   // Generate frequency grid: 0.003 to 0.4 Hz with 0.001 Hz step
   const FREQ_START = 0.003;
@@ -158,7 +222,7 @@ export function computeFrequencyDomainMetrics(
   const frequencies = generateFrequencyGrid(FREQ_START, FREQ_END, FREQ_STEP);
 
   // Compute Lomb-Scargle PSD
-  const psd = lombScargle(timestampsSec, centeredRR, frequencies);
+  const psd = lombScargle(timestampsSec, processedRR, frequencies);
 
   // Build spectrum
   const spectrum: SpectralPoint[] = frequencies.map((f, i) => ({
