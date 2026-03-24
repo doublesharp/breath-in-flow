@@ -382,11 +382,11 @@ const phaseColorClass = computed(() => {
     case 'INHALE':
       return 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-green-500/40';
     case 'INHALE_HOLD':
-      return 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-500/40';
+      return 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-amber-500/40';
     case 'EXHALE':
       return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-blue-500/40';
     case 'EXHALE_HOLD':
-      return 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-500/40';
+      return 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-amber-500/40';
     case 'EXTENDED_INHALE_HOLD':
     case 'EXTENDED_EXHALE_HOLD':
       return 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-red-500/40';

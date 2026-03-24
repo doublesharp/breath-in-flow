@@ -562,8 +562,9 @@ describe('useBreathingTimer', () => {
       const timer = useBreathingTimer(config);
       timer.start();
 
-      // 1. Complete the cycle: Inhale(2) -> Exhale(2) = 4s total + buffer
-      vi.advanceTimersByTime(4050);
+      // 1. Complete the cycle: Inhale(2) -> Exhale(2) = 4s total + buffer for transition
+      // With 100ms tick rate, need extra time for setTimeout(0) to execute
+      vi.advanceTimersByTime(4200);
 
       // 2. Should be in EXTENDED_EXHALE_HOLD (Tolerance)
       expect(timer.phase.value).toBe('EXTENDED_EXHALE_HOLD');
@@ -679,6 +680,7 @@ describe('useBreathingTimer', () => {
       config.extendedHoldEnabled = true;
       config.extendedHoldType = 'EXHALE';
       config.extendedHoldMode = 'TIMED';
+      config.extendedHoldDuration = 3;
       config.secondExtendedHoldEnabled = true;
       config.secondExtendedHoldType = 'EXHALE';
       config.secondExtendedHoldMode = 'TOLERANCE';
@@ -689,20 +691,20 @@ describe('useBreathingTimer', () => {
       config.repetitions = 1;
 
       const timer = useBreathingTimer(config);
+      timer.start();
 
-      // Put the timer into the second extended hold state manually
-      timer.state.value = {
-        ...timer.state.value,
-        phase: 'EXTENDED_EXHALE_HOLD',
-        isRunning: true,
-        isFirstExtendedHold: false,
-        extendedHoldElapsed: 0,
-        currentTime: 0,
-      };
+      // Complete first cycle and first extended hold (TIMED, 3s)
+      // Inhale(2s) + Exhale(2s) + Extended hold(3s) = 7s + extra buffer for transitions
+      vi.advanceTimersByTime(7400);
 
-      // Call skipPhase which invokes tick() and will run the tolerance branch
-      timer.skipPhase();
+      // Should now be in second extended hold (TOLERANCE mode)
+      expect(timer.phase.value).toBe('EXTENDED_EXHALE_HOLD');
+      expect(timer.isFirstExtendedHold.value).toBe(false);
 
+      // Let some time pass in tolerance mode
+      vi.advanceTimersByTime(500);
+
+      // ExtendedHoldElapsed should have incremented
       expect(timer.extendedHoldElapsed.value).toBeGreaterThan(0);
     });
 

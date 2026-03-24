@@ -23,7 +23,12 @@
                 </svg>
               </div>
               <h3 class="text-lg font-semibold text-white mt-3">Delete Session</h3>
-              <p class="text-slate-400 text-sm mt-1">
+              <div v-if="sessionToDelete" class="mt-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700/30">
+                <p class="text-slate-300 text-sm font-medium">
+                  {{ formatSessionForDelete(sessionToDelete) }}
+                </p>
+              </div>
+              <p class="text-slate-400 text-sm mt-3">
                 Are you sure you want to delete this session? This action cannot be undone.
               </p>
             </div>
@@ -296,6 +301,23 @@ function cancelDeleteAll() {
 function confirmDeleteAll() {
   storage.deleteAllSessions();
   showDeleteAllModal.value = false;
+}
+
+function formatSessionForDelete(sessionId: string): string {
+  const session = sessions.value.find((s) => s.id === sessionId);
+  if (!session || !session.config) return 'Unknown session';
+
+  const date = new Date(session.timestamp).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  const pattern = `${session.config.inhaleTime ?? 0}s / ${session.config.inhaleHoldTime ?? 0}s / ${session.config.exhaleTime ?? 0}s / ${session.config.exhaleHoldTime ?? 0}s`;
+
+  return `${date} • ${pattern}`;
 }
 </script>
 

@@ -16,6 +16,8 @@ let setVoiceMock: ReturnType<typeof vi.fn>;
 let setTtsEnabledMock: ReturnType<typeof vi.fn>;
 let hasNativeSupportMock: ReturnType<typeof vi.fn>;
 
+const cancelSessionMock = vi.fn();
+
 vi.mock('@/composables/useStorage', () => {
   return {
     useStorage: () => ({
@@ -23,12 +25,14 @@ vi.mock('@/composables/useStorage', () => {
       addSetToSession: addSetMock,
       addExtendedHoldToSet: addExtendedHoldMock,
       completeSession: completeSessionMock,
+      cancelSession: cancelSessionMock,
       updateSession: updateSessionMock,
       createConfig: createConfigMock,
       getSoundTheme: vi.fn(() => 'wood'),
       setSoundTheme: vi.fn(),
       soundTheme: ref('wood'),
       getAllConfigs: vi.fn(() => []),
+      getSession: vi.fn(() => ({ id: 'test-session', sets: [] })),
     }),
   };
 });
@@ -188,7 +192,8 @@ describe('BreathingPractice flows', () => {
     (vm as { timer: { endExtendedHold: () => void } }).timer.endExtendedHold();
 
     // Hold should be stored on the current set data, not persisted yet
-    const currentSetData = (vm as { currentSetData?: { extendedHolds?: unknown[] } }).currentSetData;
+    const currentSetData = (vm as { currentSetData?: { extendedHolds?: unknown[] } })
+      .currentSetData;
     expect(currentSetData?.extendedHolds?.length ?? 0).toBe(1);
     expect(addExtendedHoldMock).not.toHaveBeenCalled();
 

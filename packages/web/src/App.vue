@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen relative pb-20 md:pb-0">
+  <div class="min-h-screen relative pb-24 md:pb-0" style="padding-bottom: max(6rem, env(safe-area-inset-bottom) + 5rem);">
     <!-- Animated background -->
     <div class="animated-bg"></div>
 
@@ -17,9 +17,26 @@
           >
             <div class="absolute inset-0 bg-gradient-to-t from-white/10 to-transparent"></div>
             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 sm:w-6 sm:h-6 relative z-10" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="38" fill="none" stroke="white" stroke-width="3" opacity="0.4" />
-              <circle cx="50" cy="50" r="26" fill="white" opacity="0.9" />
-              <circle cx="50" cy="50" r="14" fill="white" opacity="0.5" />
+              <!-- Breathing wave pattern -->
+              <path
+                d="M 20 50 Q 30 35, 40 50 T 60 50 T 80 50"
+                fill="none"
+                stroke="white"
+                stroke-width="4"
+                opacity="0.7"
+                stroke-linecap="round"
+              />
+              <path
+                d="M 22 58 Q 32 48, 42 58 T 62 58 T 82 58"
+                fill="none"
+                stroke="white"
+                stroke-width="3"
+                opacity="0.4"
+                stroke-linecap="round"
+              />
+              <!-- Center breathing indicator -->
+              <circle cx="50" cy="50" r="12" fill="white" opacity="0.9" />
+              <circle cx="50" cy="50" r="6" fill="white" opacity="0.6" />
             </svg>
           </div>
           <span class="bg-gradient-to-r from-white via-slate-200 to-slate-300 bg-clip-text text-transparent">{{
@@ -47,6 +64,8 @@
                   ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
                   : ''
               "
+              :aria-current="activeTab === 'practice' ? 'page' : undefined"
+              aria-label="Practice breathing exercises"
             >
               <span class="flex items-center gap-2">
                 <svg
@@ -77,6 +96,8 @@
                   ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
                   : ''
               "
+              :aria-current="activeTab === 'history' ? 'page' : undefined"
+              aria-label="View session history"
             >
               <span class="flex items-center gap-2">
                 <svg
@@ -107,6 +128,8 @@
                   ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
                   : ''
               "
+              :aria-current="activeTab === 'configs' ? 'page' : undefined"
+              aria-label="Manage breathing presets"
             >
               <span class="flex items-center gap-2">
                 <svg
@@ -137,6 +160,8 @@
                   ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
                   : ''
               "
+              :aria-current="activeTab === 'analytics' ? 'page' : undefined"
+              aria-label="View analytics and insights"
             >
               <span class="flex items-center gap-2">
                 <svg
@@ -193,6 +218,8 @@
               ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
               : ''
           "
+          :aria-current="activeTab === 'practice' ? 'page' : undefined"
+          aria-label="Practice breathing exercises"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -215,6 +242,8 @@
               ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
               : ''
           "
+          :aria-current="activeTab === 'history' ? 'page' : undefined"
+          aria-label="View session history"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -237,6 +266,8 @@
               ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
               : ''
           "
+          :aria-current="activeTab === 'configs' ? 'page' : undefined"
+          aria-label="Manage breathing presets"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -259,6 +290,8 @@
               ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
               : ''
           "
+          :aria-current="activeTab === 'analytics' ? 'page' : undefined"
+          aria-label="View analytics and insights"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path

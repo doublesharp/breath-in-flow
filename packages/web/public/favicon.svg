@@ -1,12 +1,41 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <defs>
     <linearGradient id="breathGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#10B981;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#e3b25c;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7fc3aa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c26a4f;stop-opacity:1" />
     </linearGradient>
+    <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.9" />
+      <stop offset="40%" style="stop-color:#ffffff;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0" />
+    </radialGradient>
   </defs>
-  <circle cx="50" cy="50" r="45" fill="url(#breathGradient)" opacity="0.9"/>
-  <circle cx="50" cy="50" r="30" fill="white" opacity="0.3"/>
-  <circle cx="50" cy="50" r="15" fill="white" opacity="0.5"/>
+
+  <!-- Outer breathing circle -->
+  <circle cx="50" cy="50" r="46" fill="url(#breathGradient)" opacity="0.95"/>
+
+  <!-- Breathing wave pattern - represents inhale/exhale flow -->
+  <path d="M 20 50 Q 30 35, 40 50 T 60 50 T 80 50"
+        fill="none"
+        stroke="white"
+        stroke-width="3"
+        opacity="0.6"
+        stroke-linecap="round"/>
+
+  <path d="M 22 58 Q 32 48, 42 58 T 62 58 T 82 58"
+        fill="none"
+        stroke="white"
+        stroke-width="2.5"
+        opacity="0.35"
+        stroke-linecap="round"/>
+
+  <!-- Center focus point with glow -->
+  <circle cx="50" cy="50" r="24" fill="url(#centerGlow)"/>
+
+  <!-- Inner breathing indicator -->
+  <circle cx="50" cy="50" r="10" fill="white" opacity="0.85"/>
+
+  <!-- Subtle breathing rings -->
+  <circle cx="50" cy="50" r="34" fill="none" stroke="white" stroke-width="1.5" opacity="0.25"/>
 </svg>

@@ -70,7 +70,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
   function startInterval() {
     if (intervalId) return;
-    intervalId = setInterval(() => tick(), 16); // ~60fps keeps visuals responsive without drift
+    intervalId = setInterval(() => tick(), 100); // 10fps - sufficient for breathing timer without excessive CPU usage
   }
 
   function stopInterval() {
@@ -93,7 +93,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     if (state.value.isPaused) return;
 
     // Determine current extended hold mode
-    const isToleranceMode = isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold);
+    const isToleranceMode = isToleranceExtendedHold(
+      state.value.phase,
+      state.value.isFirstExtendedHold
+    );
 
     // Handle extended hold tolerance mode (counting up)
     if (isToleranceMode) {
@@ -128,15 +131,17 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
     state.value = { ...state.value, currentTime: newTime };
 
-    // When we've elapsed the full duration (with small buffer), transition to next phase
-    if (elapsed >= state.value.totalPhaseTime && lastSoundedSecond === 0) {
-      if (!transitionPending) {
-        transitionPending = true;
-        setTimeout(() => {
+    // When we've elapsed the full duration, transition to next phase
+    // Use lastSoundedSecond === 0 to ensure we've played the final click before transitioning
+    if (elapsed >= state.value.totalPhaseTime && lastSoundedSecond === 0 && !transitionPending) {
+      transitionPending = true;
+      setTimeout(() => {
+        // Only transition if still pending (prevents double transitions if tick() called rapidly)
+        if (transitionPending) {
           transitionPending = false;
           transitionToNextPhase();
-        }, 0);
-      }
+        }
+      }, 0);
     }
   }
 
@@ -185,16 +190,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       case 'EXTENDED_INHALE_HOLD':
       case 'EXTENDED_EXHALE_HOLD':
         const holdType = currentPhase === 'EXTENDED_INHALE_HOLD' ? 'INHALE' : 'EXHALE';
-        // Use the correct duration based on which hold it was
-        // Note: For tolerance mode, we might want to pass the elapsed time, but the callback signature expects 'duration'.
-        // Usually this callback is used to record the session.
-        // If it was timed, we pass the target duration. If tolerance, we pass 0 or maybe the elapsed?
-        // The original code passed config.extendedHoldDuration.
+        // Always pass the actual elapsed time, which is accurate for both TIMED and TOLERANCE modes
+        const actualDuration = state.value.extendedHoldElapsed;
 
-        const isFirst = state.value.isFirstExtendedHold;
-        const duration = isFirst ? config.extendedHoldDuration : config.secondExtendedHoldDuration;
-
-        options.onExtendedHoldEnd?.(duration, holdType, state.value);
+        options.onExtendedHoldEnd?.(actualDuration, holdType, state.value);
         handlePostExtendedHold();
         break;
     }
@@ -352,10 +351,15 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     pausedPhase.value = null;
 
     // Adjust phase start time to account for pause duration
-    const wasToleranceHold = isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold);
+    const wasToleranceHold = isToleranceExtendedHold(
+      state.value.phase,
+      state.value.isFirstExtendedHold
+    );
+    // Ensure non-negative time remaining
+    const safeTimeRemaining = Math.max(0, pausedTimeRemaining);
     phaseStartTime = wasToleranceHold
-      ? Date.now() - pausedTimeRemaining * 1000
-      : Date.now() - (state.value.totalPhaseTime - pausedTimeRemaining) * 1000;
+      ? Date.now() - safeTimeRemaining * 1000
+      : Date.now() - (state.value.totalPhaseTime - safeTimeRemaining) * 1000;
 
     startInterval();
     options.onPhaseChange?.(state.value.phase, state.value);
@@ -419,7 +423,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
   }
 
   return {
-    // State
+    // State - Note: Exposed as mutable for testing purposes, but should be treated as readonly in production code
     state,
     phase,
     currentTime,

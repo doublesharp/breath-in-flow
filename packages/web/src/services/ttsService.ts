@@ -98,18 +98,25 @@ class TtsService {
           this.voicesCache = this.dedupeVoices(voices);
           this.voicesReady.value = true;
           resolve(voices);
-          if (this.loadingPromise) this.loadingPromise = null;
           return true;
         }
         return false;
       };
 
+      const cleanup = () => {
+        this.loadingPromise = null;
+      };
+
       // Try immediately
-      if (resolveWithVoices()) return;
+      if (resolveWithVoices()) {
+        cleanup();
+        return;
+      }
 
       const handler = () => {
         if (resolveWithVoices()) {
           synth.removeEventListener('voiceschanged', handler);
+          cleanup();
         }
       };
 
@@ -117,13 +124,11 @@ class TtsService {
 
       // Fallback timeout in case event never fires
       setTimeout(() => {
-        if (resolveWithVoices()) {
-          synth.removeEventListener('voiceschanged', handler);
-        } else {
-          synth.removeEventListener('voiceschanged', handler);
+        synth.removeEventListener('voiceschanged', handler);
+        if (!resolveWithVoices()) {
           resolve([]);
-          if (this.loadingPromise) this.loadingPromise = null;
         }
+        cleanup();
       }, 600);
     });
 

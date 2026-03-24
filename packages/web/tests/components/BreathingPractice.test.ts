@@ -36,6 +36,7 @@ vi.mock('@/composables/useStorage', () => ({
     setSoundTheme: vi.fn(),
     soundTheme: ref('wood'),
     getAllConfigs: vi.fn(() => []),
+    getSession: vi.fn(() => ({ id: 'test-session', sets: [] })),
   }),
 }));
 
@@ -168,7 +169,10 @@ describe('BreathingPractice.vue', () => {
     await nextTick();
 
     // The pause button is in the fullscreen modal teleported to body
-    const pauseBtn = document.querySelector('button.btn-warning') as HTMLButtonElement;
+    // Use a more specific selector to find the Pause button by its text content
+    const buttons = Array.from(document.querySelectorAll('button.btn-warning'));
+    const pauseBtn = buttons.find((btn) => btn.textContent?.includes('Pause')) as HTMLButtonElement;
+
     expect(pauseBtn).toBeTruthy();
     if (pauseBtn) {
       pauseBtn.click();
@@ -462,8 +466,8 @@ describe('BreathingPractice.vue', () => {
         | ((phase: string, state: unknown) => void)
         | undefined;
       expect(onPhaseChange).toBeDefined();
-      onPhaseChange?.('INHALE', {});
-      expect(speakMock).toHaveBeenCalledWith('Breathe In');
+      onPhaseChange?.('INHALE', { totalPhaseTime: 4 });
+      expect(speakMock).toHaveBeenCalledWith('Full Breath In', { targetDurationSeconds: 4 });
 
       wrapper.unmount();
     });
