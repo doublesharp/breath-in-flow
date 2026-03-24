@@ -125,6 +125,44 @@ When a sensor is active:
 - **Accelerometer:** DeviceMotion API with iOS permission handling
 - **Platform:** Works on web, iOS (Capacitor), and Android (Capacitor)
 
+## Lab Tab
+
+The Lab tab is the home for all measurement and analysis features:
+
+### Standalone HRV Measurement
+- **Guided protocols:** Quick Check (2 min), Full Analysis (5 min), Morning Readiness (3 min)
+- **Freeform mode:** Start/stop manually for any duration
+- Sensor selection: camera, accelerometer, dual, or manual
+- Real-time HR tachogram and signal quality during measurement
+- Full HRV report after completion with save-to-archive option
+
+### Resonance Frequency Assessment
+- Moved from Practice tab to Lab for better organization
+- Same 5-trial Lehrer protocol with optional HRV sensing
+- Results feed back as preset recommendations
+
+### Data Archival (IndexedDB)
+- All measurements persisted in IndexedDB (much larger than localStorage)
+- Queryable by date range, type, and assessment
+- Automatic migration from localStorage on first load
+
+### Historical Trends
+- RMSSD over time with 7-day moving average and quality zones
+- LF Power trend — tracks resonance training effectiveness
+- Resting heart rate trend
+- Morning readiness score (when daily morning checks are done)
+- Selectable time ranges: 7d / 30d / 90d / All
+
+### Data-Driven Insights
+- **RF Recommendation:** "Based on your assessment, 5.5 BPM is your resonance frequency. Apply?" (suggest-then-confirm)
+- **RMSSD Trend:** Compares recent vs prior week, reports improvement/decline
+- **Measurement Streak:** Tracks consecutive days of HRV measurement
+- **Best Time of Day:** Identifies when your HRV is naturally highest
+
+### Practice Tab Integration
+- Dismissible CTA card guides new users to the Lab
+- Hidden once user completes their first measurement
+
 ## Research References
 
 - [PPG Validation for HRV-Biofeedback RF Assessment](https://pubmed.ncbi.nlm.nih.gov/37678565/) — Smartphone PPG validated for resonance frequency assessment
