@@ -274,19 +274,18 @@ describe('soundService', () => {
 
     it('setEnabled resumes suspended AudioContext', () => {
       const resume = vi.fn(() => {
-        (fakeCtx as unknown as { state: string }).state = 'running';
         return Promise.resolve();
       });
-      const fakeCtx: unknown = {
-        state: 'suspended',
-        resume,
-      };
 
-      const FakeAudioContext = vi.fn(() => fakeCtx);
-      (global as unknown as Record<string, unknown>).AudioContext = FakeAudioContext;
+      class MockSuspendedAudioContext {
+        state = 'suspended';
+        resume = resume;
+      }
+
+      (global as unknown as Record<string, unknown>).AudioContext = MockSuspendedAudioContext;
       // Ensure window.AudioContext is also set in the test DOM
       const globalWindow = (global as unknown as Record<string, unknown>).window || {};
-      (globalWindow as Record<string, unknown>).AudioContext = FakeAudioContext;
+      (globalWindow as Record<string, unknown>).AudioContext = MockSuspendedAudioContext;
       (global as unknown as Record<string, unknown>).window = globalWindow;
 
       // Ensure soundService will create a fresh AudioContext instance
@@ -296,11 +295,12 @@ describe('soundService', () => {
     });
 
     it('playClick does nothing when disabled in complex scenario', () => {
-      const fakeCtx = { state: 'running' };
-      const FakeAudioContext = vi.fn(() => fakeCtx);
-      (global as unknown as Record<string, unknown>).AudioContext = FakeAudioContext;
+      class MockRunningAudioContext {
+        state = 'running';
+      }
+      (global as unknown as Record<string, unknown>).AudioContext = MockRunningAudioContext;
       const globalWindow = (global as unknown as Record<string, unknown>).window || {};
-      (globalWindow as Record<string, unknown>).AudioContext = FakeAudioContext;
+      (globalWindow as Record<string, unknown>).AudioContext = MockRunningAudioContext;
       (global as unknown as Record<string, unknown>).window = globalWindow;
 
       // Ensure disabled
@@ -330,24 +330,23 @@ describe('soundService', () => {
         gain: { setValueAtTime, linearRampToValueAtTime, exponentialRampToValueAtTime },
       });
 
-      const fakeCtx: unknown = {
-        state: 'suspended',
-        currentTime: 0,
-        resume,
-        createOscillator: fakeOsc,
-        createGain: fakeGain,
-        createWaveShaper: () => ({ connect: vi.fn(), curve: null }),
-        createDelay: () => ({ connect: vi.fn(), delayTime: { setValueAtTime: vi.fn() } }),
-        createBiquadFilter: () => ({
+      class MockSuspendedCtx {
+        state = 'suspended';
+        currentTime = 0;
+        resume = resume;
+        createOscillator = fakeOsc;
+        createGain = fakeGain;
+        createWaveShaper = () => ({ connect: vi.fn(), curve: null });
+        createDelay = () => ({ connect: vi.fn(), delayTime: { setValueAtTime: vi.fn() } });
+        createBiquadFilter = () => ({
           connect: vi.fn(),
           frequency: { setValueAtTime: vi.fn() },
           Q: { setValueAtTime: vi.fn() },
-        }),
-        destination: {},
-      };
+        });
+        destination = {};
+      }
 
-      const FakeAudioContext = vi.fn(() => fakeCtx);
-      (global as unknown as Record<string, unknown>).AudioContext = FakeAudioContext;
+      (global as unknown as Record<string, unknown>).AudioContext = MockSuspendedCtx;
 
       (soundService as unknown as { audioContext: null }).audioContext = null;
       soundService.setEnabled(true);
@@ -358,7 +357,7 @@ describe('soundService', () => {
 
     it('resumes audio context when playing click if context is suspended', async () => {
       const resume = vi.fn(() => Promise.resolve());
-      const fakeOsc = vi.fn(() => ({
+      const fakeOsc = () => ({
         connect: vi.fn(),
         start: vi.fn(),
         stop: vi.fn(),
@@ -367,34 +366,33 @@ describe('soundService', () => {
           exponentialRampToValueAtTime: vi.fn(),
           linearRampToValueAtTime: vi.fn(),
         },
-      }));
-      const fakeGain = vi.fn(() => ({
+      });
+      const fakeGain = () => ({
         connect: vi.fn(),
         gain: {
           setValueAtTime: vi.fn(),
           linearRampToValueAtTime: vi.fn(),
           exponentialRampToValueAtTime: vi.fn(),
         },
-      }));
+      });
 
-      const fakeCtx = {
-        state: 'suspended',
-        currentTime: 0,
-        resume,
-        createOscillator: fakeOsc,
-        createGain: fakeGain,
-        createWaveShaper: () => ({ connect: vi.fn(), curve: null }),
-        createDelay: () => ({ connect: vi.fn(), delayTime: { setValueAtTime: vi.fn() } }),
-        createBiquadFilter: () => ({
+      class MockSuspendedCtx2 {
+        state = 'suspended';
+        currentTime = 0;
+        resume = resume;
+        createOscillator = fakeOsc;
+        createGain = fakeGain;
+        createWaveShaper = () => ({ connect: vi.fn(), curve: null });
+        createDelay = () => ({ connect: vi.fn(), delayTime: { setValueAtTime: vi.fn() } });
+        createBiquadFilter = () => ({
           connect: vi.fn(),
           frequency: { setValueAtTime: vi.fn() },
           Q: { setValueAtTime: vi.fn() },
-        }),
-        destination: {},
-      };
+        });
+        destination = {};
+      }
 
-      const FakeAudioContext = vi.fn(() => fakeCtx);
-      (global as unknown as Record<string, unknown>).AudioContext = FakeAudioContext;
+      (global as unknown as Record<string, unknown>).AudioContext = MockSuspendedCtx2;
 
       (soundService as unknown as { audioContext: null }).audioContext = null;
       soundService.setEnabled(true);

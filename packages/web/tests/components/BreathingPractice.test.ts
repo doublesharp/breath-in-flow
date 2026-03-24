@@ -91,7 +91,7 @@ vi.mock('@/services/ttsService', () => ({
 
 describe('BreathingPractice.vue', () => {
   beforeEach(() => {
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
+    window.alert = vi.fn();
     localStorage.clear();
     vi.clearAllMocks();
     speakMock = vi.fn();

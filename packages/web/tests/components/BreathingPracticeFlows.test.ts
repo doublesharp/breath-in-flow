@@ -259,7 +259,7 @@ describe('BreathingPractice flows', () => {
     await (vm as { $nextTick: () => Promise<void> }).$nextTick();
 
     // mock alert which the component calls after saving notes
-    const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const alertMock = (window.alert = vi.fn());
 
     // Set session notes and click save (use direct method if needed)
     const textarea = wrapper.find('textarea');
@@ -278,7 +278,7 @@ describe('BreathingPractice flows', () => {
 
     expect(updateSessionMock).toHaveBeenCalled();
 
-    alertMock.mockRestore();
+    // alertMock is a vi.fn() assigned directly, no restore needed
   });
 
   it('save preset requires a name and then saves', async () => {
