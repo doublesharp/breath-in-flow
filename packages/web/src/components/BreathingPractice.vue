@@ -925,6 +925,7 @@ import { useBreathingTimer, useStorage } from '../composables';
 import { useHrvStorage } from '../composables/useHrvStorage';
 import {
   DEFAULT_BREATHING_CONFIG,
+  BreathingConfigSchema,
   formatTime,
   type BreathingConfig,
   type Session,
@@ -1251,12 +1252,6 @@ function exitWithoutSavingSession() {
   if (currentSession.value?.id) {
     storage.deleteSession(currentSession.value.id);
   }
-
-  successMessage.value = 'Session cancelled';
-  showSuccessNotification.value = true;
-  setTimeout(() => {
-    showSuccessNotification.value = false;
-  }, 3000);
 
   stopExercise();
 }

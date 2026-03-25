@@ -213,8 +213,10 @@ class SCGService {
     }
 
     this.resetInternals();
+    console.log('SCG: Adding devicemotion listener, DeviceMotionEvent available:', 'DeviceMotionEvent' in window);
     window.addEventListener('devicemotion', this.boundHandleMotion);
     this.setStatus('capturing');
+    console.log('SCG: Status set to capturing');
   }
 
   public stop(): void {
@@ -229,6 +231,12 @@ class SCGService {
 
   /** Called for every DeviceMotionEvent from the accelerometer. */
   private handleMotion(event: DeviceMotionEvent): void {
+    // Debug: log first few events to confirm accelerometer is working
+    if (this.sampleCount < 3) {
+      const acc = event.acceleration || event.accelerationIncludingGravity;
+      console.log(`SCG event #${this.sampleCount}: x=${acc?.x?.toFixed(3)} y=${acc?.y?.toFixed(3)} z=${acc?.z?.toFixed(3)} interval=${event.interval}`);
+    }
+
     // ── 1. Advance synthetic clock ──
     // Use event.interval when available; fall back to the last known interval.
     const intervalMs =

@@ -135,16 +135,39 @@
           </p>
 
           <!-- HR tachogram -->
-          <HrTachogram
-            :hr-data="hrDataPoints"
-            :duration="selectedProtocol ? selectedProtocol.duration : Math.max(60, elapsedSeconds)"
-            :height="120"
-          />
+          <div v-if="hrDataPoints.length > 0">
+            <div class="text-xs text-white/40 mb-1">Heart Rate</div>
+            <HrTachogram
+              :hr-data="hrDataPoints"
+              :duration="selectedProtocol ? selectedProtocol.duration : Math.max(60, elapsedSeconds)"
+              :height="100"
+            />
+          </div>
+          <div v-else class="rounded-xl bg-white/5 p-4 text-center text-sm text-white/30">
+            Waiting for heart rate data...
+          </div>
+
+          <!-- Raw sensor signal chart -->
+          <div>
+            <div class="text-xs text-white/40 mb-1">Raw Sensor Signal</div>
+            <canvas ref="rawSignalCanvas" class="w-full rounded-lg bg-slate-900/50" height="80" />
+          </div>
         </div>
 
         <button @click="stopMeasurement" class="w-full btn-danger py-3 rounded-xl font-semibold">
           Stop Measurement
         </button>
+
+        <!-- Debug toggle -->
+        <button @click="showDebug = !showDebug" class="text-xs text-white/20 hover:text-white/40 w-full text-center py-1">
+          {{ showDebug ? 'Hide' : 'Show' }} Debug Log
+        </button>
+
+        <!-- Debug log panel -->
+        <div v-if="showDebug" class="rounded-xl bg-black/40 border border-white/5 p-3 max-h-48 overflow-y-auto font-mono text-[10px] text-white/50 space-y-0.5">
+          <div v-if="debugLog.length === 0" class="text-white/20">No log entries yet...</div>
+          <div v-for="(line, i) in debugLog" :key="i">{{ line }}</div>
+        </div>
       </div>
 
       <!-- Results view -->
@@ -245,7 +268,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import HrTachogram from './hrv/HrTachogram.vue';
 import SignalQualityIndicator from './hrv/SignalQualityIndicator.vue';
 import HrvMetricsDashboard from './hrv/HrvMetricsDashboard.vue';
@@ -303,6 +326,18 @@ const recentMeasurements = ref<Array<{
 }>>([]);
 const latestAssessment = ref<AssessmentResult | null>(null);
 const hrDataPoints = ref<Array<{ time: number; hr: number; quality: number }>>([]);
+const rawSignalData = ref<Array<{ time: number; value: number }>>([]);
+const debugLog = ref<string[]>([]);
+const showDebug = ref(false);
+
+const RAW_SIGNAL_MAX_POINTS = 500; // ~5-8 seconds at 60-100Hz
+const DEBUG_LOG_MAX = 100;
+
+function addDebugLine(msg: string) {
+  const ts = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 1 });
+  debugLog.value.push(`[${ts}] ${msg}`);
+  if (debugLog.value.length > DEBUG_LOG_MAX) debugLog.value.shift();
+}
 
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -332,15 +367,32 @@ async function startSensor() {
       onIBI: (sample: IBISample) => {
         collectedIBIs.value.push(sample);
         addHrDataPoint(sample);
+        addDebugLine(`IBI: ${sample.interval.toFixed(0)}ms (${(60000/sample.interval).toFixed(0)} BPM) q=${sample.quality.toFixed(2)}`);
       },
-      onQualityChange: (q: number) => { sensorQuality.value = q; },
+      onRawSignal: (value: number, timestamp: number) => {
+        rawSignalData.value.push({ time: timestamp, value });
+        if (rawSignalData.value.length > RAW_SIGNAL_MAX_POINTS) {
+          rawSignalData.value = rawSignalData.value.slice(-RAW_SIGNAL_MAX_POINTS);
+        }
+      },
+      onQualityChange: (q: number) => {
+        sensorQuality.value = q;
+        addDebugLine(`Quality: ${(q * 100).toFixed(0)}%`);
+      },
+      onError: (err: Error) => {
+        addDebugLine(`ERROR: ${err.message}`);
+      },
     };
 
     if (selectedSensor.value === 'camera') {
+      addDebugLine('Starting camera PPG...');
       await ppgService.start(callbacks);
+      addDebugLine(`Camera status: ${ppgService.getStatus()}`);
     } else {
+      addDebugLine('Starting accelerometer SCG...');
       scgService.setCallbacks(callbacks);
       await scgService.start();
+      addDebugLine(`SCG status: ${scgService.getStatus()}`);
     }
   }
 }
@@ -365,6 +417,89 @@ function addHrDataPoint(sample: IBISample) {
     quality: sample.quality,
   });
 }
+
+// Raw signal canvas
+const rawSignalCanvas = ref<HTMLCanvasElement | null>(null);
+let rawSignalAnimId: number | null = null;
+
+function drawRawSignal() {
+  const canvas = rawSignalCanvas.value;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const data = rawSignalData.value;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  canvas.width = w * (window.devicePixelRatio || 1);
+  canvas.height = h * (window.devicePixelRatio || 1);
+  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+
+  ctx.clearRect(0, 0, w, h);
+
+  if (data.length < 2) {
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Waiting for sensor data...', w / 2, h / 2);
+    return;
+  }
+
+  // Auto-scale Y
+  let minV = Infinity, maxV = -Infinity;
+  for (const d of data) {
+    if (d.value < minV) minV = d.value;
+    if (d.value > maxV) maxV = d.value;
+  }
+  const range = maxV - minV || 1;
+  const pad = range * 0.1;
+
+  // Draw line
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(52, 211, 153, 0.8)'; // emerald
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < data.length; i++) {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - ((data[i].value - minV + pad) / (range + 2 * pad)) * h;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Y-axis labels
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(maxV.toFixed(2), 2, 10);
+  ctx.fillText(minV.toFixed(2), 2, h - 2);
+  ctx.textAlign = 'right';
+  ctx.fillText(`${data.length} pts`, w - 2, 10);
+}
+
+// Redraw raw signal at ~15fps when measuring
+watch(isMeasuring, (measuring) => {
+  if (measuring) {
+    const drawLoop = () => {
+      drawRawSignal();
+      if (isMeasuring.value) {
+        rawSignalAnimId = requestAnimationFrame(drawLoop);
+      }
+    };
+    // Throttle to ~15fps
+    const throttledLoop = () => {
+      drawRawSignal();
+      if (isMeasuring.value) {
+        rawSignalAnimId = window.setTimeout(() => requestAnimationFrame(throttledLoop), 66) as unknown as number;
+      }
+    };
+    throttledLoop();
+  } else {
+    if (rawSignalAnimId) {
+      cancelAnimationFrame(rawSignalAnimId);
+      rawSignalAnimId = null;
+    }
+  }
+});
 
 // Measurement control
 async function startProtocol(protocol: Protocol) {
