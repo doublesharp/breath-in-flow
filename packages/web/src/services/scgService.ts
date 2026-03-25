@@ -82,7 +82,8 @@ const MAX_HEART_RATE_BPM = 200;
 const MOTION_VARIANCE_WINDOW_SECONDS = 1;
 
 /** Raw acceleration variance threshold above which the user is considered moving. */
-const MOTION_VARIANCE_THRESHOLD = 0.5; // (m/s²)²
+// Breathing causes ~0.3-1.0 variance, walking causes ~5+. Set high enough to allow breathing.
+const MOTION_VARIANCE_THRESHOLD = 5.0; // (m/s²)²
 
 /** Time without a detected peak before quality is zeroed (synthetic ms). */
 const NO_PEAK_TIMEOUT_MS = 3000;
@@ -136,6 +137,7 @@ class SCGService {
   private lastPeakElapsedMs: number | null = null;
   private lastPeakDetectionElapsedMs: number | null = null;
   private recentIBIs: number[] = [];
+  private sampleCount: number = 0;
 
   // Template matching state
   private template: number[] | null = null;
@@ -233,6 +235,7 @@ class SCGService {
       event.interval && event.interval > 0 ? event.interval : this.lastIntervalMs;
     this.lastIntervalMs = intervalMs;
     this.elapsedMs += intervalMs;
+    this.sampleCount++;
 
     // ── 2. Sample-rate estimation ──
     if (!this.rateEstimated) {
@@ -339,10 +342,17 @@ class SCGService {
     }
 
     // ── 7. Continuous quality monitoring ──
-    // Check for motion artefacts and peak timeout on every sample so that
-    // quality degrades promptly even when no peak is being detected.
+    // Check for large motion (walking, etc) — NOT breathing, which the bandpass filter handles.
+    // The rawAccBuffer tracks unfiltered magnitude, so breathing shows up here.
+    // Only gate on truly large motion (walking, shifting position).
     if (this.rawAccBuffer.length >= this.motionWindowSamples) {
       const motionVariance = standardDeviation(this.rawAccBuffer) ** 2;
+
+      // Debug: log motion variance every ~2 seconds
+      if (this.sampleCount % (this.sampleRateHz * 2) < 1) {
+        console.log(`SCG: motionVar=${motionVariance.toFixed(3)} threshold=${MOTION_VARIANCE_THRESHOLD} peaks=${this.recentIBIs.length} quality=${this.currentQuality.toFixed(2)}`);
+      }
+
       if (motionVariance > MOTION_VARIANCE_THRESHOLD) {
         this.updateQuality(0);
         return;
@@ -650,6 +660,7 @@ class SCGService {
     this.lastPeakElapsedMs = null;
     this.lastPeakDetectionElapsedMs = null;
     this.recentIBIs = [];
+    this.sampleCount = 0;
     this.currentQuality = 0;
     this.template = null;
     this.templateMatchCount = 0;
