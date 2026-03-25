@@ -30,45 +30,62 @@
         </button>
       </div>
 
+      <!-- Sensor selector (shared by both guided and freeform) -->
+      <div v-if="!isMeasuring && !showResults" class="space-y-3" data-testid="sensor-selection">
+        <label class="text-sm font-medium text-white/80">Sensor</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button
+            v-for="s in sensorOptions"
+            :key="s.value"
+            @click="selectedSensor = s.value"
+            :class="[
+              'p-3 rounded-xl border text-center transition-all text-sm',
+              selectedSensor === s.value
+                ? 'border-emerald-500 bg-emerald-500/10 text-white'
+                : 'border-white/10 bg-white/5 text-white/60',
+            ]"
+          >
+            {{ s.label }}
+          </button>
+        </div>
+        <p class="text-xs text-white/30">
+          {{ selectedSensor === 'camera' ? 'Place fingertip over rear camera lens. Flash will illuminate your finger.' : selectedSensor === 'accelerometer' ? 'Place phone flat on your chest (screen down). Stay very still.' : 'Phone on chest, finger on rear camera. Best accuracy.' }}
+        </p>
+      </div>
+
       <!-- Guided protocols (default) -->
-      <div v-if="mode === 'guided' && !isMeasuring && !showResults" class="grid gap-4">
+      <div v-if="mode === 'guided' && !isMeasuring && !showResults" class="space-y-4">
+        <div class="grid gap-3">
+          <button
+            v-for="p in protocols"
+            :key="p.id"
+            @click="pendingProtocol = p"
+            :class="[
+              'flex items-start gap-4 p-4 rounded-2xl text-left transition-all duration-300 border',
+              pendingProtocol?.id === p.id
+                ? 'bg-emerald-500/10 border-emerald-500/30'
+                : 'bg-white/5 hover:bg-white/10 border-white/5 hover:border-white/10',
+            ]"
+          >
+            <span class="text-2xl mt-0.5">{{ p.icon }}</span>
+            <div class="flex-1">
+              <div class="font-semibold text-white">{{ p.name }}</div>
+              <div class="text-sm text-white/50 mt-1">{{ p.description }}</div>
+              <div class="text-xs text-white/30 mt-2">{{ formatDuration(p.duration) }}</div>
+            </div>
+          </button>
+        </div>
         <button
-          v-for="p in protocols"
-          :key="p.id"
-          @click="startProtocol(p)"
-          class="flex items-start gap-4 p-4 rounded-2xl text-left transition-all duration-300 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10"
+          v-if="pendingProtocol"
+          @click="startProtocol(pendingProtocol)"
+          class="w-full btn-primary py-3 rounded-xl font-semibold"
         >
-          <span class="text-2xl mt-0.5">{{ p.icon }}</span>
-          <div class="flex-1">
-            <div class="font-semibold text-white">{{ p.name }}</div>
-            <div class="text-sm text-white/50 mt-1">{{ p.description }}</div>
-            <div class="text-xs text-white/30 mt-2">{{ formatDuration(p.duration) }}</div>
-          </div>
+          Start {{ pendingProtocol.name }}
         </button>
       </div>
 
       <!-- Freeform (start/stop manually) -->
       <div v-if="mode === 'freeform' && !isMeasuring && !showResults" class="space-y-4">
-        <!-- Sensor selector -->
-        <div class="space-y-3" data-testid="sensor-selection">
-          <label class="text-sm font-medium text-white/80">Sensor</label>
-          <div class="grid grid-cols-3 gap-2">
-            <button
-              v-for="s in sensorOptions"
-              :key="s.value"
-              @click="selectedSensor = s.value"
-              :class="[
-                'p-3 rounded-xl border text-center transition-all text-sm',
-                selectedSensor === s.value
-                  ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                  : 'border-white/10 bg-white/5 text-white/60',
-              ]"
-            >
-              {{ s.label }}
-            </button>
-          </div>
-        </div>
-
         <button @click="startFreeform" class="w-full btn-primary py-3 rounded-xl font-semibold">
           Start Measurement
         </button>
@@ -272,8 +289,9 @@ const showAssessment = ref(false);
 const currentAnalysis = ref<HRVAnalysis | null>(null);
 const sensorQuality = ref(0);
 const elapsedSeconds = ref(0);
-const selectedSensor = ref<'camera' | 'accelerometer' | 'dual'>('camera');
+const selectedSensor = ref<'camera' | 'accelerometer' | 'dual'>('accelerometer');
 const selectedProtocol = ref<Protocol | null>(null);
+const pendingProtocol = ref<Protocol | null>(null);
 const collectedIBIs = ref<IBISample[]>([]);
 const measurementNotes = ref('');
 const measurementStartTime = ref<Date>(new Date());
