@@ -483,9 +483,13 @@ function drawRawSignal() {
     return;
   }
 
-  // Show only the most recent ~3 seconds (scrolling window)
-  const VISIBLE_POINTS = 90; // ~3s at 30fps
-  const visible = data.length > VISIBLE_POINTS ? data.slice(-VISIBLE_POINTS) : data;
+  // Show the most recent 5 seconds based on timestamps (works at any sample rate)
+  const VISIBLE_SECONDS = 5;
+  const latestTime = data[data.length - 1].time;
+  const cutoffTime = latestTime - VISIBLE_SECONDS * 1000;
+  let startIdx = data.length - 1;
+  while (startIdx > 0 && data[startIdx - 1].time >= cutoffTime) startIdx--;
+  const visible = data.slice(startIdx);
 
   // Auto-scale Y using percentiles to ignore outlier spikes
   const sorted = visible.map(d => d.value).sort((a, b) => a - b);
