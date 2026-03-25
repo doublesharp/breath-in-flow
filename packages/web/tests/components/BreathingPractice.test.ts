@@ -504,7 +504,7 @@ describe('BreathingPractice.vue', () => {
     await new Promise((r) => setTimeout(r, 10));
     await nextTick();
 
-    expect(wrapper.text()).toContain('Discover Your Optimal Breathing Rate');
+    expect(wrapper.text()).toContain('Find your resonance frequency');
     wrapper.unmount();
   });
 });

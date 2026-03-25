@@ -783,23 +783,7 @@
 
     <!-- Regular Configuration View (when not running) -->
     <div class="space-y-4 sm:space-y-6">
-      <!-- Lab CTA -->
-      <div v-if="showLabCta && !labCtaDismissed" class="rounded-2xl p-4 border border-emerald-500/20 bg-emerald-500/5 mb-4">
-        <div class="flex justify-between items-start">
-          <div>
-            <h3 class="text-sm font-semibold text-emerald-400">Discover Your Optimal Breathing Rate</h3>
-            <p class="text-xs text-white/50 mt-1">Measure your HRV and find your resonance frequency in the Lab</p>
-          </div>
-          <button @click="dismissLabCta" class="text-white/30 hover:text-white/60 p-1">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <button @click="$emit('switch-tab', 'lab')" class="mt-3 text-sm font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
-          Go to Lab →
-        </button>
-      </div>
+      <!-- Lab CTA (at bottom, after Start button) is rendered below -->
 
       <!-- Quick Start / Practice View - Always at Top -->
       <div class="card-solid !p-4 sm:!p-6">
@@ -886,6 +870,18 @@
             </span>
           </button>
         </div>
+      </div>
+
+      <!-- Lab CTA — compact, bottom placement -->
+      <div v-if="showLabCta && !labCtaDismissed" class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+        <button @click="$emit('switch-tab', 'lab')" class="text-xs text-white/40 hover:text-emerald-400 transition-colors">
+          Find your resonance frequency in the <span class="font-medium text-white/60">Lab</span> →
+        </button>
+        <button @click="dismissLabCta" class="text-white/20 hover:text-white/50 ml-3 shrink-0" aria-label="Dismiss">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       <!-- Session Notes -->
