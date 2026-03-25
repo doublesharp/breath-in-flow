@@ -73,8 +73,9 @@ class TtsService {
         this.voicesReady.value = true;
         return this.nativeVoicesCache;
       } catch (err) {
-        console.error('Failed to load native TTS voices', err);
-        this.hasNativeTts = true;
+        console.warn('Native TTS getSupportedVoices failed, falling back to Web Speech:', err);
+        // Don't set hasNativeTts = true — let speak() try Web Speech instead
+        this.hasNativeTts = false;
         this.voicesReady.value = true;
         return [];
       }

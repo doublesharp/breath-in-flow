@@ -196,42 +196,45 @@
     </Teleport>
 
     <!-- Section B: Resonance Frequency Assessment -->
-    <div class="space-y-4">
-      <h2 class="text-xl font-bold text-white">Resonance Frequency</h2>
+    <div class="space-y-3">
+      <h2 class="text-lg font-bold text-white">Resonance Frequency</h2>
 
-      <ResonanceAssessment
-        v-if="showAssessment"
-        :sound-enabled="false"
-        :sound-theme="'wood'"
-        :tts-enabled="false"
-        @cancel="showAssessment = false"
-        @complete="onAssessmentComplete"
-      />
-
-      <template v-else>
-        <!-- Latest assessment summary -->
-        <div v-if="latestAssessment" class="rounded-2xl p-4 bg-white/5 border border-white/5 mb-2">
-          <div class="text-sm text-white/50">Your resonance frequency</div>
-          <div class="text-lg font-bold text-emerald-400">
-            {{ latestAssessment.selectedRate.toFixed(1) }} BPM
+      <!-- Latest assessment summary -->
+      <div v-if="latestAssessment" class="rounded-xl p-3 bg-white/5 border border-white/5">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs text-white/50">Your resonance frequency</div>
+            <div class="text-lg font-bold text-emerald-400">{{ latestAssessment.selectedRate.toFixed(1) }} BPM</div>
           </div>
-          <div class="text-xs text-white/30 mt-1">
-            Assessed {{ formatDate(latestAssessment.completedAt) }}
-          </div>
+          <div class="text-xs text-white/30">{{ formatDate(latestAssessment.completedAt) }}</div>
         </div>
+      </div>
 
-        <button
-          @click="showAssessment = true"
-          class="w-full btn-secondary py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          Find My Resonance Frequency
-        </button>
-      </template>
+      <button
+        @click="showAssessment = true"
+        class="flex items-center gap-3 w-full p-3 rounded-xl text-left transition-all bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/30 active:scale-[0.98]"
+      >
+        <span class="text-xl">🎯</span>
+        <div class="flex-1">
+          <div class="font-semibold text-white text-sm">Find My Resonance Frequency</div>
+          <div class="text-xs text-white/40">5 breathing trials to find your optimal rate</div>
+        </div>
+        <span class="text-xs text-white/30">~25 min</span>
+      </button>
     </div>
+
+    <!-- ═══ FULLSCREEN RF ASSESSMENT MODAL ═══ -->
+    <Teleport to="body">
+      <div v-if="showAssessment" class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom">
+        <ResonanceAssessment
+          :sound-enabled="true"
+          :sound-theme="'wood'"
+          :tts-enabled="true"
+          @cancel="showAssessment = false"
+          @complete="onAssessmentComplete"
+        />
+      </div>
+    </Teleport>
 
     <!-- Section C: Recent Results -->
     <div class="space-y-3">

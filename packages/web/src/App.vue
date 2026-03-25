@@ -4,7 +4,8 @@
     <div class="animated-bg"></div>
 
     <header
-      :class="['glass sticky top-0 z-50 safe-area-top transition-transform duration-300', headerHidden ? '-translate-y-full' : 'translate-y-0']"
+      :class="['sticky top-0 z-50 safe-area-top transition-transform duration-300 border-b border-white/[0.08]', headerHidden ? '-translate-y-full' : 'translate-y-0']"
+      style="background: linear-gradient(135deg, rgb(38, 32, 27) 0%, rgb(32, 27, 22) 100%);"
     >
       <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
         <h1 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">

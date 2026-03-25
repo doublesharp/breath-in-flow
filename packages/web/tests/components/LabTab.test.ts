@@ -116,8 +116,8 @@ describe('LabTab.vue', () => {
 
     expect(wrapper.find('[data-testid="sensor-selection"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('Camera');
-    expect(wrapper.text()).toContain('Accelerometer');
-    expect(wrapper.text()).toContain('Dual');
+    expect(wrapper.text()).toContain('Chest (recommended)');
+    expect(wrapper.text()).toContain('Both');
   });
 
   it('shows RF assessment section with "Find My Resonance Frequency" button', () => {
