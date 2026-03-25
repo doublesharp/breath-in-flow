@@ -19,6 +19,33 @@ export interface PPGCallbacks {
   onStatusChange?: (status: PPGStatus) => void;
 }
 
+export interface PPGStartOptions {
+  callbacks?: PPGCallbacks;
+  /** Use a specific camera by deviceId. If not set, uses the default rear camera. */
+  cameraDeviceId?: string;
+  /** Disable the torch/flash. Default: true (torch enabled). */
+  torchEnabled?: boolean;
+}
+
+/**
+ * List available video input devices (cameras).
+ * Useful for letting the user pick the camera closest to the flash.
+ */
+export async function listCameras(): Promise<{ deviceId: string; label: string }[]> {
+  try {
+    // Need a brief getUserMedia call to get labeled devices on Android
+    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    tempStream.getTracks().forEach(t => t.stop());
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices
+      .filter(d => d.kind === 'videoinput')
+      .map(d => ({ deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0, 8)}` }));
+  } catch {
+    return [];
+  }
+}
+
 class PPGService {
   private status: PPGStatus = 'idle';
   private stream: MediaStream | null = null;
@@ -153,10 +180,19 @@ class PPGService {
     this.torchEnabled = false;
   }
 
-  public async start(callbacks?: PPGCallbacks): Promise<void> {
-    if (callbacks) {
-      this.callbacks = callbacks;
+  public async start(callbacksOrOptions?: PPGCallbacks | PPGStartOptions): Promise<void> {
+    // Support both old signature (callbacks only) and new options object
+    let options: PPGStartOptions = {};
+    if (callbacksOrOptions) {
+      if ('callbacks' in callbacksOrOptions || 'cameraDeviceId' in callbacksOrOptions || 'torchEnabled' in callbacksOrOptions) {
+        options = callbacksOrOptions as PPGStartOptions;
+        if (options.callbacks) this.callbacks = options.callbacks;
+      } else {
+        this.callbacks = callbacksOrOptions as PPGCallbacks;
+      }
     }
+
+    const useTorch = options.torchEnabled !== false; // default true
 
     if (this.status === 'capturing' || this.status === 'initializing') {
       return;
@@ -173,14 +209,19 @@ class PPGService {
         );
       }
 
-      this.stream = await mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 320 },
-          height: { ideal: 240 },
-          frameRate: { ideal: 30 },
-        },
-      });
+      // Build video constraints — use specific camera if provided
+      const videoConstraints: MediaTrackConstraints = {
+        width: { ideal: 320 },
+        height: { ideal: 240 },
+        frameRate: { ideal: 30 },
+      };
+      if (options.cameraDeviceId) {
+        videoConstraints.deviceId = { exact: options.cameraDeviceId };
+      } else {
+        videoConstraints.facingMode = 'environment';
+      }
+
+      this.stream = await mediaDevices.getUserMedia({ video: videoConstraints });
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       let message = error.message;
@@ -271,10 +312,12 @@ class PPGService {
     this.canvas.height = vh;
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
 
-    // Enable torch/flashlight for PPG illumination
-    // Strategy: try native Capacitor plugin first (works on Android/iOS),
-    // then fall back to WebView MediaStream torch constraint (works in Chrome desktop)
-    await this.enableTorch();
+    // Enable torch/flashlight for PPG illumination (unless user disabled it)
+    if (useTorch) {
+      await this.enableTorch();
+    } else {
+      console.log('PPG: Torch disabled by user');
+    }
 
     this.setStatus('capturing');
     this.scheduleNextFrame();

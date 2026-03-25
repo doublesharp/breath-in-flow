@@ -89,6 +89,34 @@
             </div>
           </div>
 
+          <!-- Camera options (only when camera or dual sensor selected) -->
+          <div v-if="selectedSensor === 'camera' || selectedSensor === 'dual'" class="w-full max-w-sm space-y-3 mb-6">
+            <!-- Camera picker -->
+            <div v-if="availableCameras.length > 1" class="text-left">
+              <label class="text-xs font-medium text-white/50 block mb-1">Camera</label>
+              <select
+                v-model="selectedCameraId"
+                class="w-full py-2 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-white"
+              >
+                <option value="">Default (rear)</option>
+                <option v-for="cam in availableCameras" :key="cam.deviceId" :value="cam.deviceId">
+                  {{ cam.label }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Torch toggle -->
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-white/60">Flash / Torch</span>
+              <button
+                @click="useTorch = !useTorch"
+                :class="['relative w-11 h-6 rounded-full transition-colors', useTorch ? 'bg-emerald-500' : 'bg-white/10']"
+              >
+                <span :class="['absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform', useTorch ? 'translate-x-5' : '']" />
+              </button>
+            </div>
+          </div>
+
           <!-- Permission error -->
           <div v-if="permissionError" class="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400 mb-4 max-w-sm">
             {{ permissionError }}
@@ -270,7 +298,7 @@ import HrvMetricsDashboard from './hrv/HrvMetricsDashboard.vue';
 import FrequencySpectrum from './hrv/FrequencySpectrum.vue';
 import PoincarePlot from './hrv/PoincarePlot.vue';
 import ResonanceAssessment from './ResonanceAssessment.vue';
-import { ppgService } from '../services/ppgService';
+import { ppgService, listCameras } from '../services/ppgService';
 import { soundService } from '../services/soundService';
 import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
@@ -313,6 +341,9 @@ const selectedSensor = ref<'camera' | 'accelerometer' | 'dual'>('accelerometer')
 const selectedProtocol = ref<Protocol | null>(null);
 const showPrep = ref(false);
 const prepProtocol = ref<Protocol | null>(null);
+const availableCameras = ref<{ deviceId: string; label: string }[]>([]);
+const selectedCameraId = ref('');
+const useTorch = ref(true);
 const collectedIBIs = ref<IBISample[]>([]);
 const measurementNotes = ref('');
 const measurementStartTime = ref<Date>(new Date());
@@ -353,8 +384,12 @@ async function startSensor() {
     });
 
     await ppgService.start({
-      onIBI: (sample) => sensorFusionService.addPPGSample(sample),
-      onQualityChange: () => {},
+      callbacks: {
+        onIBI: (sample) => sensorFusionService.addPPGSample(sample),
+        onQualityChange: () => {},
+      },
+      cameraDeviceId: selectedCameraId.value || undefined,
+      torchEnabled: useTorch.value,
     });
     scgService.setCallbacks({
       onIBI: (sample) => sensorFusionService.addSCGSample(sample),
@@ -384,8 +419,12 @@ async function startSensor() {
     };
 
     if (selectedSensor.value === 'camera') {
-      addDebugLine('Starting camera PPG...');
-      await ppgService.start(callbacks);
+      addDebugLine(`Starting camera PPG (torch=${useTorch.value}, camera=${selectedCameraId.value || 'default'})...`);
+      await ppgService.start({
+        callbacks,
+        cameraDeviceId: selectedCameraId.value || undefined,
+        torchEnabled: useTorch.value,
+      });
       addDebugLine(`Camera status: ${ppgService.getStatus()}`);
     } else {
       addDebugLine('Starting accelerometer SCG...');
@@ -503,10 +542,15 @@ watch(isMeasuring, (measuring) => {
 // Measurement control
 const permissionError = ref<string | null>(null);
 
-function showPrepScreen(protocol: Protocol | null) {
+async function showPrepScreen(protocol: Protocol | null) {
   prepProtocol.value = protocol;
   permissionError.value = null;
   showPrep.value = true;
+
+  // Load available cameras when camera sensor is selected
+  if (selectedSensor.value === 'camera' || selectedSensor.value === 'dual') {
+    availableCameras.value = await listCameras();
+  }
 }
 
 async function confirmStart() {
