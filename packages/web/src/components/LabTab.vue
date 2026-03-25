@@ -75,6 +75,11 @@
             </div>
           </button>
         </div>
+        <!-- Permission error -->
+        <div v-if="permissionError" class="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+          {{ permissionError }}
+        </div>
+
         <button
           v-if="pendingProtocol"
           @click="startProtocol(pendingProtocol)"
@@ -278,6 +283,7 @@ import ResonanceAssessment from './ResonanceAssessment.vue';
 import { ppgService } from '../services/ppgService';
 import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
+import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
 import { analyzeHRV } from '@breath-in-flow/shared';
 import { useHrvStorage } from '../composables/useHrvStorage';
 import type { IBISample, HRVAnalysis, AssessmentResult } from '@breath-in-flow/shared';
@@ -502,10 +508,32 @@ watch(isMeasuring, (measuring) => {
 });
 
 // Measurement control
+const permissionError = ref<string | null>(null);
+
+async function checkPermissions(): Promise<boolean> {
+  permissionError.value = null;
+  addDebugLine(`Requesting permissions for ${selectedSensor.value} mode...`);
+
+  const perms = await requestSensorPermissions(selectedSensor.value);
+  addDebugLine(`Permissions: camera=${perms.camera} motion=${perms.motion}`);
+
+  const msg = getPermissionDeniedMessage(perms);
+  if (msg) {
+    permissionError.value = msg;
+    addDebugLine(`Permission denied: ${msg}`);
+    return false;
+  }
+  return true;
+}
+
 async function startProtocol(protocol: Protocol) {
+  if (!(await checkPermissions())) return;
+
   selectedProtocol.value = protocol;
   collectedIBIs.value = [];
   hrDataPoints.value = [];
+  rawSignalData.value = [];
+  debugLog.value = [];
   isMeasuring.value = true;
   showResults.value = false;
   elapsedSeconds.value = 0;
@@ -513,6 +541,7 @@ async function startProtocol(protocol: Protocol) {
   measurementNotes.value = '';
   measurementStartTime.value = new Date();
 
+  addDebugLine(`Starting ${protocol.name} with ${selectedSensor.value} sensor`);
   await startSensor();
 
   timerInterval = setInterval(() => {
@@ -523,10 +552,14 @@ async function startProtocol(protocol: Protocol) {
   }, 1000);
 }
 
-function startFreeform() {
+async function startFreeform() {
+  if (!(await checkPermissions())) return;
+
   selectedProtocol.value = null;
   collectedIBIs.value = [];
   hrDataPoints.value = [];
+  rawSignalData.value = [];
+  debugLog.value = [];
   isMeasuring.value = true;
   showResults.value = false;
   elapsedSeconds.value = 0;

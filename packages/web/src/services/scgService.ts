@@ -28,6 +28,8 @@ import {
 } from '@breath-in-flow/shared';
 
 import type { SOSFilter } from '@breath-in-flow/shared';
+import { Capacitor } from '@capacitor/core';
+import { Motion } from '@capacitor/motion';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -159,6 +161,8 @@ class SCGService {
 
   // Bound event handler reference (needed for removeEventListener)
   private boundHandleMotion = this.handleMotion.bind(this);
+  private capacitorListenerId: { remove: () => Promise<void> } | null = null;
+  private useNativeMotion = false;
 
   // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -178,10 +182,34 @@ class SCGService {
     if (this.status === 'capturing') return;
 
     this.setStatus('initializing');
+    this.resetInternals();
 
-    // Check for DeviceMotionEvent API
+    // Strategy 1: Use Capacitor Motion plugin on native (more reliable than DeviceMotionEvent in WebView)
+    if (Capacitor.isNativePlatform()) {
+      try {
+        console.log('SCG: Using Capacitor Motion plugin (native)');
+        this.useNativeMotion = true;
+        this.capacitorListenerId = await Motion.addListener('accel', (event) => {
+          // Convert Capacitor motion event to DeviceMotionEvent-like format
+          const fakeEvent = {
+            acceleration: event.acceleration,
+            accelerationIncludingGravity: event.accelerationIncludingGravity,
+            interval: 16, // Capacitor doesn't provide interval, assume ~60Hz
+          } as DeviceMotionEvent;
+          this.handleMotion(fakeEvent);
+        });
+        this.setStatus('capturing');
+        console.log('SCG: Capacitor Motion listener added, status: capturing');
+        return;
+      } catch (err) {
+        console.warn('SCG: Capacitor Motion failed, falling back to web API:', err);
+        this.useNativeMotion = false;
+      }
+    }
+
+    // Strategy 2: Web DeviceMotionEvent API (desktop browsers, some WebViews)
     if (typeof window === 'undefined' || !('DeviceMotionEvent' in window)) {
-      this.emitError(new Error('DeviceMotionEvent is not available in this environment'));
+      this.emitError(new Error('Motion sensor not available. This device may not have an accelerometer.'));
       return;
     }
 
@@ -196,33 +224,35 @@ class SCGService {
         ).requestPermission();
         if (permission !== 'granted') {
           this.emitError(
-            new Error(
-              'Motion sensor permission denied. Please enable motion access in iOS Settings > Privacy > Motion & Fitness.',
-            ),
+            new Error('Motion sensor permission denied. Please enable in iOS Settings > Privacy > Motion & Fitness.'),
           );
           return;
         }
       } catch (err) {
         this.emitError(
-          new Error(
-            `Failed to request motion permission: ${err instanceof Error ? err.message : String(err)}`,
-          ),
+          new Error(`Failed to request motion permission: ${err instanceof Error ? err.message : String(err)}`),
         );
         return;
       }
     }
 
-    this.resetInternals();
-    console.log('SCG: Adding devicemotion listener, DeviceMotionEvent available:', 'DeviceMotionEvent' in window);
+    console.log('SCG: Using web DeviceMotionEvent API');
     window.addEventListener('devicemotion', this.boundHandleMotion);
     this.setStatus('capturing');
     console.log('SCG: Status set to capturing');
   }
 
   public stop(): void {
+    // Remove Capacitor Motion listener if used
+    if (this.capacitorListenerId) {
+      void this.capacitorListenerId.remove();
+      this.capacitorListenerId = null;
+    }
+    // Remove web API listener
     if (typeof window !== 'undefined') {
       window.removeEventListener('devicemotion', this.boundHandleMotion);
     }
+    this.useNativeMotion = false;
     this.resetInternals();
     this.setStatus('idle');
   }
@@ -261,14 +291,7 @@ class SCGService {
     const z = this.extractZAxis(event);
     if (z === null) return;
 
-    // Track raw magnitude for motion detection
-    const rawMag = this.extractMagnitude(event) ?? Math.abs(z);
-    this.rawAccBuffer.push(rawMag);
-    if (this.rawAccBuffer.length > this.motionWindowSamples) {
-      this.rawAccBuffer.shift();
-    }
-
-    // Emit raw (unfiltered) signal for external visualization
+    // Emit raw (unfiltered) Z-axis for external visualization
     this.callbacks.onRawSignal?.(z, this.elapsedMs);
 
     // Ensure filters exist (lazy init in case rate wasn't known at start)
@@ -350,18 +373,22 @@ class SCGService {
     }
 
     // ── 7. Continuous quality monitoring ──
-    // Check for large motion (walking, etc) — NOT breathing, which the bandpass filter handles.
-    // The rawAccBuffer tracks unfiltered magnitude, so breathing shows up here.
-    // Only gate on truly large motion (walking, shifting position).
-    if (this.rawAccBuffer.length >= this.motionWindowSamples) {
-      const motionVariance = standardDeviation(this.rawAccBuffer) ** 2;
+    // Use FILTERED signal variance to detect motion — the high-pass filter removes
+    // gravity and breathing, so only cardiac vibrations and actual motion remain.
+    // Large motion produces huge filtered variance; resting cardiac signal is small.
+    if (this.filteredHistory.length >= 20) {
+      // Use last ~0.5s of filtered data
+      const recentFiltered = this.filteredHistory.slice(-Math.round(this.sampleRateHz * 0.5));
+      const filteredVariance = recentFiltered.length > 1 ? standardDeviation(recentFiltered) ** 2 : 0;
 
-      // Debug: log motion variance every ~2 seconds
-      if (this.sampleCount % (this.sampleRateHz * 2) < 1) {
-        console.log(`SCG: motionVar=${motionVariance.toFixed(3)} threshold=${MOTION_VARIANCE_THRESHOLD} peaks=${this.recentIBIs.length} quality=${this.currentQuality.toFixed(2)}`);
+      // Debug: log every ~2 seconds
+      if (this.sampleCount % Math.round(this.sampleRateHz * 2) < 1) {
+        console.log(`SCG: filteredVar=${filteredVariance.toFixed(4)} z=${z.toFixed(3)} peaks=${this.recentIBIs.length} quality=${this.currentQuality.toFixed(2)} samples=${this.sampleCount}`);
       }
 
-      if (motionVariance > MOTION_VARIANCE_THRESHOLD) {
+      // Filtered signal during rest: variance typically 0.0001-0.01
+      // Walking/large motion: variance > 5.0
+      if (filteredVariance > 10.0) {
         this.updateQuality(0);
         return;
       }
@@ -606,10 +633,13 @@ class SCGService {
   }
 
   private computeQuality(): number {
-    // Motion gating: high variance → user is moving
-    const motionVariance = standardDeviation(this.rawAccBuffer) ** 2;
-    if (motionVariance > MOTION_VARIANCE_THRESHOLD) {
-      return 0;
+    // Motion gating using filtered signal (gravity removed)
+    if (this.filteredHistory.length >= 20) {
+      const recentFiltered = this.filteredHistory.slice(-Math.round(this.sampleRateHz * 0.5));
+      const filteredVar = recentFiltered.length > 1 ? standardDeviation(recentFiltered) ** 2 : 0;
+      if (filteredVar > 10.0) {
+        return 0;
+      }
     }
 
     // No-peak timeout: phone may not be on chest
