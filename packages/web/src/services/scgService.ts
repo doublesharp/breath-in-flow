@@ -368,8 +368,9 @@ class SCGService {
     // ── 6b. Autocorrelation fallback — every 5 seconds if no peaks found ──
     // The quantized 0.1 m/s² accelerometer data may not produce detectable peaks
     // but still contains periodic heartbeat information in the timing of the 0.1 jumps.
-    const autocorrInterval = Math.round(this.sampleRateHz * 5);
-    if (this.sampleCount > 0 && this.sampleCount % autocorrInterval === 0 && this.recentIBIs.length < 3) {
+    const autocorrInterval = Math.round(this.sampleRateHz * 3); // Every 3 seconds
+    // Always run autocorrelation — peak detection rarely works with 0.1 m/s² quantized data
+    if (this.sampleCount > 0 && this.sampleCount % autocorrInterval === 0) {
       this.estimateHRFromAutocorrelation();
     }
 
