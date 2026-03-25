@@ -408,6 +408,86 @@ class PPGService {
   }
 
   /**
+   * Autocorrelation-based heart rate estimation.
+   * Finds the dominant periodicity in the filtered signal without needing
+   * explicit peak detection. Works even with weak, noisy PPG signals.
+   *
+   * Called every 5 seconds as a fallback when peak detection hasn't found enough beats.
+   */
+  private estimateHRFromAutocorrelation(): IBISample | null {
+    // Need at least 5 seconds of data (150 samples at 30fps)
+    if (this.rawBuffer.length < 150) return null;
+
+    const data = this.rawBuffer.slice(-150); // last 5 seconds
+    const N = data.length;
+
+    // Compute mean
+    let mean = 0;
+    for (let i = 0; i < N; i++) mean += data[i];
+    mean /= N;
+
+    // Subtract mean
+    const centered = data.map(v => v - mean);
+
+    // Compute autocorrelation for lags corresponding to 40-180 BPM
+    // 40 BPM = 1.5s = 45 samples at 30fps
+    // 180 BPM = 0.33s = 10 samples at 30fps
+    const minLag = Math.round(this.SAMPLE_RATE * 60 / 180); // ~10
+    const maxLag = Math.round(this.SAMPLE_RATE * 60 / 40);  // ~45
+
+    let bestLag = 0;
+    let bestCorr = -Infinity;
+
+    for (let lag = minLag; lag <= maxLag && lag < N; lag++) {
+      let corr = 0;
+      let norm1 = 0;
+      let norm2 = 0;
+      const len = N - lag;
+      for (let i = 0; i < len; i++) {
+        corr += centered[i] * centered[i + lag];
+        norm1 += centered[i] * centered[i];
+        norm2 += centered[i + lag] * centered[i + lag];
+      }
+      const denom = Math.sqrt(norm1 * norm2);
+      const ncc = denom > 0 ? corr / denom : 0;
+
+      if (ncc > bestCorr) {
+        bestCorr = ncc;
+        bestLag = lag;
+      }
+    }
+
+    // Only accept if autocorrelation is strong enough (> 0.3)
+    if (bestCorr < 0.3 || bestLag === 0) {
+      if (this.frameCount % 150 === 0) {
+        console.log(`PPG autocorr: bestCorr=${bestCorr.toFixed(3)} bestLag=${bestLag} — too weak`);
+      }
+      return null;
+    }
+
+    const intervalMs = (bestLag / this.SAMPLE_RATE) * 1000;
+    const hr = 60000 / intervalMs;
+
+    console.log(`PPG autocorr: HR=${hr.toFixed(1)} BPM (lag=${bestLag}, corr=${bestCorr.toFixed(3)}, interval=${intervalMs.toFixed(0)}ms)`);
+
+    // Emit as an IBI sample
+    const ibiSample: IBISample = {
+      timestamp: performance.now(),
+      interval: intervalMs,
+      quality: Math.min(1, bestCorr), // correlation strength as quality
+    };
+    this.callbacks.onIBI?.(ibiSample);
+
+    // Track for adaptive filter
+    this.recentIBIsMs.push(intervalMs);
+    if (this.recentIBIsMs.length > 10) {
+      this.recentIBIsMs.shift();
+    }
+
+    return ibiSample;
+  }
+
+  /**
    * Update the adaptive bandpass filter based on estimated heart rate.
    * Called every ADAPTIVE_FILTER_INTERVAL frames (~10 seconds at 30fps).
    *
@@ -531,6 +611,13 @@ class PPGService {
     // Periodically assess signal quality
     if (this.frameCount % this.QUALITY_CHECK_INTERVAL === 0 && this.rawBuffer.length >= 30) {
       this.updateSignalQuality();
+    }
+
+    // Autocorrelation fallback: every 5 seconds, if peak detection hasn't found
+    // enough beats, use autocorrelation to estimate HR from the filtered signal.
+    // This works even with very weak PPG signals where peaks are too small to detect.
+    if (this.frameCount > 0 && this.frameCount % 150 === 0 && this.recentIBIsMs.length < 3) {
+      this.estimateHRFromAutocorrelation();
     }
 
     this.scheduleNextFrame();
