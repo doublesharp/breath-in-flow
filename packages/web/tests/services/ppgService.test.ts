@@ -11,6 +11,9 @@ import type { IBISample } from '@breath-in-flow/shared';
 function makeMockTrack(opts: { torchSupported?: boolean } = {}): MediaStreamTrack {
   return {
     stop: vi.fn(),
+    getCapabilities: vi.fn().mockReturnValue(
+      opts.torchSupported ? { torch: true } : {}
+    ),
     applyConstraints: opts.torchSupported
       ? vi.fn().mockResolvedValue(undefined)
       : vi.fn().mockRejectedValue(new Error('torch not supported')),
@@ -71,6 +74,7 @@ function resetService() {
   (ppgService as unknown as Record<string, unknown>).recentIBIsMs = [];
   (ppgService as unknown as Record<string, unknown>).currentLowCut = 0.5;
   (ppgService as unknown as Record<string, unknown>).currentHighCut = 4.0;
+  (ppgService as unknown as Record<string, unknown>).torchEnabled = false;
   // Reset filter and peak detector
   (ppgService as unknown as { bandpassFilter: { reset: () => void } }).bandpassFilter.reset();
   (ppgService as unknown as { peakDetector: { reset: () => void } }).peakDetector.reset();
@@ -121,6 +125,9 @@ describe('ppgService', () => {
     // Stub requestAnimationFrame / cancelAnimationFrame
     vi.stubGlobal('requestAnimationFrame', vi.fn().mockReturnValue(42));
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+    // Prevent happy-dom from rejecting plain mock objects when appended to body
+    vi.spyOn(document.body, 'appendChild').mockImplementation((node) => node as Node);
   });
 
   afterEach(() => {
@@ -164,6 +171,11 @@ describe('ppgService', () => {
             playsInline: false,
             muted: false,
             readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
             play: vi.fn().mockResolvedValue(undefined),
           };
           return video as unknown as HTMLVideoElement;
@@ -205,6 +217,11 @@ describe('ppgService', () => {
             playsInline: false,
             muted: false,
             readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
             play: vi.fn().mockResolvedValue(undefined),
           } as unknown as HTMLVideoElement;
         }
@@ -242,6 +259,11 @@ describe('ppgService', () => {
             playsInline: false,
             muted: false,
             readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
             play: vi.fn().mockResolvedValue(undefined),
           } as unknown as HTMLVideoElement;
         }
@@ -547,6 +569,11 @@ describe('ppgService', () => {
             playsInline: false,
             muted: false,
             readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
             play: vi.fn().mockResolvedValue(undefined),
           } as unknown as HTMLVideoElement;
         }
@@ -581,6 +608,11 @@ describe('ppgService', () => {
             playsInline: false,
             muted: false,
             readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
             play: vi.fn().mockResolvedValue(undefined),
           } as unknown as HTMLVideoElement;
         }
@@ -636,6 +668,11 @@ describe('ppgService', () => {
         playsInline: false,
         muted: false,
         readyState: 4,
+        videoWidth: 320,
+        videoHeight: 240,
+        style: {} as CSSStyleDeclaration,
+        setAttribute: vi.fn(),
+        parentNode: { removeChild: vi.fn() },
         play: vi.fn().mockResolvedValue(undefined),
       };
 
@@ -680,6 +717,11 @@ describe('ppgService', () => {
             playsInline: false,
             muted: false,
             readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
             play: vi.fn().mockResolvedValue(undefined),
           } as unknown as HTMLVideoElement;
         }
@@ -715,6 +757,11 @@ describe('ppgService', () => {
             playsInline: false,
             muted: false,
             readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
             play: vi.fn().mockResolvedValue(undefined),
           } as unknown as HTMLVideoElement;
         }
@@ -761,6 +808,11 @@ describe('ppgService', () => {
             playsInline: false,
             muted: false,
             readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
             play: vi.fn().mockResolvedValue(undefined),
           } as unknown as HTMLVideoElement;
         }
@@ -909,6 +961,11 @@ describe('ppgService', () => {
             playsInline: false,
             muted: false,
             readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
             play: vi.fn().mockResolvedValue(undefined),
           } as unknown as HTMLVideoElement;
         }

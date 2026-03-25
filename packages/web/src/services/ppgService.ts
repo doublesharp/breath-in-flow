@@ -36,6 +36,7 @@ class PPGService {
   // Frame throttling
   private lastFrameTime: number = 0;
   private frameCount: number = 0;
+  private torchEnabled: boolean = false;
 
   // Adaptive bandpass state
   private adaptiveFilterFrameCount: number = 0;
@@ -136,30 +137,22 @@ class PPGService {
       return;
     }
 
-    // Create off-screen video element
+    // Create video element — must be added to DOM for Android WebView compatibility
     this.video = document.createElement('video');
     this.video.srcObject = this.stream;
     this.video.playsInline = true;
     this.video.muted = true;
-
-    // Create off-screen canvas for frame processing
-    this.canvas = document.createElement('canvas');
-    this.canvas.width = 320;
-    this.canvas.height = 240;
-    this.ctx = this.canvas.getContext('2d');
-
-    // Try to enable torch (flashlight) for better PPG signal
-    const tracks = this.stream.getVideoTracks();
-    if (tracks.length > 0) {
-      try {
-        await tracks[0].applyConstraints({
-          advanced: [{ torch: true } as MediaTrackConstraintSet],
-        });
-      } catch {
-        // Torch not available — continue without it
-        // Signal quality metric will reflect poor illumination
-      }
-    }
+    this.video.setAttribute('autoplay', '');
+    this.video.setAttribute('playsinline', '');
+    this.video.setAttribute('webkit-playsinline', '');
+    // Hide but keep in DOM — some Android WebViews require this for frame capture
+    this.video.style.position = 'fixed';
+    this.video.style.top = '-9999px';
+    this.video.style.left = '-9999px';
+    this.video.style.width = '1px';
+    this.video.style.height = '1px';
+    this.video.style.opacity = '0.01';
+    document.body.appendChild(this.video);
 
     // Reset processing state
     this.rawBuffer = [];
@@ -173,7 +166,61 @@ class PPGService {
     this.bandpassFilter.reset();
     this.peakDetector.reset();
 
+    // Start video playback — must happen before torch and canvas setup
     await this.video.play();
+
+    // Wait for video to be ready with actual dimensions
+    await new Promise<void>((resolve) => {
+      const checkReady = () => {
+        if (this.video && this.video.videoWidth > 0 && this.video.videoHeight > 0) {
+          resolve();
+        } else {
+          requestAnimationFrame(checkReady);
+        }
+      };
+      checkReady();
+    });
+
+    // Create canvas matching actual video dimensions (not hardcoded)
+    const vw = this.video.videoWidth || 320;
+    const vh = this.video.videoHeight || 240;
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = vw;
+    this.canvas.height = vh;
+    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+
+    // Enable torch AFTER video is playing — Android requires the stream to be
+    // active before getCapabilities/applyConstraints will work for torch
+    const tracks = this.stream.getVideoTracks();
+    if (tracks.length > 0) {
+      const track = tracks[0];
+      try {
+        // Check if torch is actually supported before trying
+        const capabilities = track.getCapabilities?.() as Record<string, unknown> | undefined;
+        if (capabilities?.torch) {
+          await track.applyConstraints({
+            advanced: [{ torch: true } as MediaTrackConstraintSet],
+          });
+          this.torchEnabled = true;
+        }
+      } catch {
+        // Torch not available — continue without it
+      }
+
+      // Fallback: if getCapabilities didn't report torch, try anyway
+      // Some Android devices support torch but don't report it in capabilities
+      if (!this.torchEnabled) {
+        try {
+          await track.applyConstraints({
+            advanced: [{ torch: true } as MediaTrackConstraintSet],
+          });
+          this.torchEnabled = true;
+        } catch {
+          // Truly not available
+          console.warn('PPG: Torch/flashlight not available on this device');
+        }
+      }
+    }
 
     this.setStatus('capturing');
     this.scheduleNextFrame();
@@ -381,6 +428,10 @@ class PPGService {
     // Clean up DOM elements
     if (this.video) {
       this.video.srcObject = null;
+      // Remove from DOM (we appended it in start())
+      if (this.video.parentNode) {
+        this.video.parentNode.removeChild(this.video);
+      }
       this.video = null;
     }
     this.canvas = null;
@@ -396,6 +447,7 @@ class PPGService {
     this.currentLowCut = 0.5;
     this.currentHighCut = 4.0;
     this.signalQuality = 0;
+    this.torchEnabled = false;
     this.bandpassFilter.reset();
     this.peakDetector.reset();
 
