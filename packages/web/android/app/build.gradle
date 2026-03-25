@@ -42,6 +42,16 @@ dependencies {
     implementation project(':capacitor-cordova-android-plugins')
 }
 
+// Force Kotlin stdlib version alignment to resolve duplicate class conflicts
+// between kotlin-stdlib (1.8+) and legacy kotlin-stdlib-jdk7/jdk8
+configurations.all {
+    resolutionStrategy {
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.25'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.25'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.25'
+    }
+}
+
 apply from: 'capacitor.build.gradle'
 
 try {
