@@ -83,10 +83,12 @@ function draw() {
     return;
   }
 
-  // Determine time window
+  // Determine time window — use actual data range if shorter than requested duration
   const latestTime = data[data.length - 1].time;
+  const earliestTime = data[0].time;
+  const dataSpan = latestTime - earliestTime;
   const windowEnd = latestTime;
-  const windowStart = windowEnd - props.duration;
+  const windowStart = dataSpan < props.duration ? earliestTime : windowEnd - props.duration;
 
   // Y range
   const hrs = data.map((d) => d.hr);

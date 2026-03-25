@@ -700,13 +700,18 @@ class SCGService {
 
     if (bestCorr < 0.15 || bestLag === 0) return; // too weak
 
-    // Emit IBI
-    const sample: IBISample = {
-      timestamp: this.elapsedMs,
-      interval: intervalMs,
-      quality: Math.min(1, bestCorr),
-    };
-    this.callbacks.onIBI?.(sample);
+    // Emit multiple IBIs to fill the HR chart — one per estimated heartbeat
+    // in the autocorrelation window. This gives ~5 data points per 5-second run.
+    const beatsInWindow = Math.round(5000 / intervalMs);
+    const quality = Math.min(1, bestCorr);
+    for (let i = 0; i < beatsInWindow; i++) {
+      const sample: IBISample = {
+        timestamp: this.elapsedMs - (beatsInWindow - 1 - i) * intervalMs,
+        interval: intervalMs,
+        quality,
+      };
+      this.callbacks.onIBI?.(sample);
+    }
 
     this.recentIBIs.push(intervalMs);
     if (this.recentIBIs.length > 20) this.recentIBIs.shift();
