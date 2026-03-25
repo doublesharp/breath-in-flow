@@ -268,6 +268,7 @@ import FrequencySpectrum from './hrv/FrequencySpectrum.vue';
 import PoincarePlot from './hrv/PoincarePlot.vue';
 import ResonanceAssessment from './ResonanceAssessment.vue';
 import { ppgService } from '../services/ppgService';
+import { soundService } from '../services/soundService';
 import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
 import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
@@ -590,6 +591,7 @@ function stopMeasurement() {
   if (collectedIBIs.value.length >= 10) {
     currentAnalysis.value = analyzeHRV(collectedIBIs.value);
     showResults.value = true;
+    soundService.playCompletionChime();
   }
 }
 

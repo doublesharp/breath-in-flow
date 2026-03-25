@@ -325,7 +325,8 @@ class SCGService {
           const ibi = this.elapsedMs - this.lastPeakElapsedMs;
 
           // Physiological sanity check: 200 BPM (300 ms) to 30 BPM (2000 ms)
-          if (ibi >= 300 && ibi <= 2000) {
+          // Tighter range for SCG: 400-1500ms (40-150 BPM) to reduce motion artifacts
+          if (ibi >= 400 && ibi <= 1500) {
             this.recentIBIs.push(ibi);
             if (this.recentIBIs.length > MAX_RECENT_IBIS) {
               this.recentIBIs.shift();

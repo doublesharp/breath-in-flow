@@ -100,6 +100,56 @@ class SoundService {
     }
   }
 
+  /**
+   * Play a pleasant completion chime — ascending two-note tone.
+   * Works regardless of isEnabled (measurement completion should always be audible).
+   */
+  public playCompletionChime() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const resume = ctx.state === 'suspended' ? ctx.resume() : Promise.resolve();
+    void resume.then(() => {
+      const t = ctx.currentTime;
+
+      // Note 1: C5 (523 Hz)
+      const osc1 = ctx.createOscillator();
+      osc1.type = 'sine';
+      osc1.frequency.value = 523;
+      const gain1 = ctx.createGain();
+      gain1.gain.setValueAtTime(0, t);
+      gain1.gain.linearRampToValueAtTime(0.3, t + 0.02);
+      gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+      osc1.connect(gain1).connect(ctx.destination);
+      osc1.start(t);
+      osc1.stop(t + 0.6);
+
+      // Note 2: E5 (659 Hz) — delayed slightly
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'sine';
+      osc2.frequency.value = 659;
+      const gain2 = ctx.createGain();
+      gain2.gain.setValueAtTime(0, t + 0.15);
+      gain2.gain.linearRampToValueAtTime(0.3, t + 0.17);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+      osc2.connect(gain2).connect(ctx.destination);
+      osc2.start(t + 0.15);
+      osc2.stop(t + 0.8);
+
+      // Note 3: G5 (784 Hz) — final resolve
+      const osc3 = ctx.createOscillator();
+      osc3.type = 'sine';
+      osc3.frequency.value = 784;
+      const gain3 = ctx.createGain();
+      gain3.gain.setValueAtTime(0, t + 0.3);
+      gain3.gain.linearRampToValueAtTime(0.25, t + 0.32);
+      gain3.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+      osc3.connect(gain3).connect(ctx.destination);
+      osc3.start(t + 0.3);
+      osc3.stop(t + 1.2);
+    });
+  }
+
   // ------------------------------------------------------------
   // Tick dispatcher
   // ------------------------------------------------------------
