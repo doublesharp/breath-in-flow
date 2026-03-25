@@ -292,6 +292,8 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { Capacitor } from '@capacitor/core';
+import { KeepAwake } from '@capacitor-community/keep-awake';
 import HrTachogram from './hrv/HrTachogram.vue';
 import SignalQualityIndicator from './hrv/SignalQualityIndicator.vue';
 import HrvMetricsDashboard from './hrv/HrvMetricsDashboard.vue';
@@ -675,6 +677,18 @@ async function checkPermissions(): Promise<boolean> {
   return true;
 }
 
+async function enableKeepAwake() {
+  if (Capacitor.isNativePlatform()) {
+    try { await KeepAwake.keepAwake(); } catch { /* ignore */ }
+  }
+}
+
+async function disableKeepAwake() {
+  if (Capacitor.isNativePlatform()) {
+    try { await KeepAwake.allowSleep(); } catch { /* ignore */ }
+  }
+}
+
 async function startProtocol(protocol: Protocol) {
   selectedProtocol.value = protocol;
   collectedIBIs.value = [];
@@ -682,6 +696,7 @@ async function startProtocol(protocol: Protocol) {
   rawSignalData.value = [];
   debugLog.value = [];
   isMeasuring.value = true;
+  void enableKeepAwake();
   showResults.value = false;
   elapsedSeconds.value = 0;
   sensorQuality.value = 0;
@@ -708,6 +723,7 @@ async function startFreeform() {
   rawSignalData.value = [];
   debugLog.value = [];
   isMeasuring.value = true;
+  void enableKeepAwake();
   showResults.value = false;
   elapsedSeconds.value = 0;
   sensorQuality.value = 0;
@@ -722,6 +738,7 @@ async function startFreeform() {
 }
 
 function stopMeasurement() {
+  void disableKeepAwake();
   if (timerInterval) {
     clearInterval(timerInterval);
     timerInterval = null;
@@ -841,6 +858,7 @@ onUnmounted(() => {
   }
   if (isMeasuring.value) {
     stopSensor();
+    void disableKeepAwake();
   }
 });
 </script>
