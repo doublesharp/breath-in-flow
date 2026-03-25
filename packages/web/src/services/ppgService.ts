@@ -6,6 +6,8 @@ import {
   type IBISample,
 } from '@breath-in-flow/shared';
 import type { SOSFilter } from '@breath-in-flow/shared';
+import { Capacitor } from '@capacitor/core';
+import { Torch } from '@capawesome/capacitor-torch';
 
 export type PPGStatus = 'idle' | 'initializing' | 'capturing' | 'error';
 
@@ -78,6 +80,77 @@ class PPGService {
   private setStatus(status: PPGStatus): void {
     this.status = status;
     this.callbacks.onStatusChange?.(status);
+  }
+
+  /**
+   * Enable torch using native Capacitor plugin (Android/iOS) or WebView fallback (desktop).
+   */
+  private async enableTorch(): Promise<void> {
+    // Strategy 1: Native Capacitor torch plugin (most reliable on mobile)
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { isAvailable } = await Torch.isAvailable();
+        if (isAvailable) {
+          await Torch.enable();
+          this.torchEnabled = true;
+          console.log('PPG: Torch enabled via native Capacitor plugin');
+          return;
+        }
+      } catch (e) {
+        console.warn('PPG: Native torch plugin failed:', e);
+      }
+    }
+
+    // Strategy 2: WebView MediaStream torch constraint (Chrome desktop, some Android)
+    if (this.stream) {
+      const tracks = this.stream.getVideoTracks();
+      if (tracks.length > 0) {
+        const track = tracks[0];
+        try {
+          const capabilities = track.getCapabilities?.() as Record<string, unknown> | undefined;
+          if (capabilities?.torch) {
+            await track.applyConstraints({
+              advanced: [{ torch: true } as MediaTrackConstraintSet],
+            });
+            this.torchEnabled = true;
+            console.log('PPG: Torch enabled via MediaStream constraint');
+            return;
+          }
+        } catch {
+          // Fall through
+        }
+
+        // Blind attempt — some devices support it without reporting in capabilities
+        try {
+          await track.applyConstraints({
+            advanced: [{ torch: true } as MediaTrackConstraintSet],
+          });
+          this.torchEnabled = true;
+          console.log('PPG: Torch enabled via blind constraint attempt');
+          return;
+        } catch {
+          // Truly not available
+        }
+      }
+    }
+
+    console.warn('PPG: Torch/flashlight not available on this device');
+  }
+
+  /**
+   * Disable torch on stop.
+   */
+  private async disableTorch(): Promise<void> {
+    if (!this.torchEnabled) return;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Torch.disable();
+      } catch {
+        // Ignore — stream stopping will also release the torch
+      }
+    }
+    this.torchEnabled = false;
   }
 
   public async start(callbacks?: PPGCallbacks): Promise<void> {
@@ -168,11 +241,19 @@ class PPGService {
 
     // Start video playback — must happen before torch and canvas setup
     await this.video.play();
+    console.log('PPG: Video playing, readyState:', this.video.readyState);
 
-    // Wait for video to be ready with actual dimensions
+    // Wait for video to be ready with actual dimensions (timeout after 5s)
     await new Promise<void>((resolve) => {
+      let attempts = 0;
       const checkReady = () => {
+        attempts++;
         if (this.video && this.video.videoWidth > 0 && this.video.videoHeight > 0) {
+          console.log(`PPG: Video ready — ${this.video.videoWidth}x${this.video.videoHeight}`);
+          resolve();
+        } else if (attempts > 150) {
+          // Timeout after ~5 seconds, use defaults
+          console.warn('PPG: Video dimension timeout, using defaults 320x240');
           resolve();
         } else {
           requestAnimationFrame(checkReady);
@@ -184,43 +265,16 @@ class PPGService {
     // Create canvas matching actual video dimensions (not hardcoded)
     const vw = this.video.videoWidth || 320;
     const vh = this.video.videoHeight || 240;
+    console.log(`PPG: Canvas size ${vw}x${vh}`);
     this.canvas = document.createElement('canvas');
     this.canvas.width = vw;
     this.canvas.height = vh;
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
 
-    // Enable torch AFTER video is playing — Android requires the stream to be
-    // active before getCapabilities/applyConstraints will work for torch
-    const tracks = this.stream.getVideoTracks();
-    if (tracks.length > 0) {
-      const track = tracks[0];
-      try {
-        // Check if torch is actually supported before trying
-        const capabilities = track.getCapabilities?.() as Record<string, unknown> | undefined;
-        if (capabilities?.torch) {
-          await track.applyConstraints({
-            advanced: [{ torch: true } as MediaTrackConstraintSet],
-          });
-          this.torchEnabled = true;
-        }
-      } catch {
-        // Torch not available — continue without it
-      }
-
-      // Fallback: if getCapabilities didn't report torch, try anyway
-      // Some Android devices support torch but don't report it in capabilities
-      if (!this.torchEnabled) {
-        try {
-          await track.applyConstraints({
-            advanced: [{ torch: true } as MediaTrackConstraintSet],
-          });
-          this.torchEnabled = true;
-        } catch {
-          // Truly not available
-          console.warn('PPG: Torch/flashlight not available on this device');
-        }
-      }
-    }
+    // Enable torch/flashlight for PPG illumination
+    // Strategy: try native Capacitor plugin first (works on Android/iOS),
+    // then fall back to WebView MediaStream torch constraint (works in Chrome desktop)
+    await this.enableTorch();
 
     this.setStatus('capturing');
     this.scheduleNextFrame();
@@ -371,6 +425,11 @@ class PPGService {
     const redAvg = pixelCount > 0 ? redSum / pixelCount : 0;
     const greenAvg = pixelCount > 0 ? greenSum / pixelCount : 0;
 
+    // Debug: log pixel values every 2 seconds (60 frames at 30fps)
+    if (this.frameCount > 0 && this.frameCount % 60 === 0) {
+      console.log(`PPG frame ${this.frameCount}: R=${redAvg.toFixed(1)} G=${greenAvg.toFixed(1)} readyState=${this.video.readyState} torch=${this.torchEnabled}`);
+    }
+
     // Use green channel as primary PPG signal (strongest with flash/torch)
     // Red channel available for future cross-validation
     void redAvg; // retained for potential cross-validation use
@@ -418,6 +477,9 @@ class PPGService {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
     }
+
+    // Disable torch before releasing camera
+    void this.disableTorch();
 
     // Stop all media tracks (releases camera and torch)
     if (this.stream) {

@@ -1,4 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// Mock Capacitor and Torch plugin before importing service
+vi.mock('@capacitor/core', () => ({
+  Capacitor: { isNativePlatform: () => false },
+}));
+vi.mock('@capawesome/capacitor-torch', () => ({
+  Torch: {
+    isAvailable: vi.fn().mockResolvedValue({ isAvailable: false }),
+    enable: vi.fn().mockResolvedValue(undefined),
+    disable: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 import { ppgService } from '../../src/services/ppgService';
 import type { PPGStatus } from '../../src/services/ppgService';
 import type { IBISample } from '@breath-in-flow/shared';
