@@ -406,7 +406,7 @@ async function startSensor() {
       onRawSignal: (value: number, timestamp: number) => {
         rawSignalData.value.push({ time: timestamp, value });
         if (rawSignalData.value.length > RAW_SIGNAL_MAX_POINTS) {
-          rawSignalData.value = rawSignalData.value.slice(-RAW_SIGNAL_MAX_POINTS);
+          rawSignalData.value.splice(0, rawSignalData.value.length - RAW_SIGNAL_MAX_POINTS);
         }
       },
       onQualityChange: (q: number) => {
@@ -483,14 +483,14 @@ function drawRawSignal() {
     return;
   }
 
-  // Auto-scale Y
-  let minV = Infinity, maxV = -Infinity;
-  for (const d of data) {
-    if (d.value < minV) minV = d.value;
-    if (d.value > maxV) maxV = d.value;
-  }
+  // Auto-scale Y using percentiles to ignore outlier spikes
+  const sorted = data.map(d => d.value).sort((a, b) => a - b);
+  const p5 = sorted[Math.floor(sorted.length * 0.02)] ?? 0;
+  const p95 = sorted[Math.floor(sorted.length * 0.98)] ?? 0;
+  const minV = p5;
+  const maxV = p95;
   const range = maxV - minV || 1;
-  const pad = range * 0.1;
+  const pad = range * 0.15;
 
   // Draw line
   ctx.beginPath();

@@ -473,10 +473,20 @@ class PPGService {
       console.log(`PPG frame ${this.frameCount}: R=${redAvg.toFixed(1)} G=${greenAvg.toFixed(1)} readyState=${this.video.readyState} torch=${this.torchEnabled}`);
     }
 
-    // Use green channel as primary PPG signal (strongest with flash/torch)
-    // Red channel available for future cross-validation
-    void redAvg; // retained for potential cross-validation use
-    this.processSignalSample(greenAvg, timestamp);
+    // Use whichever channel has a stronger, non-saturated signal.
+    // With flash on finger: red penetrates tissue best and saturates less.
+    // Green channel can saturate to 0 on some Android cameras when flash is on.
+    // Pick the channel that's not at 0 and not at 255 (saturated).
+    let primarySignal = greenAvg;
+    if (greenAvg < 1 || greenAvg > 254) {
+      primarySignal = redAvg; // green saturated, use red
+    } else if (redAvg < 1 || redAvg > 254) {
+      primarySignal = greenAvg; // red saturated, use green
+    } else {
+      // Neither saturated — use red (better tissue penetration with flash)
+      primarySignal = redAvg;
+    }
+    this.processSignalSample(primarySignal, timestamp);
 
     this.frameCount++;
     this.adaptiveFilterFrameCount++;
