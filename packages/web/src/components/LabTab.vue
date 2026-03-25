@@ -528,7 +528,7 @@ function drawRawSignal() {
   }
 
   // Show the most recent 5 seconds based on timestamps
-  const VISIBLE_SECONDS = 5;
+  const VISIBLE_SECONDS = 8; // Show 8 seconds — enough for ~8-10 heartbeats
   const latestTime = data[data.length - 1].time;
   const cutoffTime = latestTime - VISIBLE_SECONDS * 1000;
   let startIdx = data.length - 1;

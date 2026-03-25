@@ -142,7 +142,8 @@ class SCGService {
 
   // Circular buffer of recent filtered samples for template extraction
   private filteredHistory: number[] = [];
-  private filteredHistoryMaxLen: number = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.5);
+  // Must be large enough for autocorrelation (5+ seconds of data)
+  private filteredHistoryMaxLen: number = Math.round(DEFAULT_SAMPLE_RATE_HZ * 6);
 
   // Detected peak sample indices since start (for template extraction)
   private detectedPeakSampleIndices: number[] = [];
@@ -364,6 +365,14 @@ class SCGService {
       }
     }
 
+    // ── 6b. Autocorrelation fallback — every 5 seconds if no peaks found ──
+    // The quantized 0.1 m/s² accelerometer data may not produce detectable peaks
+    // but still contains periodic heartbeat information in the timing of the 0.1 jumps.
+    const autocorrInterval = Math.round(this.sampleRateHz * 5);
+    if (this.sampleCount > 0 && this.sampleCount % autocorrInterval === 0 && this.recentIBIs.length < 3) {
+      this.estimateHRFromAutocorrelation();
+    }
+
     // ── 7. Continuous quality monitoring ──
     // Use FILTERED signal variance to detect motion — the high-pass filter removes
     // gravity and breathing, so only cardiac vibrations and actual motion remain.
@@ -373,9 +382,10 @@ class SCGService {
       const recentFiltered = this.filteredHistory.slice(-Math.round(this.sampleRateHz * 0.5));
       const filteredVariance = recentFiltered.length > 1 ? standardDeviation(recentFiltered) ** 2 : 0;
 
-      // Debug: log every ~2 seconds
+      // Debug: log every ~2 seconds with more detail
       if (this.sampleCount % Math.round(this.sampleRateHz * 2) < 1) {
-        console.log(`SCG: filteredVar=${filteredVariance.toFixed(4)} z=${z.toFixed(3)} peaks=${this.recentIBIs.length} quality=${this.currentQuality.toFixed(2)} samples=${this.sampleCount}`);
+        const env = this.envelopeBuffer.length > 0 ? this.envelopeBuffer[this.envelopeBuffer.length - 1] : 0;
+        console.log(`SCG: fltVar=${filteredVariance.toFixed(4)} flt=${filtered.toFixed(4)} env=${env.toFixed(4)} z=${z.toFixed(1)} peaks=${this.recentIBIs.length} q=${this.currentQuality.toFixed(2)} n=${this.sampleCount}`);
       }
 
       // TODO: Re-enable motion gate after tuning with real device data
@@ -619,7 +629,7 @@ class SCGService {
     this.TEMPLATE_WINDOW_SAMPLES = Math.round(fs * 0.1); // ±100 ms
     this.filteredHistoryMaxLen = Math.max(
       2 * this.TEMPLATE_WINDOW_SAMPLES + 1,
-      Math.round(fs * 0.5),
+      Math.round(fs * 6), // 6 seconds for autocorrelation
     );
 
     // Rebuild Hilbert coefficients for the (potentially new) sample rate
@@ -637,6 +647,72 @@ class SCGService {
       adaptiveWindow: Math.max(10, Math.round(fs * 0.5)),
       minProminence: 0.1,    // Lower — cardiac peaks are small with quantized data
     });
+  }
+
+  /**
+   * Autocorrelation-based HR estimation for quantized accelerometer data.
+   * When the accelerometer resolution is too low for peak detection (0.1 m/s²),
+   * the timing of the quantization steps still carries cardiac periodicity.
+   */
+  private estimateHRFromAutocorrelation(): void {
+    // Use the filtered signal history (high-pass removes gravity)
+    const data = this.filteredHistory;
+    if (data.length < Math.round(this.sampleRateHz * 3)) return; // need 3+ seconds
+
+    const N = Math.min(data.length, Math.round(this.sampleRateHz * 5));
+    const segment = data.slice(-N);
+
+    // Compute mean
+    let mean = 0;
+    for (let i = 0; i < N; i++) mean += segment[i];
+    mean /= N;
+
+    // Center
+    const centered = segment.map(v => v - mean);
+
+    // Autocorrelation for lags corresponding to 40-150 BPM
+    const minLag = Math.round(this.sampleRateHz * 60 / 150); // ~25 at 60Hz
+    const maxLag = Math.round(this.sampleRateHz * 60 / 40);  // ~90 at 60Hz
+
+    let bestLag = 0;
+    let bestCorr = -Infinity;
+
+    for (let lag = minLag; lag <= maxLag && lag < N; lag++) {
+      let corr = 0, norm1 = 0, norm2 = 0;
+      const len = N - lag;
+      for (let i = 0; i < len; i++) {
+        corr += centered[i] * centered[i + lag];
+        norm1 += centered[i] * centered[i];
+        norm2 += centered[i + lag] * centered[i + lag];
+      }
+      const denom = Math.sqrt(norm1 * norm2);
+      const ncc = denom > 0 ? corr / denom : 0;
+      if (ncc > bestCorr) {
+        bestCorr = ncc;
+        bestLag = lag;
+      }
+    }
+
+    const intervalMs = (bestLag / this.sampleRateHz) * 1000;
+    const hr = 60000 / intervalMs;
+
+    console.log(`SCG autocorr: corr=${bestCorr.toFixed(3)} lag=${bestLag} HR=${hr.toFixed(1)} BPM interval=${intervalMs.toFixed(0)}ms`);
+
+    if (bestCorr < 0.15 || bestLag === 0) return; // too weak
+
+    // Emit IBI
+    const sample: IBISample = {
+      timestamp: this.elapsedMs,
+      interval: intervalMs,
+      quality: Math.min(1, bestCorr),
+    };
+    this.callbacks.onIBI?.(sample);
+
+    this.recentIBIs.push(intervalMs);
+    if (this.recentIBIs.length > 20) this.recentIBIs.shift();
+
+    // Update quality based on correlation strength
+    this.updateQuality(Math.min(1, bestCorr * 1.5));
   }
 
   private computeQuality(): number {
@@ -709,7 +785,7 @@ class SCGService {
     this.axisCalibrated = false;
     this.bestAxis = 'z';
     this.calibrationSamples = [];
-    this.filteredHistoryMaxLen = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.5);
+    this.filteredHistoryMaxLen = Math.round(DEFAULT_SAMPLE_RATE_HZ * 6);
     this.detectedPeakSampleIndices = [];
     this.sampleIndex = 0;
     this.TEMPLATE_WINDOW_SAMPLES = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.1);
