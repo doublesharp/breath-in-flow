@@ -64,7 +64,27 @@
           <!-- Protocol info -->
           <div class="text-4xl mb-4">{{ prepProtocol?.icon || '📊' }}</div>
           <h2 class="text-xl font-bold text-white mb-1">{{ prepProtocol?.name || 'Freeform Measurement' }}</h2>
-          <p class="text-sm text-white/50 mb-6">{{ prepProtocol ? formatDuration(prepProtocol.duration) : 'Manual stop' }}</p>
+
+          <!-- Duration slider -->
+          <div v-if="prepProtocol" class="w-full max-w-xs mb-6">
+            <div class="flex justify-between items-baseline mb-1">
+              <span class="text-lg font-bold text-white">{{ formatDuration(customDuration) }}</span>
+              <span v-if="customDuration < 60" class="text-[10px] text-amber-400/70">Longer = more accurate</span>
+            </div>
+            <input
+              type="range"
+              v-model.number="customDuration"
+              :min="30"
+              :max="prepProtocol.id === 'full-analysis' ? 600 : 300"
+              step="30"
+              class="w-full h-1.5 rounded-full appearance-none bg-white/10 accent-emerald-500"
+            />
+            <div class="flex justify-between text-[9px] text-white/20 mt-1">
+              <span>30s</span>
+              <span>{{ formatDuration(prepProtocol.id === 'full-analysis' ? 600 : 300) }}</span>
+            </div>
+          </div>
+          <p v-else class="text-sm text-white/50 mb-6">Manual stop</p>
 
           <!-- Sensor-specific instructions -->
           <div class="rounded-2xl bg-white/5 border border-white/10 p-5 mb-6 max-w-sm">
@@ -146,7 +166,7 @@
               <div class="text-xs text-white/50">{{ selectedProtocol ? selectedProtocol.name : 'Freeform' }}</div>
               <div class="text-2xl font-bold text-white font-mono">
                 {{ formatTimer(elapsedSeconds) }}
-                <span v-if="selectedProtocol" class="text-white/30 text-base">/ {{ formatTimer(selectedProtocol.duration) }}</span>
+                <span v-if="selectedProtocol" class="text-white/30 text-base">/ {{ formatTimer(customDuration) }}</span>
               </div>
             </div>
             <SignalQualityIndicator
@@ -159,7 +179,7 @@
           <!-- Progress bar -->
           <div v-if="selectedProtocol" class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-3">
             <div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-1000"
-              :style="{ width: `${Math.min(100, (elapsedSeconds / selectedProtocol.duration) * 100)}%` }" />
+              :style="{ width: `${Math.min(100, (elapsedSeconds / customDuration) * 100)}%` }" />
           </div>
 
           <!-- Sensor instructions -->
@@ -346,6 +366,7 @@ const prepProtocol = ref<Protocol | null>(null);
 const availableCameras = ref<{ deviceId: string; label: string }[]>([]);
 const selectedCameraId = ref('');
 const useTorch = ref(true);
+const customDuration = ref(120); // seconds, adjustable in prep screen
 const collectedIBIs = ref<IBISample[]>([]);
 const measurementNotes = ref('');
 const measurementStartTime = ref<Date>(new Date());
@@ -640,6 +661,7 @@ const permissionError = ref<string | null>(null);
 
 async function showPrepScreen(protocol: Protocol | null) {
   prepProtocol.value = protocol;
+  customDuration.value = protocol?.duration ?? 120;
   permissionError.value = null;
   showPrep.value = true;
 
@@ -708,7 +730,7 @@ async function startProtocol(protocol: Protocol) {
 
   timerInterval = setInterval(() => {
     elapsedSeconds.value++;
-    if (selectedProtocol.value && elapsedSeconds.value >= selectedProtocol.value.duration) {
+    if (selectedProtocol.value && elapsedSeconds.value >= customDuration.value) {
       stopMeasurement();
     }
   }, 1000);

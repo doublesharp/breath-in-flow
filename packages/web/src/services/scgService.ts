@@ -535,14 +535,20 @@ class SCGService {
 
   // ─── Internal helpers ────────────────────────────────────────────────────────
 
+  private axisCalibrated = false;
+  private bestAxis: 'x' | 'y' | 'z' = 'z';
+  private calibrationSamples: { x: number; y: number; z: number }[] = [];
+
   /**
-   * Extract acceleration signal from the event.
-   * Uses total magnitude sqrt(x²+y²+z²) which works regardless of phone orientation.
-   * The high-pass filter removes the static gravity baseline (~9.8 m/s²).
+   * Extract the best acceleration axis for cardiac signal detection.
+   *
+   * Auto-detects which axis has gravity (largest absolute mean) during the
+   * first 30 samples. The gravity axis is perpendicular to the chest surface
+   * and carries the strongest cardiac vibration signal.
+   *
+   * Works in any orientation: face-up (Z), face-down (Z), on-side (X or Y).
    */
   private extractSignal(event: DeviceMotionEvent): number | null {
-    // Prefer accelerationIncludingGravity — higher resolution on many devices
-    // and the high-pass filter removes the gravity component anyway.
     const acc = event.accelerationIncludingGravity ?? event.acceleration;
     if (!acc) return null;
 
@@ -550,8 +556,30 @@ class SCGService {
     const y = acc.y ?? 0;
     const z = acc.z ?? 0;
 
-    // Total magnitude — orientation-independent
-    return Math.sqrt(x * x + y * y + z * z);
+    // Auto-calibrate: find the axis carrying gravity (largest mean absolute value)
+    if (!this.axisCalibrated) {
+      this.calibrationSamples.push({ x, y, z });
+      if (this.calibrationSamples.length >= 30) {
+        const avgX = this.calibrationSamples.reduce((s, v) => s + Math.abs(v.x), 0) / 30;
+        const avgY = this.calibrationSamples.reduce((s, v) => s + Math.abs(v.y), 0) / 30;
+        const avgZ = this.calibrationSamples.reduce((s, v) => s + Math.abs(v.z), 0) / 30;
+
+        if (avgX >= avgY && avgX >= avgZ) this.bestAxis = 'x';
+        else if (avgY >= avgX && avgY >= avgZ) this.bestAxis = 'y';
+        else this.bestAxis = 'z';
+
+        this.axisCalibrated = true;
+        console.log(`SCG: Auto-calibrated axis=${this.bestAxis} (avgX=${avgX.toFixed(2)} avgY=${avgY.toFixed(2)} avgZ=${avgZ.toFixed(2)})`);
+      }
+      return z; // Use Z during calibration
+    }
+
+    // Return the gravity-aligned axis
+    switch (this.bestAxis) {
+      case 'x': return x;
+      case 'y': return y;
+      case 'z': return z;
+    }
   }
 
   private estimateSampleRateFromWallClock(): void {
@@ -605,11 +633,9 @@ class SCGService {
     const minPeakDistance = Math.floor(fs * (60 / MAX_HEART_RATE_BPM));
     this.peakDetector = new StreamingPeakDetector({
       minPeakDistance,
-      thresholdFactor: 0.6,
+      thresholdFactor: 0.3,  // Lower for quantized accelerometer data (0.1 m/s² resolution)
       adaptiveWindow: Math.max(10, Math.round(fs * 0.5)),
-      // Reject secondary ringing bumps: a valid cardiac peak must be at least
-      // 25% of the running signal range above its surrounding valley.
-      minProminence: 0.25,
+      minProminence: 0.1,    // Lower — cardiac peaks are small with quantized data
     });
   }
 
@@ -680,6 +706,9 @@ class SCGService {
     this.template = null;
     this.templateMatchCount = 0;
     this.filteredHistory = [];
+    this.axisCalibrated = false;
+    this.bestAxis = 'z';
+    this.calibrationSamples = [];
     this.filteredHistoryMaxLen = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.5);
     this.detectedPeakSampleIndices = [];
     this.sampleIndex = 0;
