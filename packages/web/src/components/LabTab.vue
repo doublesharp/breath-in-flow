@@ -504,81 +504,111 @@ function drawRawSignal() {
     return;
   }
 
-  // Show the most recent 5 seconds based on timestamps (works at any sample rate)
+  // Show the most recent 5 seconds based on timestamps
   const VISIBLE_SECONDS = 5;
   const latestTime = data[data.length - 1].time;
   const cutoffTime = latestTime - VISIBLE_SECONDS * 1000;
   let startIdx = data.length - 1;
   while (startIdx > 0 && data[startIdx - 1].time >= cutoffTime) startIdx--;
   const visible = data.slice(startIdx);
+  if (visible.length < 3) return;
 
-  // Auto-scale Y using percentiles to ignore outlier spikes
-  const sorted = visible.map(d => d.value).sort((a, b) => a - b);
-  const p2 = sorted[Math.floor(sorted.length * 0.05)] ?? 0;
-  const p98 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
-  const minV = p2;
-  const maxV = p98;
+  // Apply 5-point moving average for smoother display
+  const smoothed: number[] = [];
+  const SMOOTH_W = 5;
+  for (let i = 0; i < visible.length; i++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - Math.floor(SMOOTH_W / 2)); j <= Math.min(visible.length - 1, i + Math.floor(SMOOTH_W / 2)); j++) {
+      sum += visible[j].value;
+      count++;
+    }
+    smoothed.push(sum / count);
+  }
+
+  // IQR-based scale — very robust against movement spikes
+  const sortedSmooth = [...smoothed].sort((a, b) => a - b);
+  const q1 = sortedSmooth[Math.floor(sortedSmooth.length * 0.25)] ?? 0;
+  const q3 = sortedSmooth[Math.floor(sortedSmooth.length * 0.75)] ?? 0;
+  const iqr = q3 - q1 || 0.01;
+  // Show 2x IQR around the median for tight, stable scaling
+  const med = sortedSmooth[Math.floor(sortedSmooth.length * 0.5)] ?? 0;
+  const minV = med - iqr * 1.5;
+  const maxV = med + iqr * 1.5;
   const range = maxV - minV || 0.01;
-  const pad = range * 0.2;
 
-  // Background gradient
+  // Helper to map value to Y pixel
+  const toY = (v: number) => {
+    const clamped = Math.max(minV, Math.min(maxV, v));
+    return h - ((clamped - minV) / range) * h;
+  };
+
+  // Gradient fill under curve
   const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-  bgGrad.addColorStop(0, 'rgba(52, 211, 153, 0.03)');
+  bgGrad.addColorStop(0, 'rgba(52, 211, 153, 0.06)');
   bgGrad.addColorStop(1, 'rgba(52, 211, 153, 0)');
-
-  // Draw filled area under curve
   ctx.beginPath();
   ctx.moveTo(0, h);
-  for (let i = 0; i < visible.length; i++) {
-    const x = (i / (visible.length - 1)) * w;
-    const clamped = Math.max(minV - pad, Math.min(maxV + pad, visible[i].value));
-    const y = h - ((clamped - minV + pad) / (range + 2 * pad)) * h;
-    ctx.lineTo(x, y);
+  for (let i = 0; i < smoothed.length; i++) {
+    ctx.lineTo((i / (smoothed.length - 1)) * w, toY(smoothed[i]));
   }
   ctx.lineTo(w, h);
   ctx.closePath();
   ctx.fillStyle = bgGrad;
   ctx.fill();
 
-  // Draw line
+  // Draw smoothed signal line
   ctx.beginPath();
-  ctx.strokeStyle = 'rgba(52, 211, 153, 0.9)';
+  ctx.strokeStyle = 'rgba(52, 211, 153, 0.85)';
   ctx.lineWidth = 1.5;
-  for (let i = 0; i < visible.length; i++) {
-    const x = (i / (visible.length - 1)) * w;
-    const clamped = Math.max(minV - pad, Math.min(maxV + pad, visible[i].value));
-    const y = h - ((clamped - minV + pad) / (range + 2 * pad)) * h;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  for (let i = 0; i < smoothed.length; i++) {
+    const x = (i / (smoothed.length - 1)) * w;
+    if (i === 0) ctx.moveTo(x, toY(smoothed[i]));
+    else ctx.lineTo(x, toY(smoothed[i]));
   }
   ctx.stroke();
 
-  // Zero line (center reference)
-  const zeroY = h - ((0 - minV + pad) / (range + 2 * pad)) * h;
-  if (zeroY > 0 && zeroY < h) {
-    ctx.beginPath();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 0.5;
-    ctx.setLineDash([4, 4]);
-    ctx.moveTo(0, zeroY);
-    ctx.lineTo(w, zeroY);
-    ctx.stroke();
-    ctx.setLineDash([]);
+  // Overlay detected heartbeat markers from recent IBIs
+  if (hrDataPoints.value.length > 0) {
+    const recentBeats = hrDataPoints.value.filter(p => {
+      const beatTimeMs = p.time * 1000; // p.time is in seconds elapsed
+      return beatTimeMs >= (elapsedSeconds.value * 1000 - VISIBLE_SECONDS * 1000);
+    });
+
+    // Show beat markers as vertical ticks at the top of the chart
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.7)'; // amber
+    for (const beat of recentBeats) {
+      // Map beat time to X position (approximate — beats are in seconds, chart is in ms)
+      const beatMs = beat.time * 1000;
+      const xFrac = (beatMs - (elapsedSeconds.value * 1000 - VISIBLE_SECONDS * 1000)) / (VISIBLE_SECONDS * 1000);
+      if (xFrac >= 0 && xFrac <= 1) {
+        const x = xFrac * w;
+        // Small triangle/dot at top
+        ctx.beginPath();
+        ctx.arc(x, 6, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Show live BPM in top-right
+    const lastBeat = hrDataPoints.value[hrDataPoints.value.length - 1];
+    if (lastBeat) {
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.9)';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${lastBeat.hr.toFixed(0)} BPM`, w - 4, 14);
+    }
   }
 
-  // Labels
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.font = '9px monospace';
-  ctx.textAlign = 'left';
-  ctx.fillText(maxV.toFixed(2), 2, 10);
-  ctx.fillText(minV.toFixed(2), 2, h - 2);
-
-  // Latest value + points count
-  const lastVal = visible[visible.length - 1].value;
-  ctx.textAlign = 'right';
-  ctx.fillText(`${lastVal.toFixed(3)}`, w - 2, h - 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
-  ctx.fillText(`${data.length}`, w - 2, 10);
+  // Subtle center line
+  const centerY = h / 2;
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([3, 3]);
+  ctx.moveTo(0, centerY);
+  ctx.lineTo(w, centerY);
+  ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 // Redraw raw signal at ~15fps when measuring
