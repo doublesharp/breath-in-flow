@@ -4,7 +4,7 @@ import HrTachogram from '@/components/hrv/HrTachogram.vue';
 
 // Mock requestAnimationFrame / cancelAnimationFrame
 beforeEach(() => {
-  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+  vi.stubGlobal('requestAnimationFrame', (_cb: FrameRequestCallback) => {
     // Don't actually call cb to avoid infinite loop in tests
     return 1;
   });

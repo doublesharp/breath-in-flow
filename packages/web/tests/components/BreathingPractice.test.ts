@@ -426,7 +426,7 @@ describe('BreathingPractice.vue', () => {
 
     it('saves configuration with custom name', async () => {
       const createConfigMock = vi.fn();
-      (global as Record<string, unknown>).createConfigMock = createConfigMock;
+      (globalThis as Record<string, unknown>).createConfigMock = createConfigMock;
 
       const wrapper = mount(BreathingPractice, {
         global: {
@@ -444,7 +444,7 @@ describe('BreathingPractice.vue', () => {
 
     it('saves session notes when completing a session', async () => {
       const updateSessionMock = vi.fn();
-      (global as Record<string, unknown>).updateSessionMock = updateSessionMock;
+      (globalThis as Record<string, unknown>).updateSessionMock = updateSessionMock;
 
       const wrapper = mount(BreathingPractice, {
         global: {

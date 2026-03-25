@@ -305,9 +305,9 @@ function confirmDeleteAll() {
 
 function formatSessionForDelete(sessionId: string): string {
   const session = sessions.value.find((s) => s.id === sessionId);
-  if (!session || !session.config) return 'Unknown session';
+  if (!session || !session.configSnapshot) return 'Unknown session';
 
-  const date = new Date(session.timestamp).toLocaleDateString('en-US', {
+  const date = new Date(session.startedAt).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -315,7 +315,7 @@ function formatSessionForDelete(sessionId: string): string {
     minute: '2-digit',
   });
 
-  const pattern = `${session.config.inhaleTime ?? 0}s / ${session.config.inhaleHoldTime ?? 0}s / ${session.config.exhaleTime ?? 0}s / ${session.config.exhaleHoldTime ?? 0}s`;
+  const pattern = `${session.configSnapshot.inhaleTime ?? 0}s / ${session.configSnapshot.inhaleHoldTime ?? 0}s / ${session.configSnapshot.exhaleTime ?? 0}s / ${session.configSnapshot.exhaleHoldTime ?? 0}s`;
 
   return `${date} • ${pattern}`;
 }

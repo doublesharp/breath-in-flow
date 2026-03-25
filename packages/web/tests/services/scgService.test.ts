@@ -15,10 +15,10 @@ function dispatchMotionEvent(
   acceleration: { x: number; y: number; z: number },
   interval: number = 10,
 ): void {
-  const event = new Event('devicemotion') as DeviceMotionEvent & Record<string, unknown>;
-  event['accelerationIncludingGravity'] = acceleration;
-  event['acceleration'] = acceleration;
-  event['interval'] = interval;
+  const event = new Event('devicemotion') as DeviceMotionEvent;
+  Object.defineProperty(event, 'accelerationIncludingGravity', { value: acceleration });
+  Object.defineProperty(event, 'acceleration', { value: acceleration });
+  Object.defineProperty(event, 'interval', { value: interval });
   window.dispatchEvent(event);
 }
 
@@ -165,8 +165,8 @@ describe('scgService', () => {
   describe('DeviceMotionEvent unavailable', () => {
     it('emits error when DeviceMotionEvent is missing', async () => {
       // Temporarily remove DeviceMotionEvent from window
-      const original = (window as Record<string, unknown>)['DeviceMotionEvent'];
-      delete (window as Record<string, unknown>)['DeviceMotionEvent'];
+      const original = (window as unknown as Record<string, unknown>)['DeviceMotionEvent'];
+      delete (window as unknown as Record<string, unknown>)['DeviceMotionEvent'];
 
       await scgService.start();
 
@@ -175,7 +175,7 @@ describe('scgService', () => {
       expect(errors[0].message).toMatch(/not available/i);
 
       // Restore
-      (window as Record<string, unknown>)['DeviceMotionEvent'] = original;
+      (window as unknown as Record<string, unknown>)['DeviceMotionEvent'] = original;
     });
   });
 

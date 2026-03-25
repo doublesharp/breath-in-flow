@@ -25,7 +25,7 @@ const localStorageMock = (() => {
   };
 })();
 
-Object.defineProperty(global, 'localStorage', {
+Object.defineProperty(globalThis, 'localStorage', {
   value: localStorageMock,
 });
 
@@ -57,7 +57,7 @@ function createTestConfigInput(
 }
 
 describe('useStorage', () => {
-  const originalLocalStorage = global.localStorage;
+  const originalLocalStorage = globalThis.localStorage;
 
   beforeEach(() => {
     localStorageMock.clear();
@@ -66,7 +66,7 @@ describe('useStorage', () => {
 
   afterEach(() => {
     vi.resetModules();
-    Object.defineProperty(global, 'localStorage', {
+    Object.defineProperty(globalThis, 'localStorage', {
       value: originalLocalStorage,
     });
     vi.restoreAllMocks();
@@ -538,7 +538,7 @@ describe('useStorage', () => {
         clear: vi.fn(),
       };
 
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(globalThis, 'localStorage', {
         value: mockLS,
       });
 
@@ -563,7 +563,7 @@ describe('useStorage', () => {
         clear: vi.fn(),
       };
 
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(globalThis, 'localStorage', {
         value: mockLS,
       });
 
@@ -590,7 +590,7 @@ describe('useStorage', () => {
         clear: vi.fn(),
       };
 
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(globalThis, 'localStorage', {
         value: mockLS,
       });
 
@@ -615,7 +615,7 @@ describe('useStorage', () => {
         clear: vi.fn(),
       };
 
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(globalThis, 'localStorage', {
         value: mockLS,
       });
 
@@ -635,7 +635,7 @@ describe('useStorage', () => {
         clear: vi.fn(),
       };
 
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(globalThis, 'localStorage', {
         value: mockLS,
       });
 
@@ -802,7 +802,7 @@ describe('useStorage', () => {
         clear: vi.fn(),
       };
 
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(globalThis, 'localStorage', {
         value: mockLS,
       });
 

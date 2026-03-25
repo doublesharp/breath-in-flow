@@ -1,114 +1,74 @@
 <template>
   <div class="space-y-6">
     <!-- Section A: Standalone HRV Measurement -->
-    <div class="space-y-6">
-      <h2 class="text-xl font-bold text-white">HRV Measurement</h2>
-
-      <!-- Mode toggle: Guided / Freeform -->
-      <div class="flex gap-2">
-        <button
-          @click="mode = 'guided'"
-          :class="[
-            'px-4 py-2 rounded-xl font-medium transition-all duration-300',
-            mode === 'guided'
-              ? 'text-white bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg'
-              : 'text-slate-400 hover:text-white bg-white/5 hover:bg-white/10',
-          ]"
-        >
-          Guided
-        </button>
-        <button
-          @click="mode = 'freeform'"
-          :class="[
-            'px-4 py-2 rounded-xl font-medium transition-all duration-300',
-            mode === 'freeform'
-              ? 'text-white bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg'
-              : 'text-slate-400 hover:text-white bg-white/5 hover:bg-white/10',
-          ]"
-        >
-          Freeform
-        </button>
-      </div>
-
-      <!-- Sensor selector (shared by both guided and freeform) -->
-      <div v-if="!isMeasuring && !showResults" class="space-y-3" data-testid="sensor-selection">
-        <label class="text-sm font-medium text-white/80">Sensor</label>
-        <div class="grid grid-cols-3 gap-2">
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-white">HRV Measurement</h2>
+        <div class="flex gap-1">
           <button
-            v-for="s in sensorOptions"
-            :key="s.value"
-            @click="selectedSensor = s.value"
-            :class="[
-              'p-3 rounded-xl border text-center transition-all text-sm',
-              selectedSensor === s.value
-                ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                : 'border-white/10 bg-white/5 text-white/60',
-            ]"
-          >
-            {{ s.label }}
-          </button>
+            @click="mode = 'guided'"
+            :class="['px-3 py-1 rounded-lg text-xs font-medium transition-all', mode === 'guided' ? 'text-white bg-emerald-600' : 'text-white/40 bg-white/5']"
+          >Guided</button>
+          <button
+            @click="mode = 'freeform'"
+            :class="['px-3 py-1 rounded-lg text-xs font-medium transition-all', mode === 'freeform' ? 'text-white bg-emerald-600' : 'text-white/40 bg-white/5']"
+          >Freeform</button>
         </div>
-        <p class="text-xs text-white/30">
-          {{ selectedSensor === 'camera' ? 'Place fingertip over rear camera lens. Flash will illuminate your finger.' : selectedSensor === 'accelerometer' ? 'Place phone flat on your chest (screen down). Stay very still.' : 'Phone on chest, finger on rear camera. Best accuracy.' }}
-        </p>
       </div>
 
-      <!-- Guided protocols (default) -->
-      <div v-if="mode === 'guided' && !isMeasuring && !showResults" class="space-y-4">
-        <div class="grid gap-3">
-          <button
-            v-for="p in protocols"
-            :key="p.id"
-            @click="pendingProtocol = p"
-            :class="[
-              'flex items-start gap-4 p-4 rounded-2xl text-left transition-all duration-300 border',
-              pendingProtocol?.id === p.id
-                ? 'bg-emerald-500/10 border-emerald-500/30'
-                : 'bg-white/5 hover:bg-white/10 border-white/5 hover:border-white/10',
-            ]"
-          >
-            <span class="text-2xl mt-0.5">{{ p.icon }}</span>
-            <div class="flex-1">
-              <div class="font-semibold text-white">{{ p.name }}</div>
-              <div class="text-sm text-white/50 mt-1">{{ p.description }}</div>
-              <div class="text-xs text-white/30 mt-2">{{ formatDuration(p.duration) }}</div>
-            </div>
-          </button>
-        </div>
-        <!-- Permission error -->
-        <div v-if="permissionError" class="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
-          {{ permissionError }}
-        </div>
-
+      <!-- Sensor selector — compact row -->
+      <div class="flex gap-2" data-testid="sensor-selection">
         <button
-          v-if="pendingProtocol"
-          @click="startProtocol(pendingProtocol)"
-          class="w-full btn-primary py-3 rounded-xl font-semibold"
+          v-for="s in sensorOptions"
+          :key="s.value"
+          @click="selectedSensor = s.value"
+          :class="['flex-1 py-2 rounded-lg border text-center text-xs font-medium transition-all',
+            selectedSensor === s.value ? 'border-emerald-500 bg-emerald-500/10 text-white' : 'border-white/10 bg-white/5 text-white/50']"
+        >{{ s.label }}</button>
+      </div>
+
+      <!-- Permission error -->
+      <div v-if="permissionError" class="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-xs text-red-400">
+        {{ permissionError }}
+      </div>
+
+      <!-- Guided protocols — compact single-line cards -->
+      <div v-if="mode === 'guided'" class="space-y-2">
+        <button
+          v-for="p in protocols"
+          :key="p.id"
+          @click="startProtocol(p)"
+          class="flex items-center gap-3 w-full p-3 rounded-xl text-left transition-all bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/30 active:scale-[0.98]"
         >
-          Start {{ pendingProtocol.name }}
+          <span class="text-xl shrink-0">{{ p.icon }}</span>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-white text-sm">{{ p.name }}</div>
+            <div class="text-xs text-white/40 truncate">{{ p.description }}</div>
+          </div>
+          <span class="text-xs text-white/30 shrink-0">{{ formatDuration(p.duration) }}</span>
         </button>
       </div>
 
-      <!-- Freeform (start/stop manually) -->
-      <div v-if="mode === 'freeform' && !isMeasuring && !showResults" class="space-y-4">
+      <!-- Freeform — start button -->
+      <div v-if="mode === 'freeform'">
         <button @click="startFreeform" class="w-full btn-primary py-3 rounded-xl font-semibold">
           Start Measurement
         </button>
       </div>
+    </div>
 
-      <!-- Active measurement view -->
-      <div v-if="isMeasuring" class="space-y-4">
-        <div class="card-solid !p-4">
+    <!-- ═══ FULLSCREEN MEASUREMENT MODAL ═══ -->
+    <Teleport to="body">
+      <div v-if="isMeasuring || showResults" class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom">
+        <!-- Measuring view -->
+        <div v-if="isMeasuring" class="flex flex-col h-full p-4">
+          <!-- Header -->
           <div class="flex items-center justify-between mb-4">
             <div>
-              <div class="text-sm text-white/50">
-                {{ selectedProtocol ? selectedProtocol.name : 'Freeform Measurement' }}
-              </div>
+              <div class="text-xs text-white/50">{{ selectedProtocol ? selectedProtocol.name : 'Freeform' }}</div>
               <div class="text-2xl font-bold text-white font-mono">
                 {{ formatTimer(elapsedSeconds) }}
-                <span v-if="selectedProtocol" class="text-white/30 text-lg">
-                  / {{ formatTimer(selectedProtocol.duration) }}
-                </span>
+                <span v-if="selectedProtocol" class="text-white/30 text-base">/ {{ formatTimer(selectedProtocol.duration) }}</span>
               </div>
             </div>
             <SignalQualityIndicator
@@ -118,95 +78,72 @@
             />
           </div>
 
-          <!-- Progress bar for guided -->
-          <div v-if="selectedProtocol" class="w-full h-2 rounded-full bg-white/10 overflow-hidden mb-4">
-            <div
-              class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-1000"
-              :style="{ width: `${Math.min(100, (elapsedSeconds / selectedProtocol.duration) * 100)}%` }"
-            />
+          <!-- Progress bar -->
+          <div v-if="selectedProtocol" class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-3">
+            <div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-1000"
+              :style="{ width: `${Math.min(100, (elapsedSeconds / selectedProtocol.duration) * 100)}%` }" />
           </div>
 
-          <!-- Sensor placement instructions -->
-          <p class="text-xs text-white/40 mb-4">
-            <template v-if="selectedSensor === 'camera'">
-              Place your fingertip gently over the rear camera lens. Keep still.
-            </template>
-            <template v-else-if="selectedSensor === 'accelerometer'">
-              Place the phone flat on your chest (sternum), screen up. Breathe normally and stay still.
-            </template>
-            <template v-else>
-              Place your fingertip over the camera and the phone on your chest for dual-sensor mode.
-            </template>
+          <!-- Sensor instructions -->
+          <p class="text-xs text-white/40 mb-3">
+            {{ selectedSensor === 'camera' ? 'Finger on rear camera lens. Keep still.' : selectedSensor === 'accelerometer' ? 'Phone flat on chest. Breathe normally.' : 'Phone on chest, finger on camera.' }}
           </p>
 
-          <!-- HR tachogram -->
-          <div v-if="hrDataPoints.length > 0">
-            <div class="text-xs text-white/40 mb-1">Heart Rate</div>
-            <HrTachogram
-              :hr-data="hrDataPoints"
-              :duration="selectedProtocol ? selectedProtocol.duration : Math.max(60, elapsedSeconds)"
-              :height="100"
-            />
-          </div>
-          <div v-else class="rounded-xl bg-white/5 p-4 text-center text-sm text-white/30">
-            Waiting for heart rate data...
+          <!-- Charts area — fills remaining space -->
+          <div class="flex-1 space-y-3 min-h-0 overflow-y-auto">
+            <!-- HR tachogram -->
+            <div v-if="hrDataPoints.length > 0">
+              <div class="text-xs text-white/40 mb-1">Heart Rate</div>
+              <HrTachogram :hr-data="hrDataPoints" :duration="selectedProtocol ? selectedProtocol.duration : Math.max(60, elapsedSeconds)" :height="100" />
+            </div>
+            <div v-else class="rounded-xl bg-white/5 p-4 text-center text-sm text-white/30">
+              Waiting for heart rate data...
+            </div>
+
+            <!-- Raw sensor signal -->
+            <div>
+              <div class="text-xs text-white/40 mb-1">Raw Sensor Signal</div>
+              <canvas ref="rawSignalCanvas" class="w-full rounded-lg bg-slate-900/50" height="80" />
+            </div>
+
+            <!-- Debug toggle + log -->
+            <button @click="showDebug = !showDebug" class="text-[10px] text-white/15 hover:text-white/30 w-full text-center">
+              {{ showDebug ? 'Hide' : 'Show' }} Debug
+            </button>
+            <div v-if="showDebug" class="rounded-lg bg-black/50 border border-white/5 p-2 max-h-32 overflow-y-auto font-mono text-[9px] text-white/40 space-y-px">
+              <div v-for="(line, i) in debugLog" :key="i">{{ line }}</div>
+            </div>
           </div>
 
-          <!-- Raw sensor signal chart -->
-          <div>
-            <div class="text-xs text-white/40 mb-1">Raw Sensor Signal</div>
-            <canvas ref="rawSignalCanvas" class="w-full rounded-lg bg-slate-900/50" height="80" />
-          </div>
+          <!-- Stop button — pinned to bottom -->
+          <button @click="stopMeasurement" class="mt-3 w-full btn-danger py-3 rounded-xl font-semibold shrink-0">
+            Stop Measurement
+          </button>
         </div>
 
-        <button @click="stopMeasurement" class="w-full btn-danger py-3 rounded-xl font-semibold">
-          Stop Measurement
-        </button>
-
-        <!-- Debug toggle -->
-        <button @click="showDebug = !showDebug" class="text-xs text-white/20 hover:text-white/40 w-full text-center py-1">
-          {{ showDebug ? 'Hide' : 'Show' }} Debug Log
-        </button>
-
-        <!-- Debug log panel -->
-        <div v-if="showDebug" class="rounded-xl bg-black/40 border border-white/5 p-3 max-h-48 overflow-y-auto font-mono text-[10px] text-white/50 space-y-0.5">
-          <div v-if="debugLog.length === 0" class="text-white/20">No log entries yet...</div>
-          <div v-for="(line, i) in debugLog" :key="i">{{ line }}</div>
-        </div>
-      </div>
-
-      <!-- Results view -->
-      <div v-if="showResults && currentAnalysis" class="space-y-4">
-        <HrvMetricsDashboard :analysis="currentAnalysis" />
-        <FrequencySpectrum
-          :spectrum="currentAnalysis.frequencyDomain.spectrum"
-          :lf-peak="currentAnalysis.frequencyDomain.lfPeak"
-          :hf-peak="currentAnalysis.frequencyDomain.hfPeak"
-        />
-        <PoincarePlot :rr-intervals="currentAnalysis.raw.rrIntervals" />
-
-        <!-- Notes -->
-        <div class="card-solid !p-4">
-          <label class="text-sm font-medium text-white/80 block mb-2">Notes</label>
-          <textarea
-            v-model="measurementNotes"
-            rows="3"
-            class="form-input resize-none w-full"
-            placeholder="Add any notes about this measurement..."
+        <!-- Results view -->
+        <div v-if="showResults && currentAnalysis" class="p-4 space-y-4">
+          <h2 class="text-lg font-bold text-white">Results</h2>
+          <HrvMetricsDashboard :analysis="currentAnalysis" />
+          <FrequencySpectrum
+            :spectrum="currentAnalysis.frequencyDomain.spectrum"
+            :lf-peak="currentAnalysis.frequencyDomain.lfPeak"
+            :hf-peak="currentAnalysis.frequencyDomain.hfPeak"
           />
-        </div>
+          <PoincarePlot :rr-intervals="currentAnalysis.raw.rrIntervals" />
 
-        <!-- Actions -->
-        <div class="flex gap-3">
-          <button @click="saveResults" class="flex-1 btn-primary py-3 rounded-xl font-semibold">
-            Save &amp; Close
-          </button>
-          <button @click="discardResults" class="flex-1 btn-secondary py-3 rounded-xl font-semibold">
-            Discard
-          </button>
+          <div class="card-solid !p-4">
+            <label class="text-sm font-medium text-white/80 block mb-2">Notes</label>
+            <textarea v-model="measurementNotes" rows="2" class="form-input resize-none w-full" placeholder="Add notes..." />
+          </div>
+
+          <div class="flex gap-3">
+            <button @click="saveResults" class="flex-1 btn-primary py-3 rounded-xl font-semibold">Save</button>
+            <button @click="discardResults" class="flex-1 btn-secondary py-3 rounded-xl font-semibold">Discard</button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Section B: Resonance Frequency Assessment -->
     <div class="space-y-4">
@@ -320,7 +257,6 @@ const sensorQuality = ref(0);
 const elapsedSeconds = ref(0);
 const selectedSensor = ref<'camera' | 'accelerometer' | 'dual'>('accelerometer');
 const selectedProtocol = ref<Protocol | null>(null);
-const pendingProtocol = ref<Protocol | null>(null);
 const collectedIBIs = ref<IBISample[]>([]);
 const measurementNotes = ref('');
 const measurementStartTime = ref<Date>(new Date());
@@ -340,7 +276,8 @@ const RAW_SIGNAL_MAX_POINTS = 500; // ~5-8 seconds at 60-100Hz
 const DEBUG_LOG_MAX = 100;
 
 function addDebugLine(msg: string) {
-  const ts = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 1 });
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-US', { hour12: false }) + '.' + String(now.getMilliseconds()).padStart(3, '0').slice(0, 1);
   debugLog.value.push(`[${ts}] ${msg}`);
   if (debugLog.value.length > DEBUG_LOG_MAX) debugLog.value.shift();
 }

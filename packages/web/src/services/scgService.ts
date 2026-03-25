@@ -80,12 +80,7 @@ const ENVELOPE_SMOOTH_SECONDS = 0.15;
 /** Maximum plausible heart rate (limits minimum peak distance in samples). */
 const MAX_HEART_RATE_BPM = 200;
 
-/** Window used to estimate motion variance for quality gating (seconds). */
-const MOTION_VARIANCE_WINDOW_SECONDS = 1;
 
-/** Raw acceleration variance threshold above which the user is considered moving. */
-// Breathing causes ~0.3-1.0 variance, walking causes ~5+. Set high enough to allow breathing.
-const MOTION_VARIANCE_THRESHOLD = 5.0; // (m/s²)²
 
 /** Time without a detected peak before quality is zeroed (synthetic ms). */
 const NO_PEAK_TIMEOUT_MS = 3000;
@@ -129,11 +124,6 @@ class SCGService {
   private envelopeBuffer: number[] = [];
   private envelopeSmoothSamples: number = Math.round(DEFAULT_SAMPLE_RATE_HZ * ENVELOPE_SMOOTH_SECONDS);
 
-  // Motion quality monitoring
-  private rawAccBuffer: number[] = [];
-  private motionWindowSamples: number = Math.round(
-    DEFAULT_SAMPLE_RATE_HZ * MOTION_VARIANCE_WINDOW_SECONDS,
-  );
 
   // IBI tracking
   private lastPeakElapsedMs: number | null = null;
@@ -162,8 +152,6 @@ class SCGService {
   // Bound event handler reference (needed for removeEventListener)
   private boundHandleMotion = this.handleMotion.bind(this);
   private capacitorListenerId: { remove: () => Promise<void> } | null = null;
-  private useNativeMotion = false;
-
   // ─── Public API ─────────────────────────────────────────────────────────────
 
   public setCallbacks(callbacks: SCGCallbacks): void {
@@ -188,7 +176,6 @@ class SCGService {
     if (Capacitor.isNativePlatform()) {
       try {
         console.log('SCG: Using Capacitor Motion plugin (native)');
-        this.useNativeMotion = true;
         this.capacitorListenerId = await Motion.addListener('accel', (event) => {
           // Convert Capacitor motion event to DeviceMotionEvent-like format
           const fakeEvent = {
@@ -203,7 +190,6 @@ class SCGService {
         return;
       } catch (err) {
         console.warn('SCG: Capacitor Motion failed, falling back to web API:', err);
-        this.useNativeMotion = false;
       }
     }
 
@@ -252,7 +238,6 @@ class SCGService {
     if (typeof window !== 'undefined') {
       window.removeEventListener('devicemotion', this.boundHandleMotion);
     }
-    this.useNativeMotion = false;
     this.resetInternals();
     this.setStatus('idle');
   }
@@ -562,15 +547,6 @@ class SCGService {
     return null;
   }
 
-  private extractMagnitude(event: DeviceMotionEvent): number | null {
-    const acc = event.acceleration ?? event.accelerationIncludingGravity;
-    if (!acc) return null;
-    const x = acc.x ?? 0;
-    const y = acc.y ?? 0;
-    const z = acc.z ?? 0;
-    return Math.sqrt(x * x + y * y + z * z);
-  }
-
   private estimateSampleRateFromWallClock(): void {
     const timestamps = this.rateEstimationTimestamps;
     if (timestamps.length < 2) return;
@@ -604,8 +580,6 @@ class SCGService {
     const fs = this.sampleRateHz;
     this.hpFilter = createHighpassFilter(HP_CUTOFF_HZ, fs);
     this.lpFilter = createLowpassFilter(LP_CUTOFF_HZ, fs);
-
-    this.motionWindowSamples = Math.max(1, Math.round(fs * MOTION_VARIANCE_WINDOW_SECONDS));
 
     this.TEMPLATE_WINDOW_SAMPLES = Math.round(fs * 0.1); // ±100 ms
     this.filteredHistoryMaxLen = Math.max(
@@ -686,15 +660,11 @@ class SCGService {
     this.hilbertCoeffs = [];
     this.envelopeBuffer = [];
     this.envelopeSmoothSamples = Math.round(DEFAULT_SAMPLE_RATE_HZ * ENVELOPE_SMOOTH_SECONDS);
-    this.rawAccBuffer = [];
     this.rateEstimationTimestamps = [];
     this.rateEstimated = false;
     this.sampleRateHz = DEFAULT_SAMPLE_RATE_HZ;
     this.lastIntervalMs = DEFAULT_INTERVAL_MS;
     this.elapsedMs = 0;
-    this.motionWindowSamples = Math.round(
-      DEFAULT_SAMPLE_RATE_HZ * MOTION_VARIANCE_WINDOW_SECONDS,
-    );
     this.lastPeakElapsedMs = null;
     this.lastPeakDetectionElapsedMs = null;
     this.recentIBIs = [];

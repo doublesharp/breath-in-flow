@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import type { HRVAnalysis } from '@breath-in-flow/shared';
-import { ref, watch, onMounted, computed } from 'vue';
+import { ref, watch, onMounted } from 'vue';
 
 interface Trial {
   rate: number;

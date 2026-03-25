@@ -212,7 +212,7 @@
 
     <main class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <transition name="fade" mode="out-in">
-        <BreathingPractice v-if="activeTab === 'practice'" key="practice" @switch-tab="(tab) => activeTab = tab" />
+        <BreathingPractice v-if="activeTab === 'practice'" key="practice" @switch-tab="(tab: string) => (activeTab = tab as 'practice' | 'lab' | 'history' | 'configs' | 'analytics')" />
         <LabTab v-else-if="activeTab === 'lab'" key="lab" />
         <SessionHistory v-else-if="activeTab === 'history'" key="history" />
         <PracticePresets v-else-if="activeTab === 'configs'" key="configs" @load-config="loadConfig" />

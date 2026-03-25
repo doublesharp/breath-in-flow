@@ -115,7 +115,7 @@ describe('PracticePresets.vue', () => {
     }));
 
     // Mock confirm to return false
-    (global as unknown as Record<string, unknown>).confirm = () => false;
+    (globalThis as unknown as Record<string, unknown>).confirm = () => false;
 
     const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
     const wrapper = mount(PracticePresets as unknown);

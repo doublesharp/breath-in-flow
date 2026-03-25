@@ -173,7 +173,7 @@ class FakeAudioContext {
 
 describe('soundService', () => {
   beforeEach(() => {
-    // Reset global AudioContext to our fake
+    // Reset globalThis AudioContext to our fake
     (globalThis as unknown as Record<string, unknown>).AudioContext = FakeAudioContext;
     // Clear instances
     FakeAudioContext.instances = [];
@@ -266,10 +266,10 @@ describe('soundService', () => {
   });
 
   describe('SoundService Extra - Advanced Scenarios', () => {
-    const originalAudioContext = (global as unknown as { AudioContext: unknown }).AudioContext;
+    const originalAudioContext = (globalThis as unknown as { AudioContext: unknown }).AudioContext;
 
     afterEach(() => {
-      (global as unknown as { AudioContext: unknown }).AudioContext = originalAudioContext;
+      (globalThis as unknown as { AudioContext: unknown }).AudioContext = originalAudioContext;
     });
 
     it('setEnabled resumes suspended AudioContext', () => {
@@ -282,11 +282,11 @@ describe('soundService', () => {
         resume = resume;
       }
 
-      (global as unknown as Record<string, unknown>).AudioContext = MockSuspendedAudioContext;
+      (globalThis as unknown as Record<string, unknown>).AudioContext = MockSuspendedAudioContext;
       // Ensure window.AudioContext is also set in the test DOM
-      const globalWindow = (global as unknown as Record<string, unknown>).window || {};
-      (globalWindow as Record<string, unknown>).AudioContext = MockSuspendedAudioContext;
-      (global as unknown as Record<string, unknown>).window = globalWindow;
+      const globalThisWindow = (globalThis as unknown as Record<string, unknown>).window || {};
+      (globalThisWindow as Record<string, unknown>).AudioContext = MockSuspendedAudioContext;
+      (globalThis as unknown as Record<string, unknown>).window = globalThisWindow;
 
       // Ensure soundService will create a fresh AudioContext instance
       (soundService as unknown as { audioContext: null }).audioContext = null;
@@ -298,10 +298,10 @@ describe('soundService', () => {
       class MockRunningAudioContext {
         state = 'running';
       }
-      (global as unknown as Record<string, unknown>).AudioContext = MockRunningAudioContext;
-      const globalWindow = (global as unknown as Record<string, unknown>).window || {};
-      (globalWindow as Record<string, unknown>).AudioContext = MockRunningAudioContext;
-      (global as unknown as Record<string, unknown>).window = globalWindow;
+      (globalThis as unknown as Record<string, unknown>).AudioContext = MockRunningAudioContext;
+      const globalThisWindow = (globalThis as unknown as Record<string, unknown>).window || {};
+      (globalThisWindow as Record<string, unknown>).AudioContext = MockRunningAudioContext;
+      (globalThis as unknown as Record<string, unknown>).window = globalThisWindow;
 
       // Ensure disabled
       soundService.setEnabled(false);
@@ -346,7 +346,7 @@ describe('soundService', () => {
         destination = {};
       }
 
-      (global as unknown as Record<string, unknown>).AudioContext = MockSuspendedCtx;
+      (globalThis as unknown as Record<string, unknown>).AudioContext = MockSuspendedCtx;
 
       (soundService as unknown as { audioContext: null }).audioContext = null;
       soundService.setEnabled(true);
@@ -392,7 +392,7 @@ describe('soundService', () => {
         destination = {};
       }
 
-      (global as unknown as Record<string, unknown>).AudioContext = MockSuspendedCtx2;
+      (globalThis as unknown as Record<string, unknown>).AudioContext = MockSuspendedCtx2;
 
       (soundService as unknown as { audioContext: null }).audioContext = null;
       soundService.setEnabled(true);
@@ -405,7 +405,7 @@ describe('soundService', () => {
   describe('Sound Themes', () => {
     beforeEach(() => {
       FakeAudioContext.instances = [];
-      (global as unknown as Record<string, unknown>).AudioContext =
+      (globalThis as unknown as Record<string, unknown>).AudioContext =
         FakeAudioContext as unknown as typeof AudioContext;
       (soundService as unknown as { audioContext: null }).audioContext = null;
       soundService.setEnabled(true);
@@ -488,7 +488,7 @@ describe('soundService', () => {
 
     it('should not play sounds when disabled regardless of theme', () => {
       FakeAudioContext.instances = [];
-      (global as unknown as Record<string, unknown>).AudioContext =
+      (globalThis as unknown as Record<string, unknown>).AudioContext =
         FakeAudioContext as unknown as typeof AudioContext;
       (soundService as unknown as { audioContext: null }).audioContext = null;
 

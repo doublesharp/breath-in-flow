@@ -89,8 +89,8 @@ class PPGService {
     // Strategy 1: Native Capacitor torch plugin (most reliable on mobile)
     if (Capacitor.isNativePlatform()) {
       try {
-        const { isAvailable } = await Torch.isAvailable();
-        if (isAvailable) {
+        const { available } = await Torch.isAvailable();
+        if (available) {
           await Torch.enable();
           this.torchEnabled = true;
           console.log('PPG: Torch enabled via native Capacitor plugin');

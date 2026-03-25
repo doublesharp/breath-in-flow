@@ -175,7 +175,7 @@ describe('ppgService', () => {
 
       // Stub video.play so it resolves immediately
       let playResolve: () => void;
-      const playPromise = new Promise<void>((res) => { playResolve = res; });
+      void new Promise<void>((res) => { playResolve = res; });
 
       vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
         if (tag === 'video') {

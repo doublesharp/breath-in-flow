@@ -1097,7 +1097,7 @@ describe('useBreathingTimer', () => {
         },
       };
 
-      const clearSpy = vi.spyOn(global, 'clearInterval');
+      const clearSpy = vi.spyOn(globalThis, 'clearInterval');
       const wrapper = mount(timerComp);
 
       // allow interval to be created
