@@ -37,7 +37,7 @@
         <button
           v-for="p in protocols"
           :key="p.id"
-          @click="startProtocol(p)"
+          @click="showPrepScreen(p)"
           class="flex items-center gap-3 w-full p-3 rounded-xl text-left transition-all bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/30 active:scale-[0.98]"
         >
           <span class="text-xl shrink-0">{{ p.icon }}</span>
@@ -51,11 +51,61 @@
 
       <!-- Freeform — start button -->
       <div v-if="mode === 'freeform'">
-        <button @click="startFreeform" class="w-full btn-primary py-3 rounded-xl font-semibold">
+        <button @click="showPrepScreen(null)" class="w-full btn-primary py-3 rounded-xl font-semibold">
           Start Measurement
         </button>
       </div>
     </div>
+
+    <!-- ═══ PREP SCREEN MODAL — instructions before starting ═══ -->
+    <Teleport to="body">
+      <div v-if="showPrep" class="fixed inset-0 z-50 bg-slate-950 flex flex-col safe-area-top safe-area-bottom">
+        <div class="flex-1 flex flex-col justify-center items-center px-6 text-center">
+          <!-- Protocol info -->
+          <div class="text-4xl mb-4">{{ prepProtocol?.icon || '📊' }}</div>
+          <h2 class="text-xl font-bold text-white mb-1">{{ prepProtocol?.name || 'Freeform Measurement' }}</h2>
+          <p class="text-sm text-white/50 mb-6">{{ prepProtocol ? formatDuration(prepProtocol.duration) : 'Manual stop' }}</p>
+
+          <!-- Sensor-specific instructions -->
+          <div class="rounded-2xl bg-white/5 border border-white/10 p-5 mb-6 max-w-sm">
+            <h3 class="text-sm font-semibold text-emerald-400 mb-3">How to get a good reading</h3>
+            <div v-if="selectedSensor === 'camera'" class="space-y-2 text-sm text-white/70 text-left">
+              <p>1. Place your <strong class="text-white">fingertip</strong> gently over the rear camera lens</p>
+              <p>2. The flash will turn on to illuminate your finger</p>
+              <p>3. Press firmly but don't squeeze — stay relaxed</p>
+              <p>4. Keep completely still during the measurement</p>
+            </div>
+            <div v-else-if="selectedSensor === 'accelerometer'" class="space-y-2 text-sm text-white/70 text-left">
+              <p>1. Lie down or recline comfortably</p>
+              <p>2. Place the phone <strong class="text-white">flat on your chest</strong> (sternum area)</p>
+              <p>3. Screen can face up — just keep the phone stable</p>
+              <p>4. Breathe normally and stay as still as possible</p>
+            </div>
+            <div v-else class="space-y-2 text-sm text-white/70 text-left">
+              <p>1. Place phone <strong class="text-white">screen-down on your chest</strong></p>
+              <p>2. Cover the rear camera with your <strong class="text-white">fingertip</strong></p>
+              <p>3. The flash will illuminate your finger from below</p>
+              <p>4. Stay still — follow audio cues for breathing</p>
+            </div>
+          </div>
+
+          <!-- Permission error -->
+          <div v-if="permissionError" class="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400 mb-4 max-w-sm">
+            {{ permissionError }}
+          </div>
+        </div>
+
+        <!-- Bottom buttons -->
+        <div class="px-6 pb-6 space-y-3">
+          <button @click="confirmStart" class="w-full btn-primary py-4 rounded-2xl font-bold text-lg">
+            Start
+          </button>
+          <button @click="showPrep = false; prepProtocol = null" class="w-full py-3 rounded-xl font-medium text-white/40 hover:text-white/60">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- ═══ FULLSCREEN MEASUREMENT MODAL ═══ -->
     <Teleport to="body">
@@ -257,6 +307,8 @@ const sensorQuality = ref(0);
 const elapsedSeconds = ref(0);
 const selectedSensor = ref<'camera' | 'accelerometer' | 'dual'>('accelerometer');
 const selectedProtocol = ref<Protocol | null>(null);
+const showPrep = ref(false);
+const prepProtocol = ref<Protocol | null>(null);
 const collectedIBIs = ref<IBISample[]>([]);
 const measurementNotes = ref('');
 const measurementStartTime = ref<Date>(new Date());
@@ -447,6 +499,24 @@ watch(isMeasuring, (measuring) => {
 // Measurement control
 const permissionError = ref<string | null>(null);
 
+function showPrepScreen(protocol: Protocol | null) {
+  prepProtocol.value = protocol;
+  permissionError.value = null;
+  showPrep.value = true;
+}
+
+async function confirmStart() {
+  if (!(await checkPermissions())) return;
+  showPrep.value = false;
+
+  if (prepProtocol.value) {
+    await startProtocol(prepProtocol.value);
+  } else {
+    await startFreeform();
+  }
+  prepProtocol.value = null;
+}
+
 async function checkPermissions(): Promise<boolean> {
   permissionError.value = null;
   addDebugLine(`Requesting permissions for ${selectedSensor.value} mode...`);
@@ -464,8 +534,6 @@ async function checkPermissions(): Promise<boolean> {
 }
 
 async function startProtocol(protocol: Protocol) {
-  if (!(await checkPermissions())) return;
-
   selectedProtocol.value = protocol;
   collectedIBIs.value = [];
   hrDataPoints.value = [];

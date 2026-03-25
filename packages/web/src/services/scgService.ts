@@ -371,19 +371,18 @@ class SCGService {
         console.log(`SCG: filteredVar=${filteredVariance.toFixed(4)} z=${z.toFixed(3)} peaks=${this.recentIBIs.length} quality=${this.currentQuality.toFixed(2)} samples=${this.sampleCount}`);
       }
 
-      // Filtered signal during rest: variance typically 0.0001-0.01
-      // Walking/large motion: variance > 5.0
-      if (filteredVariance > 10.0) {
-        this.updateQuality(0);
-        return;
-      }
+      // TODO: Re-enable motion gate after tuning with real device data
+      // For now, disabled to debug peak detection with actual accelerometer readings
+      // if (filteredVariance > 10.0) {
+      //   this.updateQuality(0);
+      //   return;
+      // }
     }
 
-    if (
-      this.lastPeakDetectionElapsedMs !== null &&
-      this.elapsedMs - this.lastPeakDetectionElapsedMs > NO_PEAK_TIMEOUT_MS
-    ) {
-      this.updateQuality(0);
+    // Set quality to moderate if we have any samples flowing, regardless of peaks
+    // This lets us observe the signal even before peak detection kicks in
+    if (this.sampleCount > 20 && this.currentQuality === 0) {
+      this.updateQuality(0.3);
     }
   }
 
