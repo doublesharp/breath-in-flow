@@ -278,6 +278,7 @@ class PPGService {
     // Reset processing state
     this.rawBuffer = [];
     this.normBuffer = [];
+    this.lastRawValue = -1;
     this.lastPeakTimestamp = null;
     this.frameCount = 0;
     this.lastFrameTime = 0;
@@ -337,6 +338,8 @@ class PPGService {
     });
   }
 
+  private lastRawValue: number = -1;
+
   // Exposed for testing purposes
   public processSignalSample(value: number, timestamp: number): IBISample | null {
     // Skip samples where the signal is clearly invalid (camera blocked or saturated)
@@ -344,6 +347,21 @@ class PPGService {
       this.callbacks.onRawSignal?.(0, timestamp);
       return null;
     }
+
+    // Rate-of-change filter: reject sudden jumps from finger movement.
+    // A real heartbeat causes ~2-5 units change per frame at 30fps.
+    // Finger shifts cause 20+ unit jumps. Skip the sample and hold the
+    // last good value to avoid injecting a massive transient into the filter.
+    if (this.lastRawValue > 0) {
+      const delta = Math.abs(value - this.lastRawValue);
+      if (delta > 15) {
+        // Large jump — don't feed to filter, emit zero for chart
+        this.callbacks.onRawSignal?.(0, timestamp);
+        // Don't update lastRawValue — wait for signal to stabilize
+        return null;
+      }
+    }
+    this.lastRawValue = value;
 
     // Pass through bandpass filter
     const filtered = this.bandpassFilter.filter(value);
@@ -388,7 +406,8 @@ class PPGService {
         const interval = peakTimestamp - this.lastPeakTimestamp;
 
         // Only emit physiologically plausible intervals (300ms–2000ms = 30–200 BPM)
-        if (interval >= 300 && interval <= 2000) {
+        // Tighter range: 400-1500ms (40-150 BPM) to reject motion artifacts
+        if (interval >= 400 && interval <= 1500) {
           ibiSample = {
             timestamp: peakTimestamp,
             interval,
@@ -676,6 +695,7 @@ class PPGService {
     // Reset processing state
     this.rawBuffer = [];
     this.normBuffer = [];
+    this.lastRawValue = -1;
     this.lastPeakTimestamp = null;
     this.frameCount = 0;
     this.lastFrameTime = 0;
