@@ -172,7 +172,7 @@
             <!-- HR tachogram -->
             <div v-if="hrDataPoints.length > 0">
               <div class="text-xs text-white/40 mb-1">Heart Rate</div>
-              <HrTachogram :hr-data="hrDataPoints" :duration="selectedProtocol ? selectedProtocol.duration : Math.max(60, elapsedSeconds)" :height="100" />
+              <HrTachogram :hr-data="hrDataPoints" :duration="Math.min(60, Math.max(15, elapsedSeconds))" :height="100" />
             </div>
             <div v-else class="rounded-xl bg-white/5 p-4 text-center text-sm text-white/30">
               Waiting for heart rate data...
@@ -359,7 +359,7 @@ const rawSignalData = ref<Array<{ time: number; value: number }>>([]);
 const debugLog = ref<string[]>([]);
 const showDebug = ref(false);
 
-const RAW_SIGNAL_MAX_POINTS = 500; // ~5-8 seconds at 60-100Hz
+const RAW_SIGNAL_MAX_POINTS = 200; // ~6-7 seconds at 30fps
 const DEBUG_LOG_MAX = 100;
 
 function addDebugLine(msg: string) {
@@ -483,42 +483,77 @@ function drawRawSignal() {
     return;
   }
 
+  // Show only the most recent ~3 seconds (scrolling window)
+  const VISIBLE_POINTS = 90; // ~3s at 30fps
+  const visible = data.length > VISIBLE_POINTS ? data.slice(-VISIBLE_POINTS) : data;
+
   // Auto-scale Y using percentiles to ignore outlier spikes
-  const sorted = data.map(d => d.value).sort((a, b) => a - b);
-  const p5 = sorted[Math.floor(sorted.length * 0.02)] ?? 0;
-  const p95 = sorted[Math.floor(sorted.length * 0.98)] ?? 0;
-  const minV = p5;
-  const maxV = p95;
-  const range = maxV - minV || 1;
-  const pad = range * 0.15;
+  const sorted = visible.map(d => d.value).sort((a, b) => a - b);
+  const p2 = sorted[Math.floor(sorted.length * 0.05)] ?? 0;
+  const p98 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
+  const minV = p2;
+  const maxV = p98;
+  const range = maxV - minV || 0.01;
+  const pad = range * 0.2;
+
+  // Background gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+  bgGrad.addColorStop(0, 'rgba(52, 211, 153, 0.03)');
+  bgGrad.addColorStop(1, 'rgba(52, 211, 153, 0)');
+
+  // Draw filled area under curve
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  for (let i = 0; i < visible.length; i++) {
+    const x = (i / (visible.length - 1)) * w;
+    const clamped = Math.max(minV - pad, Math.min(maxV + pad, visible[i].value));
+    const y = h - ((clamped - minV + pad) / (range + 2 * pad)) * h;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fillStyle = bgGrad;
+  ctx.fill();
 
   // Draw line
   ctx.beginPath();
-  ctx.strokeStyle = 'rgba(52, 211, 153, 0.8)'; // emerald
+  ctx.strokeStyle = 'rgba(52, 211, 153, 0.9)';
   ctx.lineWidth = 1.5;
-  for (let i = 0; i < data.length; i++) {
-    const x = (i / (data.length - 1)) * w;
-    const y = h - ((data[i].value - minV + pad) / (range + 2 * pad)) * h;
+  for (let i = 0; i < visible.length; i++) {
+    const x = (i / (visible.length - 1)) * w;
+    const clamped = Math.max(minV - pad, Math.min(maxV + pad, visible[i].value));
+    const y = h - ((clamped - minV + pad) / (range + 2 * pad)) * h;
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
   ctx.stroke();
 
-  // Y-axis labels
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  // Zero line (center reference)
+  const zeroY = h - ((0 - minV + pad) / (range + 2 * pad)) * h;
+  if (zeroY > 0 && zeroY < h) {
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([4, 4]);
+    ctx.moveTo(0, zeroY);
+    ctx.lineTo(w, zeroY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Labels
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.font = '9px monospace';
   ctx.textAlign = 'left';
   ctx.fillText(maxV.toFixed(2), 2, 10);
   ctx.fillText(minV.toFixed(2), 2, h - 2);
-  ctx.textAlign = 'right';
-  ctx.fillText(`${data.length} pts`, w - 2, 10);
 
-  // Show latest value
-  const lastVal = data[data.length - 1].value;
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.font = '10px monospace';
+  // Latest value + points count
+  const lastVal = visible[visible.length - 1].value;
   ctx.textAlign = 'right';
-  ctx.fillText(`${lastVal.toFixed(3)}`, w - 4, h - 4);
+  ctx.fillText(`${lastVal.toFixed(3)}`, w - 2, h - 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillText(`${data.length}`, w - 2, 10);
 }
 
 // Redraw raw signal at ~15fps when measuring
