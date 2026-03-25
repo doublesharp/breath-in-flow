@@ -86,8 +86,8 @@ function resetService() {
   (ppgService as unknown as Record<string, unknown>).signalQuality = 0;
   (ppgService as unknown as Record<string, unknown>).adaptiveFilterFrameCount = 0;
   (ppgService as unknown as Record<string, unknown>).recentIBIsMs = [];
-  (ppgService as unknown as Record<string, unknown>).currentLowCut = 0.5;
-  (ppgService as unknown as Record<string, unknown>).currentHighCut = 4.0;
+  (ppgService as unknown as Record<string, unknown>).currentLowCut = 0.7;
+  (ppgService as unknown as Record<string, unknown>).currentHighCut = 3.5;
   (ppgService as unknown as Record<string, unknown>).torchEnabled = false;
   // Reset filter and peak detector
   (ppgService as unknown as { bandpassFilter: { reset: () => void } }).bandpassFilter.reset();
@@ -883,11 +883,11 @@ describe('ppgService', () => {
         (ppgService as unknown as { updateAdaptiveFilter: () => void }).updateAdaptiveFilter();
       }).not.toThrow();
 
-      // Cutoffs should remain at defaults
+      // Cutoffs should remain at defaults (0.7–3.5 Hz)
       const lowCut = (ppgService as unknown as { currentLowCut: number }).currentLowCut;
       const highCut = (ppgService as unknown as { currentHighCut: number }).currentHighCut;
-      expect(lowCut).toBe(0.5);
-      expect(highCut).toBe(4.0);
+      expect(lowCut).toBe(0.7);
+      expect(highCut).toBe(3.5);
     });
 
     it('updateAdaptiveFilter adjusts cutoffs when IBIs available', () => {
@@ -943,7 +943,7 @@ describe('ppgService', () => {
       const highCut = (ppgService as unknown as { currentHighCut: number }).currentHighCut;
 
       expect(recentIBIs.length).toBe(0);
-      expect(highCut).toBe(4.0);
+      expect(highCut).toBe(3.5);
     });
   });
 

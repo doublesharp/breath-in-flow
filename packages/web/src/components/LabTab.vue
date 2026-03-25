@@ -639,10 +639,29 @@ function stopMeasurement() {
   stopSensor();
   isMeasuring.value = false;
 
-  if (collectedIBIs.value.length >= 10) {
-    currentAnalysis.value = analyzeHRV(collectedIBIs.value);
+  // Trim first 5 seconds and last 3 seconds of IBI data.
+  // Start: sensor settling, finger placement, phone positioning causes noise.
+  // End: user movement to press the Stop button introduces artifacts.
+  // Works for both camera PPG and accelerometer SCG.
+  let ibis = collectedIBIs.value;
+  if (ibis.length > 0) {
+    const startTime = ibis[0].timestamp;
+    const endTime = ibis[ibis.length - 1].timestamp;
+    const trimStartMs = 5000; // discard first 5 seconds
+    const trimEndMs = 3000;   // discard last 3 seconds
+    ibis = ibis.filter(s =>
+      s.timestamp >= startTime + trimStartMs &&
+      s.timestamp <= endTime - trimEndMs
+    );
+    addDebugLine(`Trimmed IBIs: ${collectedIBIs.value.length} → ${ibis.length} (removed ${trimStartMs/1000}s start, ${trimEndMs/1000}s end)`);
+  }
+
+  if (ibis.length >= 10) {
+    currentAnalysis.value = analyzeHRV(ibis);
     showResults.value = true;
     soundService.playCompletionChime();
+  } else {
+    addDebugLine(`Not enough IBIs after trimming: ${ibis.length} (need >= 10)`);
   }
 }
 

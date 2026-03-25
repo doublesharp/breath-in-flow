@@ -74,8 +74,8 @@ class PPGService {
   // Adaptive bandpass state
   private adaptiveFilterFrameCount: number = 0;
   private recentIBIsMs: number[] = []; // Recent IBI values for adaptive filter
-  private currentLowCut: number = 0.5;
-  private currentHighCut: number = 4.0;
+  private currentLowCut: number = 0.7;
+  private currentHighCut: number = 3.5;
 
   // Configuration
   private readonly SAMPLE_RATE = 30; // fps
@@ -86,7 +86,10 @@ class PPGService {
   private readonly ADAPTIVE_FILTER_INTERVAL = 300; // frames between adaptive filter updates (~10s)
 
   constructor() {
-    this.bandpassFilter = createBandpassFilter(0.5, 4.0, this.SAMPLE_RATE, 2);
+    // 4th-order Butterworth bandpass 0.7-3.5 Hz (42-210 BPM)
+    // Higher order = sharper rolloff = better rejection of baseline drift
+    // Narrower band = less noise, more focused on cardiac frequency
+    this.bandpassFilter = createBandpassFilter(0.7, 3.5, this.SAMPLE_RATE, 4);
     this.peakDetector = new StreamingPeakDetector({
       minPeakDistance: this.MIN_PEAK_DISTANCE_SAMPLES,
       thresholdFactor: 0.3,
@@ -280,8 +283,8 @@ class PPGService {
     this.lastFrameTime = 0;
     this.adaptiveFilterFrameCount = 0;
     this.recentIBIsMs = [];
-    this.currentLowCut = 0.5;
-    this.currentHighCut = 4.0;
+    this.currentLowCut = 0.7;
+    this.currentHighCut = 3.5;
     this.bandpassFilter.reset();
     this.peakDetector.reset();
 
@@ -497,7 +500,7 @@ class PPGService {
   private updateAdaptiveFilter(): void {
     if (this.recentIBIsMs.length < 3) {
       // Not enough data — revert to defaults if we drifted
-      if (this.currentLowCut !== 0.5 || this.currentHighCut !== 4.0) {
+      if (this.currentLowCut !== 0.7 || this.currentHighCut !== 3.5) {
         this.currentLowCut = 0.5;
         this.currentHighCut = 4.0;
         this.bandpassFilter = createBandpassFilter(
@@ -515,9 +518,9 @@ class PPGService {
       this.recentIBIsMs.reduce((sum, v) => sum + v, 0) / this.recentIBIsMs.length;
     const hrHz = 1000 / meanIBI; // convert ms to Hz
 
-    // Adjust cutoffs: low = HR * 0.5, high = HR * 2.5, clamped to [0.5, 4.0]
-    const newLowCut = Math.max(0.5, hrHz * 0.5);
-    const newHighCut = Math.min(4.0, hrHz * 2.5);
+    // Adjust cutoffs: low = HR * 0.5, high = HR * 2.5, clamped to [0.7, 3.5]
+    const newLowCut = Math.max(0.7, hrHz * 0.5);
+    const newHighCut = Math.min(3.5, hrHz * 2.5);
 
     // Only rebuild if cutoffs changed meaningfully (>0.05 Hz)
     if (
@@ -678,8 +681,8 @@ class PPGService {
     this.lastFrameTime = 0;
     this.adaptiveFilterFrameCount = 0;
     this.recentIBIsMs = [];
-    this.currentLowCut = 0.5;
-    this.currentHighCut = 4.0;
+    this.currentLowCut = 0.7;
+    this.currentHighCut = 3.5;
     this.signalQuality = 0;
     this.torchEnabled = false;
     this.bandpassFilter.reset();
