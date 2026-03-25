@@ -55,11 +55,13 @@ const DEFAULT_INTERVAL_MS = 1000 / DEFAULT_SAMPLE_RATE_HZ;
 const RATE_ESTIMATION_EVENTS = 10;
 
 /**
- * High-pass cutoff: removes respiratory artifacts (1–5 Hz) while preserving
- * cardiac SCG content.  Research (Zheng et al. 2024) uses 7 Hz; we use 5 Hz
- * as a compromise.
+ * High-pass cutoff: removes baseline drift and gravity.
+ * Lowered from 5 Hz to 2 Hz because the Capacitor Motion plugin quantizes
+ * acceleration to 0.1 m/s² resolution — we need to preserve more of the
+ * cardiac signal (fundamental at ~1-2 Hz) to detect peaks from the quantized data.
+ * Breathing (~0.2-0.4 Hz) is still removed.
  */
-const HP_CUTOFF_HZ = 5;
+const HP_CUTOFF_HZ = 2;
 
 /** Low-pass cutoff: removes high-frequency electronic noise. */
 const LP_CUTOFF_HZ = 25;

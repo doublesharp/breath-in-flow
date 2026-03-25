@@ -291,9 +291,9 @@ const protocols: Protocol[] = [
 ];
 
 const sensorOptions = [
+  { value: 'accelerometer' as const, label: 'Chest (recommended)' },
   { value: 'camera' as const, label: 'Camera' },
-  { value: 'accelerometer' as const, label: 'Accelerometer' },
-  { value: 'dual' as const, label: 'Dual' },
+  { value: 'dual' as const, label: 'Both' },
 ];
 
 const hrvStorage = useHrvStorage();

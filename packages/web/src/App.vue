@@ -3,7 +3,9 @@
     <!-- Animated background -->
     <div class="animated-bg"></div>
 
-    <header class="glass sticky top-0 z-50 safe-area-top">
+    <header
+      :class="['glass sticky top-0 z-50 safe-area-top transition-transform duration-300', headerHidden ? '-translate-y-full' : 'translate-y-0']"
+    >
       <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
         <h1 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
           <div
@@ -355,7 +357,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, provide } from 'vue';
+import { ref, provide, onMounted, onUnmounted } from 'vue';
 import BreathingPractice from './components/BreathingPractice.vue';
 import SessionHistory from './components/SessionHistory.vue';
 import PracticePresets from './components/PracticePresets.vue';
@@ -366,6 +368,29 @@ import { AppConfig, type BreathingConfig } from '@breath-in-flow/shared';
 
 const activeTab = ref<'practice' | 'lab' | 'history' | 'configs' | 'analytics'>('practice');
 const selectedConfig = ref<BreathingConfig | null>(null);
+
+// Auto-hide header on scroll down, show on scroll up
+const headerHidden = ref(false);
+let lastScrollY = 0;
+const SCROLL_THRESHOLD = 10;
+
+function onScroll() {
+  const currentY = window.scrollY;
+  if (currentY < 50) {
+    // Always show near top of page
+    headerHidden.value = false;
+  } else if (currentY - lastScrollY > SCROLL_THRESHOLD) {
+    // Scrolling down
+    headerHidden.value = true;
+  } else if (lastScrollY - currentY > SCROLL_THRESHOLD) {
+    // Scrolling up
+    headerHidden.value = false;
+  }
+  lastScrollY = currentY;
+}
+
+onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }));
+onUnmounted(() => window.removeEventListener('scroll', onScroll));
 
 function loadConfig(config: BreathingConfig) {
   selectedConfig.value = config;
