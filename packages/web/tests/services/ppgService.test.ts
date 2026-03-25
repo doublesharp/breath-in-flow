@@ -79,6 +79,7 @@ function resetService() {
   (ppgService as unknown as Record<string, unknown>).animFrameId = null;
   (ppgService as unknown as Record<string, unknown>).callbacks = {};
   (ppgService as unknown as Record<string, unknown>).rawBuffer = [];
+  (ppgService as unknown as Record<string, unknown>).normBuffer = [];
   (ppgService as unknown as Record<string, unknown>).lastPeakTimestamp = null;
   (ppgService as unknown as Record<string, unknown>).frameCount = 0;
   (ppgService as unknown as Record<string, unknown>).lastFrameTime = 0;

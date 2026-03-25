@@ -512,25 +512,29 @@ function drawRawSignal() {
   ctx.fillText(minV.toFixed(2), 2, h - 2);
   ctx.textAlign = 'right';
   ctx.fillText(`${data.length} pts`, w - 2, 10);
+
+  // Show latest value
+  const lastVal = data[data.length - 1].value;
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${lastVal.toFixed(3)}`, w - 4, h - 4);
 }
 
 // Redraw raw signal at ~15fps when measuring
 watch(isMeasuring, (measuring) => {
   if (measuring) {
-    const drawLoop = () => {
-      drawRawSignal();
-      if (isMeasuring.value) {
-        rawSignalAnimId = requestAnimationFrame(drawLoop);
+    let lastDraw = 0;
+    const drawLoop = (time: number) => {
+      if (!isMeasuring.value) return;
+      // Draw at ~15fps
+      if (time - lastDraw > 66) {
+        drawRawSignal();
+        lastDraw = time;
       }
+      rawSignalAnimId = requestAnimationFrame(drawLoop);
     };
-    // Throttle to ~15fps
-    const throttledLoop = () => {
-      drawRawSignal();
-      if (isMeasuring.value) {
-        rawSignalAnimId = window.setTimeout(() => requestAnimationFrame(throttledLoop), 66) as unknown as number;
-      }
-    };
-    throttledLoop();
+    rawSignalAnimId = requestAnimationFrame(drawLoop);
   } else {
     if (rawSignalAnimId) {
       cancelAnimationFrame(rawSignalAnimId);

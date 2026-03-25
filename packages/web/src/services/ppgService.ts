@@ -62,6 +62,10 @@ class PPGService {
   private lastPeakTimestamp: number | null = null;
   private signalQuality: number = 0;
 
+  // Rolling normalization buffer (for normalizing filtered signal before peak detection)
+  private normBuffer: number[] = [];
+  private readonly NORM_WINDOW = 90; // 3 seconds at 30fps
+
   // Frame throttling
   private lastFrameTime: number = 0;
   private frameCount: number = 0;
@@ -85,10 +89,10 @@ class PPGService {
     this.bandpassFilter = createBandpassFilter(0.5, 4.0, this.SAMPLE_RATE, 2);
     this.peakDetector = new StreamingPeakDetector({
       minPeakDistance: this.MIN_PEAK_DISTANCE_SAMPLES,
-      thresholdFactor: 0.6,
-      adaptiveWindow: 15,
+      thresholdFactor: 0.3,
+      adaptiveWindow: 30,
       adaptiveRefractory: true,
-      minProminence: 0.15,
+      minProminence: 0.05,
     });
   }
 
@@ -270,6 +274,7 @@ class PPGService {
 
     // Reset processing state
     this.rawBuffer = [];
+    this.normBuffer = [];
     this.lastPeakTimestamp = null;
     this.frameCount = 0;
     this.lastFrameTime = 0;
@@ -331,10 +336,16 @@ class PPGService {
 
   // Exposed for testing purposes
   public processSignalSample(value: number, timestamp: number): IBISample | null {
+    // Skip samples where the signal is clearly invalid (camera blocked or saturated)
+    if (value < 1 || value > 254) {
+      this.callbacks.onRawSignal?.(0, timestamp);
+      return null;
+    }
+
     // Pass through bandpass filter
     const filtered = this.bandpassFilter.filter(value);
 
-    // Maintain rolling buffer
+    // Maintain rolling buffer of filtered values
     this.rawBuffer.push(filtered);
     if (this.rawBuffer.length > this.BUFFER_SIZE) {
       this.rawBuffer.shift();
@@ -342,8 +353,28 @@ class PPGService {
 
     this.callbacks.onRawSignal?.(filtered, timestamp);
 
-    // Feed to streaming peak detector
-    const peak = this.peakDetector.addSample(filtered, timestamp);
+    // Normalize the filtered signal to zero-mean, unit-variance over a rolling window.
+    // This makes the peak detector work regardless of absolute signal amplitude.
+    this.normBuffer.push(filtered);
+    if (this.normBuffer.length > this.NORM_WINDOW) {
+      this.normBuffer.shift();
+    }
+
+    let normalized = 0;
+    if (this.normBuffer.length >= 10) {
+      const mean = this.normBuffer.reduce((s, v) => s + v, 0) / this.normBuffer.length;
+      const variance = this.normBuffer.reduce((s, v) => s + (v - mean) ** 2, 0) / this.normBuffer.length;
+      const std = Math.sqrt(variance);
+      normalized = std > 1e-8 ? (filtered - mean) / std : 0;
+    }
+
+    // Debug logging every 60 frames (~2 seconds)
+    if (this.frameCount % 60 === 0 && this.frameCount > 0) {
+      console.log(`PPG signal: raw=${value.toFixed(1)} filtered=${filtered.toFixed(4)} normalized=${normalized.toFixed(3)} bufLen=${this.rawBuffer.length}`);
+    }
+
+    // Feed the normalized signal to the streaming peak detector
+    const peak = this.peakDetector.addSample(normalized, timestamp);
 
     let ibiSample: IBISample | null = null;
 
@@ -510,8 +541,8 @@ class PPGService {
 
     const peaks = detectPeaks(this.rawBuffer, {
       minPeakDistance: this.MIN_PEAK_DISTANCE_SAMPLES,
-      thresholdFactor: 0.6,
-      adaptiveWindow: 15,
+      thresholdFactor: 0.3,
+      adaptiveWindow: 30,
     });
 
     const quality = assessSignalQuality(this.rawBuffer, peaks);
@@ -554,6 +585,7 @@ class PPGService {
 
     // Reset processing state
     this.rawBuffer = [];
+    this.normBuffer = [];
     this.lastPeakTimestamp = null;
     this.frameCount = 0;
     this.lastFrameTime = 0;
