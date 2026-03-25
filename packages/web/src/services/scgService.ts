@@ -250,8 +250,9 @@ class SCGService {
   private handleMotion(event: DeviceMotionEvent): void {
     // Debug: log first few events to confirm accelerometer is working
     if (this.sampleCount < 3) {
-      const acc = event.acceleration || event.accelerationIncludingGravity;
-      console.log(`SCG event #${this.sampleCount}: x=${acc?.x?.toFixed(3)} y=${acc?.y?.toFixed(3)} z=${acc?.z?.toFixed(3)} interval=${event.interval}`);
+      const acc = event.accelerationIncludingGravity || event.acceleration;
+      const mag = acc ? Math.sqrt((acc.x ?? 0) ** 2 + (acc.y ?? 0) ** 2 + (acc.z ?? 0) ** 2) : 0;
+      console.log(`SCG event #${this.sampleCount}: x=${acc?.x?.toFixed(3)} y=${acc?.y?.toFixed(3)} z=${acc?.z?.toFixed(3)} mag=${mag.toFixed(3)} interval=${event.interval}`);
     }
 
     // ── 1. Advance synthetic clock ──
@@ -275,7 +276,10 @@ class SCGService {
     }
 
     // ── 3. Extract Z-axis signal ──
-    const z = this.extractZAxis(event);
+    // Use total acceleration magnitude — works regardless of phone orientation
+    // (face-up, face-down, or on side). The high-pass filter removes the static
+    // gravity component, leaving only dynamic cardiac/motion vibrations.
+    const z = this.extractSignal(event);
     if (z === null) return;
 
     // Emit raw (unfiltered) Z-axis for external visualization
@@ -531,22 +535,23 @@ class SCGService {
 
   // ─── Internal helpers ────────────────────────────────────────────────────────
 
-  private extractZAxis(event: DeviceMotionEvent): number | null {
-    // Prefer pure acceleration (gravity already removed by hardware)
-    if (event.acceleration?.z !== null && event.acceleration?.z !== undefined) {
-      return event.acceleration.z;
-    }
+  /**
+   * Extract acceleration signal from the event.
+   * Uses total magnitude sqrt(x²+y²+z²) which works regardless of phone orientation.
+   * The high-pass filter removes the static gravity baseline (~9.8 m/s²).
+   */
+  private extractSignal(event: DeviceMotionEvent): number | null {
+    // Prefer accelerationIncludingGravity — higher resolution on many devices
+    // and the high-pass filter removes the gravity component anyway.
+    const acc = event.accelerationIncludingGravity ?? event.acceleration;
+    if (!acc) return null;
 
-    // Fall back to accelerationIncludingGravity. The high-pass filter will
-    // remove the static ~9.8 m/s² gravity component.
-    if (
-      event.accelerationIncludingGravity?.z !== null &&
-      event.accelerationIncludingGravity?.z !== undefined
-    ) {
-      return event.accelerationIncludingGravity.z;
-    }
+    const x = acc.x ?? 0;
+    const y = acc.y ?? 0;
+    const z = acc.z ?? 0;
 
-    return null;
+    // Total magnitude — orientation-independent
+    return Math.sqrt(x * x + y * y + z * z);
   }
 
   private estimateSampleRateFromWallClock(): void {

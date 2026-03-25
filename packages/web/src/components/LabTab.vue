@@ -383,17 +383,38 @@ async function startSensor() {
       onQualityChange: (q: number) => { sensorQuality.value = q; },
     });
 
+    // In dual mode, each sensor feeds into fusion AND directly collects IBIs
+    // as a fallback — if one sensor fails, we still get data from the other.
     await ppgService.start({
       callbacks: {
-        onIBI: (sample) => sensorFusionService.addPPGSample(sample),
-        onQualityChange: () => {},
+        onIBI: (sample) => {
+          sensorFusionService.addPPGSample(sample);
+          // Also collect directly as fallback
+          if (collectedIBIs.value.length === 0 || collectedIBIs.value[collectedIBIs.value.length - 1].timestamp !== sample.timestamp) {
+            collectedIBIs.value.push(sample);
+            addHrDataPoint(sample);
+          }
+        },
+        onRawSignal: (value: number, timestamp: number) => {
+          rawSignalData.value.push({ time: timestamp, value });
+          if (rawSignalData.value.length > RAW_SIGNAL_MAX_POINTS) {
+            rawSignalData.value.splice(0, rawSignalData.value.length - RAW_SIGNAL_MAX_POINTS);
+          }
+        },
+        onQualityChange: (q: number) => { sensorQuality.value = Math.max(sensorQuality.value, q); },
       },
       cameraDeviceId: selectedCameraId.value || undefined,
       torchEnabled: useTorch.value,
     });
     scgService.setCallbacks({
-      onIBI: (sample) => sensorFusionService.addSCGSample(sample),
-      onQualityChange: () => {},
+      onIBI: (sample) => {
+        sensorFusionService.addSCGSample(sample);
+        if (collectedIBIs.value.length === 0 || collectedIBIs.value[collectedIBIs.value.length - 1].timestamp !== sample.timestamp) {
+          collectedIBIs.value.push(sample);
+          addHrDataPoint(sample);
+        }
+      },
+      onQualityChange: (q: number) => { sensorQuality.value = Math.max(sensorQuality.value, q); },
     });
     await scgService.start();
   } else {
