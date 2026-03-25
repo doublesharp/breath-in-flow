@@ -1,6 +1,6 @@
-require_relative '../../../../node_modules/.pnpm/@capacitor+ios@7.4.4_@capacitor+core@7.4.4/node_modules/@capacitor/ios/scripts/pods_helpers'
+require_relative '../../../../node_modules/.pnpm/@capacitor+ios@8.2.0_@capacitor+core@8.2.0/node_modules/@capacitor/ios/scripts/pods_helpers'
 
-platform :ios, '14.0'
+platform :ios, '16.0'
 use_frameworks!
 
 # workaround to avoid Xcode caching of Pods that requires
@@ -9,10 +9,11 @@ use_frameworks!
 install! 'cocoapods', :disable_input_output_paths => true
 
 def capacitor_pods
-  pod 'Capacitor', :path => '../../../../node_modules/.pnpm/@capacitor+ios@7.4.4_@capacitor+core@7.4.4/node_modules/@capacitor/ios'
-  pod 'CapacitorCordova', :path => '../../../../node_modules/.pnpm/@capacitor+ios@7.4.4_@capacitor+core@7.4.4/node_modules/@capacitor/ios'
-  pod 'CapacitorCommunityKeepAwake', :path => '../../../../node_modules/.pnpm/@capacitor-community+keep-awake@7.1.0_@capacitor+core@7.4.4/node_modules/@capacitor-community/keep-awake'
-  pod 'CapacitorCommunityTextToSpeech', :path => '../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@5.1.0_@capacitor+core@7.4.4/node_modules/@capacitor-community/text-to-speech'
+  pod 'Capacitor', :path => '../../../../node_modules/.pnpm/@capacitor+ios@8.2.0_@capacitor+core@8.2.0/node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../../../../node_modules/.pnpm/@capacitor+ios@8.2.0_@capacitor+core@8.2.0/node_modules/@capacitor/ios'
+  pod 'CapacitorCommunityKeepAwake', :path => '../../../../node_modules/.pnpm/@capacitor-community+keep-awake@8.0.0_@capacitor+core@8.2.0/node_modules/@capacitor-community/keep-awake'
+  pod 'CapacitorCommunityTextToSpeech', :path => '../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@8.0.0_@capacitor+core@8.2.0/node_modules/@capacitor-community/text-to-speech'
+  pod 'CapawesomeCapacitorTorch', :path => '../../../../node_modules/.pnpm/@capawesome+capacitor-torch@8.0.1_@capacitor+core@8.2.0/node_modules/@capawesome/capacitor-torch'
 end
 
 target 'App' do
