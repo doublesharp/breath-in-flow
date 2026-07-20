@@ -174,6 +174,61 @@ describe('MeasurementSession', () => {
     expect(result.activeSources).toEqual(['ppg']);
   });
 
+  it('interrupts once without producing a successful or eligible result', async () => {
+    const camera = sensor({ ok: true });
+    const onElapsed = vi.fn();
+    const session = new MeasurementSession({
+      protocol: 'quick-check',
+      noDataTimeoutMs: 5_000,
+      now: () => nowMs,
+      onElapsed,
+    });
+    await session.start({ ppg: camera });
+    session.addDetectedSample(detectedSample(1_000));
+
+    const first = session.interrupt('The app was backgrounded. Restart the measurement.');
+    const second = session.interrupt('A duplicate lifecycle event arrived.');
+    const stopped = session.stop();
+    vi.advanceTimersByTime(10_000);
+
+    expect(camera.stop).toHaveBeenCalledOnce();
+    expect(first).toMatchObject({
+      state: 'interrupted',
+      errorMessage: 'The app was backgrounded. Restart the measurement.',
+      activeSources: ['ppg'],
+    });
+    expect(first.eligibility).toBeUndefined();
+    expect(second).toEqual(first);
+    expect(stopped).toEqual(first);
+    expect(onElapsed).not.toHaveBeenCalled();
+  });
+
+  it('stops a sensor that finishes starting after the session was interrupted', async () => {
+    let finishStarting!: (result: { ok: true }) => void;
+    const camera = {
+      start: vi.fn(
+        () =>
+          new Promise<{ ok: true }>((resolve) => {
+            finishStarting = resolve;
+          })
+      ),
+      stop: vi.fn(),
+    };
+    const session = new MeasurementSession({ protocol: 'quick-check', now: () => nowMs });
+
+    const startOutcome = session.start({ ppg: camera });
+    const interrupted = session.interrupt('Measurement interrupted while starting.');
+    finishStarting({ ok: true });
+
+    expect(await startOutcome).toEqual({
+      ok: false,
+      message: 'Measurement interrupted while starting.',
+    });
+    expect(interrupted.state).toBe('interrupted');
+    expect(session.getResult().state).toBe('interrupted');
+    expect(camera.stop).toHaveBeenCalledOnce();
+  });
+
   it('removes frequency outputs when the selected protocol does not allow them', () => {
     const samples = Array.from({ length: 70 }, (_, index) => detectedSample(index * 1_000));
     const analysis = analyzeHRV(samples);

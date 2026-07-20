@@ -114,6 +114,38 @@ describe('permissionService', () => {
     });
   });
 
+  it('requests dual-mode motion permission before the first await can lose user activation', async () => {
+    const originalDeviceMotionEvent = globalThis.DeviceMotionEvent;
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    Object.defineProperty(globalThis, 'DeviceMotionEvent', {
+      value: { requestPermission },
+      configurable: true,
+    });
+    let resolveCameraPermission!: (value: { state: PermissionState }) => void;
+    Object.defineProperty(navigator, 'permissions', {
+      value: {
+        query: vi.fn(
+          () =>
+            new Promise<{ state: PermissionState }>((resolve) => {
+              resolveCameraPermission = resolve;
+            })
+        ),
+      },
+      configurable: true,
+    });
+
+    const resultPromise = requestSensorPermissions('dual');
+
+    expect(requestPermission).toHaveBeenCalledOnce();
+    resolveCameraPermission({ state: 'granted' });
+    await expect(resultPromise).resolves.toEqual({ camera: 'granted', motion: 'granted' });
+
+    Object.defineProperty(globalThis, 'DeviceMotionEvent', {
+      value: originalDeviceMotionEvent,
+      configurable: true,
+    });
+  });
+
   it('returns no denied message when all requested permissions are available', () => {
     expect(getPermissionDeniedMessage({ camera: 'granted', motion: 'granted' })).toBeNull();
   });

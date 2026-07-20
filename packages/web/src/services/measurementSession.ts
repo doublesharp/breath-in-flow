@@ -10,7 +10,14 @@ import {
 import type { SensorStartResult } from './sensorTypes';
 
 export type MeasurementState =
-  'idle' | 'starting' | 'acquiring' | 'measuring' | 'no-data' | 'failed' | 'complete';
+  | 'idle'
+  | 'starting'
+  | 'acquiring'
+  | 'measuring'
+  | 'no-data'
+  | 'failed'
+  | 'interrupted'
+  | 'complete';
 
 type MeasurementSensorSource = Exclude<SensorSource, 'fused'>;
 
@@ -109,6 +116,18 @@ export class MeasurementSession {
       }))
     );
 
+    if (this.isInterrupted()) {
+      for (const outcome of outcomes) {
+        if (outcome.result.ok) {
+          outcome.adapter.stop();
+          if (!this.acquisitionSources.includes(outcome.source)) {
+            this.acquisitionSources.push(outcome.source);
+          }
+        }
+      }
+      return { ok: false, message: this.errorMessage };
+    }
+
     const failedSources: MeasurementSensorSource[] = [];
     const failureMessages: string[] = [];
     for (const outcome of outcomes) {
@@ -160,7 +179,12 @@ export class MeasurementSession {
   }
 
   stop(finalSamples?: IBISample[]): MeasurementSessionResult {
-    if (this.state === 'complete' || this.state === 'failed' || this.state === 'no-data') {
+    if (
+      this.state === 'complete' ||
+      this.state === 'failed' ||
+      this.state === 'no-data' ||
+      this.state === 'interrupted'
+    ) {
       return this.getResult();
     }
 
@@ -182,6 +206,25 @@ export class MeasurementSession {
       sampleSpanSeconds
     );
     this.setState('complete');
+    return this.getResult();
+  }
+
+  interrupt(reason: string): MeasurementSessionResult {
+    if (
+      this.state === 'complete' ||
+      this.state === 'failed' ||
+      this.state === 'no-data' ||
+      this.state === 'interrupted'
+    ) {
+      return this.getResult();
+    }
+
+    this.clearTimers();
+    this.snapshotActiveSources();
+    this.stopActiveSensors();
+    this.eligibility = undefined;
+    this.errorMessage = reason;
+    this.setState('interrupted');
     return this.getResult();
   }
 
@@ -243,5 +286,9 @@ export class MeasurementSession {
   private setState(state: MeasurementState): void {
     this.state = state;
     this.onStateChange?.(state);
+  }
+
+  private isInterrupted(): boolean {
+    return this.state === 'interrupted';
   }
 }

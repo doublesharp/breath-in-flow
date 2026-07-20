@@ -74,6 +74,14 @@
             </div>
           </div>
 
+          <div
+            v-if="sensorStatusMessage"
+            class="mb-4 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200"
+            role="status"
+          >
+            {{ sensorStatusMessage }}
+          </div>
+
           <!-- Action Buttons -->
           <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
             <button data-testid="cancel-btn" @click="requestCancel" class="btn-secondary">Back</button>
@@ -437,6 +445,7 @@ import SignalQualityIndicator from './hrv/SignalQualityIndicator.vue';
 import { useBreathingTimer } from '../composables/useBreathingTimer';
 import { useHrvStorage } from '../composables/useHrvStorage';
 import { useStorage } from '../composables/useStorage';
+import { useAppLifecycle } from '../composables/useAppLifecycle';
 import {
   ASSESSMENT_TRIALS,
   DEFAULT_BREATHING_CONFIG,
@@ -460,6 +469,7 @@ import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
 import type { FusedIBISample } from '../services/sensorFusion';
 import { MeasurementSession, type MeasurementStartOutcome } from '../services/measurementSession';
+import { getPermissionDeniedMessage, requestSensorPermissions } from '../services/permissionService';
 import { ttsService } from '../services/ttsService';
 import { scoreTrial, findSuggestedRate } from '../utils/assessmentScoring';
 import { v4 as uuidv4 } from 'uuid';
@@ -798,8 +808,27 @@ async function disableKeepAwake() {
 
 // ======================== Phase Transitions ========================
 
-function startAssessment() {
-  enableKeepAwake();
+const ASSESSMENT_INTERRUPTION_MESSAGE =
+  'Assessment interrupted when the app became inactive. Return to setup and restart when ready.';
+let appIsActive = true;
+
+async function startAssessment() {
+  sensorStatusMessage.value = '';
+  if (selectedSensorMode.value !== 'none') {
+    const permissions = await requestSensorPermissions(selectedSensorMode.value);
+    const permissionMessage = getPermissionDeniedMessage(permissions);
+    if (permissionMessage) {
+      sensorStatusMessage.value = permissionMessage;
+      return;
+    }
+  }
+
+  if (!appIsActive) {
+    sensorStatusMessage.value = ASSESSMENT_INTERRUPTION_MESSAGE;
+    return;
+  }
+
+  void enableKeepAwake();
   const warmupTrial = ASSESSMENT_TRIALS.find((t) => t.rate === assessmentConfig.warmupRate) ?? ASSESSMENT_TRIALS[1];
   const warmupReps = Math.round(
     assessmentConfig.warmupDurationSeconds / (warmupTrial.inhaleTime + warmupTrial.exhaleTime)
@@ -841,6 +870,8 @@ async function startTrial(index: number) {
 
   // Start sensor for IBI collection
   const outcome = await startSensor();
+  if (!appIsActive || phase.value !== 'TRIAL_BREATHING') return;
+
   if (!outcome.ok) {
     sensorStatusMessage.value = `${outcome.message ?? 'The sensor could not start.'} Continue with manual scoring for this trial.`;
   } else if (outcome.degradedSources?.length) {
@@ -896,11 +927,41 @@ function confirmCancel() {
   clearRestInterval();
   disableKeepAwake();
   if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
-  measurementSession?.stop();
+  measurementSession?.interrupt('Assessment cancelled before completion.');
   measurementSession = null;
   showCancelConfirm.value = false;
   emit('cancel');
 }
+
+function interruptAssessment() {
+  if (phase.value !== 'WARMUP' && phase.value !== 'TRIAL_BREATHING' && phase.value !== 'TRIAL_REST') {
+    return;
+  }
+
+  timer.stop();
+  clearRestInterval();
+  void disableKeepAwake();
+  if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
+  measurementSession?.interrupt(ASSESSMENT_INTERRUPTION_MESSAGE);
+  measurementSession = null;
+  currentTrialIBIs.value = [];
+  trialAnalyses.value = [null, null, null, null, null];
+  sensorQuality.value = 0;
+  isPaused.value = false;
+  showCancelConfirm.value = false;
+  phase.value = 'INTRO';
+  sensorStatusMessage.value = ASSESSMENT_INTERRUPTION_MESSAGE;
+}
+
+useAppLifecycle({
+  onInactive: () => {
+    appIsActive = false;
+    interruptAssessment();
+  },
+  onActive: () => {
+    appIsActive = true;
+  },
+});
 
 // ======================== Scoring Helpers ========================
 
@@ -983,7 +1044,7 @@ onUnmounted(() => {
   clearRestInterval();
   disableKeepAwake();
   if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
-  measurementSession?.stop();
+  measurementSession?.interrupt('Assessment closed before completion.');
   measurementSession = null;
 });
 </script>

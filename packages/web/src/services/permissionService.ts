@@ -71,17 +71,19 @@ async function requestMotionPermission(): Promise<PermissionStatus> {
 export async function requestSensorPermissions(
   mode: 'camera' | 'accelerometer' | 'dual'
 ): Promise<{ camera: PermissionStatus; motion: PermissionStatus }> {
-  const result = { camera: 'unknown' as PermissionStatus, motion: 'unknown' as PermissionStatus };
+  // Start gesture-gated motion access before yielding to any camera permission
+  // promise. In dual mode this keeps both checks in the same user-activation turn.
+  const motionPermission =
+    mode === 'accelerometer' || mode === 'dual'
+      ? requestMotionPermission()
+      : Promise.resolve<PermissionStatus>('unknown');
+  const cameraPermission =
+    mode === 'camera' || mode === 'dual'
+      ? requestCameraPermission()
+      : Promise.resolve<PermissionStatus>('unknown');
 
-  if (mode === 'camera' || mode === 'dual') {
-    result.camera = await requestCameraPermission();
-  }
-
-  if (mode === 'accelerometer' || mode === 'dual') {
-    result.motion = await requestMotionPermission();
-  }
-
-  return result;
+  const [camera, motion] = await Promise.all([cameraPermission, motionPermission]);
+  return { camera, motion };
 }
 
 /**

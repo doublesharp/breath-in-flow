@@ -7,8 +7,11 @@ enableAutoUnmount(afterEach);
 
 const startMock = vi.fn();
 const pauseMock = vi.fn();
+const resumeMock = vi.fn();
+const stopMock = vi.fn();
 const nextSetMock = vi.fn();
 const isRunning = ref(false);
+const timerIsPaused = ref(false);
 const timerPhase = ref('IDLE');
 const timerCurrentTime = ref(0);
 const timerTotalPhaseTime = ref(0);
@@ -28,6 +31,18 @@ let setTtsEnabledMock: ReturnType<typeof vi.fn>;
 let hasNativeSupportMock: ReturnType<typeof vi.fn>;
 
 let lastTimerOptions: Record<string, unknown> | undefined;
+let lastLifecycleOptions:
+  { onInactive: () => void | Promise<void>; onActive: () => void | Promise<void> } | undefined;
+
+vi.mock('@/composables/useAppLifecycle', () => ({
+  useAppLifecycle: (options: {
+    onInactive: () => void | Promise<void>;
+    onActive: () => void | Promise<void>;
+  }) => {
+    lastLifecycleOptions = options;
+    return { dispose: vi.fn().mockResolvedValue(undefined) };
+  },
+}));
 
 vi.mock('@/composables/useStorage', () => ({
   useStorage: () => ({
@@ -74,9 +89,10 @@ vi.mock('@/composables/useBreathingTimer', () => {
         isFirstExtendedHold: ref(true),
         start: startMock,
         pause: pauseMock,
+        resume: resumeMock,
         nextSet: nextSetMock,
-        stop: vi.fn(),
-        isPaused: ref(false),
+        stop: stopMock,
+        isPaused: timerIsPaused,
       };
     },
   };
@@ -119,7 +135,15 @@ describe('BreathingPractice.vue', () => {
     setTtsEnabledMock = vi.fn();
     hasNativeSupportMock = vi.fn().mockReturnValue(false);
     lastTimerOptions = undefined;
+    lastLifecycleOptions = undefined;
     isRunning.value = false;
+    timerIsPaused.value = false;
+    pauseMock.mockImplementation(() => {
+      timerIsPaused.value = true;
+    });
+    resumeMock.mockImplementation(() => {
+      timerIsPaused.value = false;
+    });
     timerPhase.value = 'IDLE';
     timerCurrentTime.value = 0;
     timerTotalPhaseTime.value = 0;
@@ -204,6 +228,43 @@ describe('BreathingPractice.vue', () => {
     }
     expect(pauseMock).toHaveBeenCalled();
 
+    wrapper.unmount();
+  });
+
+  it('pauses an active practice on backgrounding and preserves it for explicit resume', async () => {
+    const activeSession = { id: 'session-mobile', sets: [] };
+    createSessionMock.mockReturnValueOnce(activeSession);
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref(null),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+      attachTo: document.body,
+    });
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().toLowerCase().includes('start'))!
+      .trigger('click');
+    isRunning.value = true;
+    await nextTick();
+
+    await lastLifecycleOptions?.onInactive();
+    await nextTick();
+
+    expect(pauseMock).toHaveBeenCalledOnce();
+    expect(timerIsPaused.value).toBe(true);
+    expect((wrapper.vm as unknown as { currentSession: unknown }).currentSession).toEqual(
+      activeSession
+    );
+    expect(cancelSessionMock).not.toHaveBeenCalled();
+    expect(completeSessionMock).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('Resume');
+
+    isRunning.value = false;
     wrapper.unmount();
   });
 

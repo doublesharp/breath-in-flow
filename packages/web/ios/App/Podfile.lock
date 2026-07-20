@@ -1,6 +1,8 @@
 PODS:
   - Capacitor (8.4.2):
     - CapacitorCordova
+  - CapacitorApp (8.1.1):
+    - Capacitor
   - CapacitorCommunityKeepAwake (8.0.1):
     - Capacitor
   - CapacitorCommunityTextToSpeech (8.0.2):
@@ -11,6 +13,7 @@ PODS:
 
 DEPENDENCIES:
   - "Capacitor (from `../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios`)"
+  - "CapacitorApp (from `../../../../node_modules/.pnpm/@capacitor+app@8.1.1_@capacitor+core@8.4.2/node_modules/@capacitor/app`)"
   - "CapacitorCommunityKeepAwake (from `../../../../node_modules/.pnpm/@capacitor-community+keep-awake@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor-community/keep-awake`)"
   - "CapacitorCommunityTextToSpeech (from `../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@8.0.2_@capacitor+core@8.4.2/node_modules/@capacitor-community/text-to-speech`)"
   - "CapacitorCordova (from `../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios`)"
@@ -19,6 +22,8 @@ DEPENDENCIES:
 EXTERNAL SOURCES:
   Capacitor:
     :path: "../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios"
+  CapacitorApp:
+    :path: "../../../../node_modules/.pnpm/@capacitor+app@8.1.1_@capacitor+core@8.4.2/node_modules/@capacitor/app"
   CapacitorCommunityKeepAwake:
     :path: "../../../../node_modules/.pnpm/@capacitor-community+keep-awake@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor-community/keep-awake"
   CapacitorCommunityTextToSpeech:
@@ -30,11 +35,12 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Capacitor: 52f999235b8bd6a7d01694753f4f4d54d182e3a3
+  CapacitorApp: 305bd13c44f6f9d164e2ee66a4faa956ed8c0e06
   CapacitorCommunityKeepAwake: d41922812644562e94a79acaf7f41e6d9413af8c
   CapacitorCommunityTextToSpeech: a9f7c5bcdc424197d11bb7ae3e9010b415e931b0
   CapacitorCordova: 345eacdc4c8282415446aea4acd8c77d82480bd4
   CapawesomeCapacitorTorch: d118c3fe55e7472061f02d4775f08899fde73a32
 
-PODFILE CHECKSUM: e24405645129a94cf8712eeaa2aa7193f1c73b8a
+PODFILE CHECKSUM: 51bff58daeabcb5e78e065d21e14a425b73fbb42
 
 COCOAPODS: 1.17.0

@@ -449,6 +449,7 @@ import {
 import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
 import { analyzeHRV, finalizeMeasurement, MAX_PLAUSIBLE_IBI_MS } from '@breath-in-flow/shared';
 import { useHrvStorage } from '../composables/useHrvStorage';
+import { useAppLifecycle } from '../composables/useAppLifecycle';
 import type {
   AssessmentResult,
   HeartRateEstimate,
@@ -1063,6 +1064,33 @@ function stopMeasurement() {
   }
 }
 
+const MEASUREMENT_INTERRUPTION_MESSAGE =
+  'Measurement interrupted when the app became inactive. Reposition the sensor and restart.';
+
+function interruptMeasurement() {
+  const sessionState = measurementSession?.getResult().state;
+  const hasActiveSession =
+    sessionState === 'starting' || sessionState === 'acquiring' || sessionState === 'measuring';
+  if (!hasActiveSession && !isMeasuring.value) return;
+
+  void disableKeepAwake();
+  if (selectedSensor.value === 'dual') sensorFusionService.reset();
+  measurementSession?.interrupt(MEASUREMENT_INTERRUPTION_MESSAGE);
+  measurementSession = null;
+  isMeasuring.value = false;
+  showResults.value = false;
+  currentAnalysis.value = null;
+  collectedIBIs.value = [];
+  currentEligibility.value = null;
+  currentSampleProvenance.value = [];
+  hrDataPoints.value = [];
+  rawSignalData.value = [];
+  sensorQuality.value = 0;
+  measurementNotice.value = null;
+  permissionError.value = MEASUREMENT_INTERRUPTION_MESSAGE;
+  showRecoveryActions.value = true;
+}
+
 async function retryMeasurement() {
   const protocol = selectedProtocol.value;
   permissionError.value = null;
@@ -1185,6 +1213,11 @@ function formatType(type: string): string {
 }
 
 // Lifecycle
+useAppLifecycle({
+  onInactive: interruptMeasurement,
+  onActive: () => {},
+});
+
 onMounted(async () => {
   await hrvStorage.initialize();
   await Promise.all([loadRecentResults(), loadLatestAssessment()]);
@@ -1193,7 +1226,7 @@ onMounted(async () => {
 onUnmounted(() => {
   if (measurementSession) {
     if (selectedSensor.value === 'dual') sensorFusionService.reset();
-    measurementSession.stop();
+    measurementSession.interrupt('Measurement closed before completion.');
     measurementSession = null;
     void disableKeepAwake();
   }

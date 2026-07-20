@@ -1,8 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import ResonanceAssessment from '../../src/components/ResonanceAssessment.vue';
+import { ppgService } from '../../src/services/ppgService';
 
-const { saveAssessment } = vi.hoisted(() => ({ saveAssessment: vi.fn() }));
+const { saveAssessment, requestSensorPermissions, getPermissionDeniedMessage } = vi.hoisted(() => ({
+  saveAssessment: vi.fn(),
+  requestSensorPermissions: vi.fn(),
+  getPermissionDeniedMessage: vi.fn(),
+}));
+
+let lastLifecycleOptions:
+  { onInactive: () => void | Promise<void>; onActive: () => void | Promise<void> } | undefined;
+
+vi.mock('../../src/composables/useAppLifecycle', () => ({
+  useAppLifecycle: (options: {
+    onInactive: () => void | Promise<void>;
+    onActive: () => void | Promise<void>;
+  }) => {
+    lastLifecycleOptions = options;
+    return { dispose: vi.fn().mockResolvedValue(undefined) };
+  },
+}));
 
 vi.mock('../../src/composables/useHrvStorage', () => ({
   useHrvStorage: () => ({ saveAssessment }),
@@ -18,6 +36,11 @@ vi.mock('@capacitor/core', () => ({
 
 vi.mock('../../src/services/ttsService', () => ({
   ttsService: { speak: vi.fn(), setEnabled: vi.fn(), setVoiceByUri: vi.fn() },
+}));
+
+vi.mock('../../src/services/permissionService', () => ({
+  requestSensorPermissions,
+  getPermissionDeniedMessage,
 }));
 
 vi.mock('../../src/services/soundService', () => ({
@@ -47,6 +70,11 @@ vi.mock('../../src/services/sensorFusion', () => ({
 describe('ResonanceAssessment', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.clearAllMocks();
+    lastLifecycleOptions = undefined;
+    requestSensorPermissions.mockResolvedValue({ camera: 'granted', motion: 'granted' });
+    getPermissionDeniedMessage.mockReturnValue(null);
+    vi.mocked(ppgService.start).mockResolvedValue({ ok: true });
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -75,6 +103,49 @@ describe('ResonanceAssessment', () => {
     await wrapper.find('[data-testid="start-btn"]').trigger('click');
     expect(wrapper.text()).toContain('Warmup');
     expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(true);
+  });
+
+  it('requests motion permission from the Start gesture before entering warmup', async () => {
+    let resolvePermission!: (permissions: { camera: 'granted'; motion: 'granted' }) => void;
+    requestSensorPermissions.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePermission = resolve;
+      })
+    );
+    const wrapper = mount(ResonanceAssessment);
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Chest Motion'))!
+      .trigger('click');
+
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+
+    expect(requestSensorPermissions).toHaveBeenCalledWith('accelerometer');
+    expect(wrapper.text()).toContain('Start Assessment');
+
+    resolvePermission({ camera: 'granted', motion: 'granted' });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Warmup');
+  });
+
+  it('returns to setup with actionable permission guidance when motion is denied', async () => {
+    requestSensorPermissions.mockResolvedValueOnce({ camera: 'granted', motion: 'denied' });
+    getPermissionDeniedMessage.mockReturnValueOnce(
+      'Motion sensor permission denied. Please allow access in your browser settings and reload.'
+    );
+    const wrapper = mount(ResonanceAssessment);
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Chest Motion'))!
+      .trigger('click');
+
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Start Assessment');
+    expect(wrapper.text()).toContain('Motion sensor permission denied');
+    expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(false);
   });
 
   it('shows cancel confirmation during active phases', async () => {
@@ -109,6 +180,51 @@ describe('ResonanceAssessment', () => {
 
     expect(wrapper.emitted('cancel')).toBeTruthy();
     expect(wrapper.text()).not.toContain('Cancel assessment?');
+  });
+
+  it('releases an active trial sensor once and returns to a restart state on backgrounding', async () => {
+    const wrapper = mount(ResonanceAssessment);
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+    await flushPromises();
+
+    await vi.advanceTimersByTimeAsync(125_000);
+    await flushPromises();
+    expect(ppgService.start).toHaveBeenCalledOnce();
+    expect(lastLifecycleOptions).toBeDefined();
+
+    await lastLifecycleOptions?.onInactive();
+    await lastLifecycleOptions?.onInactive();
+    await wrapper.vm.$nextTick();
+
+    expect(ppgService.stop).toHaveBeenCalledOnce();
+    expect(saveAssessment).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('Start Assessment');
+    expect(wrapper.text()).toContain('interrupted');
+  });
+
+  it('does not resume a trial when sensor startup finishes after background interruption', async () => {
+    let finishSensorStart!: (result: { ok: true }) => void;
+    vi.mocked(ppgService.start).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishSensorStart = resolve;
+      })
+    );
+    const wrapper = mount(ResonanceAssessment);
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(125_000);
+
+    expect(ppgService.start).toHaveBeenCalledOnce();
+    await lastLifecycleOptions?.onInactive();
+    finishSensorStart({ ok: true });
+    await flushPromises();
+
+    expect(ppgService.stop).toHaveBeenCalledOnce();
+    expect(wrapper.text()).toContain('Start Assessment');
+    expect(wrapper.text()).toContain(
+      'Assessment interrupted when the app became inactive. Return to setup and restart when ready.'
+    );
+    expect(wrapper.text()).not.toContain('Continue with manual scoring for this trial.');
   });
 
   describe('Sensor mode selection', () => {

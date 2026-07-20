@@ -23,6 +23,19 @@ const hrvStorageMock = vi.hoisted(() => ({
   migrateFromLocalStorage: vi.fn(),
 }));
 
+let lastLifecycleOptions:
+  { onInactive: () => void | Promise<void>; onActive: () => void | Promise<void> } | undefined;
+
+vi.mock('@/composables/useAppLifecycle', () => ({
+  useAppLifecycle: (options: {
+    onInactive: () => void | Promise<void>;
+    onActive: () => void | Promise<void>;
+  }) => {
+    lastLifecycleOptions = options;
+    return { dispose: vi.fn().mockResolvedValue(undefined) };
+  },
+}));
+
 // Mock all services and storage
 vi.mock('@/services/ppgService', () => ({
   ppgService: {
@@ -99,6 +112,7 @@ function analysisWithPoincareUnavailable(reason: PoincareUnavailableReason): HRV
 describe('LabTab.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    lastLifecycleOptions = undefined;
     hrvStorageMock.initialize.mockResolvedValue(undefined);
     hrvStorageMock.getMeasurements.mockResolvedValue([]);
     hrvStorageMock.getLatestMeasurement.mockResolvedValue(null);
@@ -600,6 +614,65 @@ describe('LabTab.vue', () => {
 
     expect(document.body.textContent).toContain('Unable to start camera preview.');
     expect(document.body.textContent).not.toContain('Stop Measurement');
+
+    await lastLifecycleOptions?.onInactive();
+    await wrapper.vm.$nextTick();
+    expect(document.body.textContent).toContain('Unable to start camera preview.');
+    expect(document.body.textContent).not.toContain('Measurement interrupted');
+    expect(ppgService.stop).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it('interrupts an active capture once on backgrounding without saving partial results', async () => {
+    const wrapper = mount(LabTab, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          HrTachogram: true,
+          SignalQualityIndicator: true,
+          HrvMetricsDashboard: true,
+          FrequencySpectrum: true,
+          PoincarePlot: true,
+          ResonanceAssessment: true,
+        },
+      },
+    });
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Freeform')!
+      .trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
+    await flushPromises();
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Start')!
+      .click();
+    await flushPromises();
+
+    expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
+    expect(lastLifecycleOptions).toBeDefined();
+
+    await lastLifecycleOptions?.onInactive();
+    await lastLifecycleOptions?.onInactive();
+    await wrapper.vm.$nextTick();
+
+    const vm = wrapper.vm as unknown as {
+      isMeasuring: boolean;
+      showResults: boolean;
+      showRecoveryActions: boolean;
+      permissionError: string;
+    };
+    expect(ppgService.stop).toHaveBeenCalledOnce();
+    expect(hrvStorageMock.saveMeasurement).not.toHaveBeenCalled();
+    expect(vm.isMeasuring).toBe(false);
+    expect(vm.showResults).toBe(false);
+    expect(vm.showRecoveryActions).toBe(true);
+    expect(vm.permissionError).toContain('interrupted');
+    expect(wrapper.text()).toContain('Retry');
 
     wrapper.unmount();
   });

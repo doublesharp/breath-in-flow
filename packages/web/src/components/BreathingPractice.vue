@@ -1035,6 +1035,7 @@ import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
 import { useBreathingTimer, useStorage } from '../composables';
+import { useAppLifecycle } from '../composables/useAppLifecycle';
 import { useHrvStorage } from '../composables/useHrvStorage';
 import {
   DEFAULT_BREATHING_CONFIG,
@@ -1330,6 +1331,15 @@ watch(
   },
   { immediate: true }
 );
+
+useAppLifecycle({
+  onInactive: () => {
+    if (timer.isRunning.value && !timer.isPaused.value) {
+      timer.pause();
+    }
+  },
+  onActive: () => {},
+});
 
 // Cleanup watchers and services on unmount
 onUnmounted(() => {
