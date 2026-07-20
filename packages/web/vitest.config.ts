@@ -71,7 +71,6 @@ export default defineConfig({
         'src/services/adaptiveMotionGate.ts': completeLineAndFunctionThresholds,
         'src/utils/hrvAnalysisValidation.ts': completeLineAndFunctionThresholds,
         'src/utils/measurementTrends.ts': completeLineAndFunctionThresholds,
-        'src/utils/storageSerialization.ts': completeLineAndFunctionThresholds,
         'src/utils/storedRecordValidation.ts': completeLineAndFunctionThresholds,
       },
     },

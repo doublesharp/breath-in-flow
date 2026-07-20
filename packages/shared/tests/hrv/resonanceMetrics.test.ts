@@ -219,9 +219,7 @@ describe('computeResonanceMetrics', () => {
     );
 
     // Clean data should have higher smoothness than this fixed noisy fixture.
-    expect(cleanResult.waveformSmoothness).toBeGreaterThanOrEqual(
-      noisyResult.waveformSmoothness * 0.5
-    );
+    expect(cleanResult.waveformSmoothness).toBeGreaterThan(noisyResult.waveformSmoothness);
   });
 
   it('lfPeakCount is non-negative integer', () => {

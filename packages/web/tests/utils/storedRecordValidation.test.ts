@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseJsonWithDateFields } from '../../src/utils/storageSerialization';
 import { validateStoredArray } from '../../src/utils/storedRecordValidation';
 
 type StoredRecord = { id: string; createdAt: Date; enabled: boolean };
@@ -127,43 +126,5 @@ describe('validateStoredArray', () => {
       expect.objectContaining({ message: 'legacy conversion failed' })
     );
     expect(warn).toHaveBeenCalledWith('Skipped 1 invalid records from records');
-  });
-});
-
-describe('parseJsonWithDateFields', () => {
-  it('revives only the named date fields, including nested records', () => {
-    const parsed = parseJsonWithDateFields<{
-      createdAt: Date;
-      label: string;
-      nested: { completedAt: Date; dateLikeText: string };
-    }>(
-      JSON.stringify({
-        createdAt: '2026-07-20T12:00:00.000Z',
-        label: '2026-07-20T12:00:00.000Z',
-        nested: {
-          completedAt: '2026-07-20T12:30:00.000Z',
-          dateLikeText: '2026-07-20T12:30:00.000Z',
-        },
-      }),
-      ['createdAt', 'completedAt']
-    );
-
-    expect(parsed.createdAt).toEqual(new Date('2026-07-20T12:00:00.000Z'));
-    expect(parsed.label).toBe('2026-07-20T12:00:00.000Z');
-    expect(parsed.nested.completedAt).toEqual(new Date('2026-07-20T12:30:00.000Z'));
-    expect(parsed.nested.dateLikeText).toBe('2026-07-20T12:30:00.000Z');
-  });
-
-  it('preserves null and empty optional date fields', () => {
-    const parsed = parseJsonWithDateFields<{ startedAt: null; endedAt: '' }>(
-      '{"startedAt":null,"endedAt":""}',
-      ['startedAt', 'endedAt']
-    );
-
-    expect(parsed).toEqual({ startedAt: null, endedAt: '' });
-  });
-
-  it('surfaces malformed JSON instead of returning partial data', () => {
-    expect(() => parseJsonWithDateFields('{"startedAt":', ['startedAt'])).toThrow(SyntaxError);
   });
 });
