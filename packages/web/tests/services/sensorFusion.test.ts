@@ -6,6 +6,18 @@ function makeSample(timestamp: number, interval: number, quality: number): IBISa
   return { timestamp, interval, quality };
 }
 
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rng: () => number, min: number, max: number): number {
+  return Math.floor(rng() * (max - min + 1)) + min;
+}
+
 describe('SensorFusionService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -28,6 +40,10 @@ describe('SensorFusionService', () => {
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].source).toBe('fused');
+    expect(emitted[0].provenance).toEqual({
+      source: 'fused',
+      method: 'peak-detected',
+    });
   });
 
   it('uses quality-weighted average when intervals agree within 30ms', () => {
@@ -97,6 +113,60 @@ describe('SensorFusionService', () => {
     expect(emitted[0].source).toBe('scg');
     expect(emitted[0].scgInterval).toBe(800);
     expect(emitted[0].confidence).toBeCloseTo(0.7 * 0.8, 5);
+  });
+
+  it('flushes both unmatched pending sensors after the match window expires', () => {
+    const emitted: FusedIBISample[] = [];
+    sensorFusionService.setCallbacks({
+      onFusedIBI: (s) => emitted.push(s),
+    });
+
+    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8));
+    sensorFusionService.addSCGSample(makeSample(1201, 760, 0.7));
+
+    expect(emitted).toHaveLength(0);
+
+    vi.advanceTimersByTime(101);
+
+    expect(emitted).toHaveLength(2);
+    expect(emitted[0]).toMatchObject({
+      source: 'ppg',
+      interval: 800,
+      ppgInterval: 800,
+    });
+    expect(emitted[1]).toMatchObject({
+      source: 'scg',
+      interval: 760,
+      scgInterval: 760,
+    });
+  });
+
+  it('does not overwrite an earlier same-sensor beat while waiting for a match', () => {
+    const emitted: FusedIBISample[] = [];
+    sensorFusionService.setCallbacks({
+      onFusedIBI: (sample) => emitted.push(sample),
+    });
+
+    sensorFusionService.addPPGSample(makeSample(1_000, 800, 0.8));
+    sensorFusionService.addPPGSample(makeSample(2_000, 790, 0.75));
+    sensorFusionService.addSCGSample(makeSample(1_020, 805, 0.7));
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({
+      source: 'fused',
+      ppgInterval: 800,
+      scgInterval: 805,
+    });
+
+    vi.advanceTimersByTime(101);
+
+    expect(emitted).toHaveLength(2);
+    expect(emitted[1]).toMatchObject({
+      source: 'ppg',
+      timestamp: 2_000,
+      interval: 790,
+      provenance: { source: 'ppg', method: 'peak-detected' },
+    });
   });
 
   it('increases confidence after consecutive matches', () => {
@@ -177,5 +247,63 @@ describe('SensorFusionService', () => {
     expect(emitted).toHaveLength(0);
 
     expect(sensorFusionService.getQuality()).toBe(0);
+  });
+
+  it('fuzzes paired sensor samples and keeps fused output bounded', () => {
+    const rng = createRng(0x51a7e);
+    const emitted: FusedIBISample[] = [];
+    sensorFusionService.setCallbacks({
+      onFusedIBI: (s) => emitted.push(s),
+    });
+
+    for (let i = 0; i < 60; i++) {
+      const baseTimestamp = 10_000 + i * 1_000;
+      const timestampOffset = randomInt(rng, -100, 100);
+      const ppgInterval = randomInt(rng, 500, 1_200);
+      const intervalsAgree = rng() < 0.65;
+      const scgInterval =
+        ppgInterval +
+        (intervalsAgree
+          ? randomInt(rng, -30, 30)
+          : (rng() < 0.5 ? -1 : 1) * randomInt(rng, 31, 180));
+      const ppgQuality = Number(rng().toFixed(4));
+      const scgQuality = Number(rng().toFixed(4));
+      const ppg = makeSample(baseTimestamp, ppgInterval, ppgQuality);
+      const scg = makeSample(baseTimestamp + timestampOffset, scgInterval, scgQuality);
+      const expectedLength = emitted.length + 1;
+
+      if (rng() < 0.5) {
+        sensorFusionService.addPPGSample(ppg);
+        sensorFusionService.addSCGSample(scg);
+      } else {
+        sensorFusionService.addSCGSample(scg);
+        sensorFusionService.addPPGSample(ppg);
+      }
+
+      expect(emitted).toHaveLength(expectedLength);
+
+      const sample = emitted.at(-1)!;
+      expect(sample.source).toBe('fused');
+      expect(Number.isFinite(sample.timestamp)).toBe(true);
+      expect(Number.isFinite(sample.interval)).toBe(true);
+      expect(sample.confidence).toBeGreaterThanOrEqual(0);
+      expect(sample.confidence).toBeLessThanOrEqual(1);
+      expect(sample.quality).toBe(sample.confidence);
+      expect(sample.ppgInterval).toBe(ppgInterval);
+      expect(sample.scgInterval).toBe(scgInterval);
+
+      const intervalDiff = Math.abs(ppgInterval - scgInterval);
+      if (intervalDiff <= 30) {
+        const totalQuality = ppgQuality + scgQuality;
+        const expectedInterval =
+          totalQuality > 0
+            ? (ppgInterval * ppgQuality + scgInterval * scgQuality) / totalQuality
+            : (ppgInterval + scgInterval) / 2;
+        expect(sample.interval).toBeCloseTo(expectedInterval, 6);
+      } else {
+        const expectedInterval = ppgQuality >= scgQuality ? ppgInterval : scgInterval;
+        expect(sample.interval).toBe(expectedInterval);
+      }
+    }
   });
 });

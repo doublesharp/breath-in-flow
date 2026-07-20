@@ -177,9 +177,14 @@
           </div>
 
           <!-- Progress bar -->
-          <div v-if="selectedProtocol" class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-3">
-            <div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-1000"
-              :style="{ width: `${Math.min(100, (elapsedSeconds / customDuration) * 100)}%` }" />
+          <div
+            v-if="selectedProtocol"
+            class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-3"
+          >
+            <div
+              class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-1000"
+              :style="{ width: `${Math.min(100, (elapsedSeconds / customDuration) * 100)}%` }"
+            />
           </div>
 
           <!-- Sensor instructions -->
@@ -327,7 +332,12 @@ import { sensorFusionService } from '../services/sensorFusion';
 import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
 import { analyzeHRV } from '@breath-in-flow/shared';
 import { useHrvStorage } from '../composables/useHrvStorage';
-import type { IBISample, HRVAnalysis, AssessmentResult } from '@breath-in-flow/shared';
+import type {
+  AssessmentResult,
+  HeartRateEstimate,
+  HRVAnalysis,
+  IBISample,
+} from '@breath-in-flow/shared';
 
 interface Protocol {
   id: string;
@@ -406,18 +416,14 @@ async function startSensor() {
       onQualityChange: (q: number) => { sensorQuality.value = q; },
     });
 
-    // In dual mode, each sensor feeds into fusion AND directly collects IBIs
-    // as a fallback — if one sensor fails, we still get data from the other.
+    // Detected beats flow through fusion exactly once. If only one sensor sees
+    // a beat, fusion emits that source after its short match window.
     await ppgService.start({
       callbacks: {
         onIBI: (sample) => {
           sensorFusionService.addPPGSample(sample);
-          // Also collect directly as fallback
-          if (collectedIBIs.value.length === 0 || collectedIBIs.value[collectedIBIs.value.length - 1].timestamp !== sample.timestamp) {
-            collectedIBIs.value.push(sample);
-            addHrDataPoint(sample);
-          }
         },
+        onHeartRateEstimate: addHeartRateEstimateDataPoint,
         onRawSignal: (value: number, timestamp: number) => {
           rawSignalData.value.push({ time: timestamp, value });
           if (rawSignalData.value.length > RAW_SIGNAL_MAX_POINTS) {
@@ -432,11 +438,8 @@ async function startSensor() {
     scgService.setCallbacks({
       onIBI: (sample) => {
         sensorFusionService.addSCGSample(sample);
-        if (collectedIBIs.value.length === 0 || collectedIBIs.value[collectedIBIs.value.length - 1].timestamp !== sample.timestamp) {
-          collectedIBIs.value.push(sample);
-          addHrDataPoint(sample);
-        }
       },
+      onHeartRateEstimate: addHeartRateEstimateDataPoint,
       onQualityChange: (q: number) => { sensorQuality.value = Math.max(sensorQuality.value, q); },
     });
     await scgService.start();
@@ -447,6 +450,7 @@ async function startSensor() {
         addHrDataPoint(sample);
         addDebugLine(`IBI: ${sample.interval.toFixed(0)}ms (${(60000/sample.interval).toFixed(0)} BPM) q=${sample.quality.toFixed(2)}`);
       },
+      onHeartRateEstimate: addHeartRateEstimateDataPoint,
       onRawSignal: (value: number, timestamp: number) => {
         rawSignalData.value.push({ time: timestamp, value });
         if (rawSignalData.value.length > RAW_SIGNAL_MAX_POINTS) {
@@ -497,6 +501,14 @@ function addHrDataPoint(sample: IBISample) {
     time: elapsedSeconds.value,
     hr,
     quality: sample.quality,
+  });
+}
+
+function addHeartRateEstimateDataPoint(estimate: HeartRateEstimate) {
+  hrDataPoints.value.push({
+    time: elapsedSeconds.value,
+    hr: estimate.bpm,
+    quality: estimate.quality,
   });
 }
 

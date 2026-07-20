@@ -1,26 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { shallowMount } from '@vue/test-utils';
+import { flushPromises, mount, shallowMount } from '@vue/test-utils';
 import LabTab from '@/components/LabTab.vue';
+import { ppgService } from '@/services/ppgService';
+import { sensorFusionService } from '@/services/sensorFusion';
 
 // Mock all services and storage
 vi.mock('@/services/ppgService', () => ({
   ppgService: {
-    start: vi.fn(),
+    start: vi.fn().mockResolvedValue({ ok: true }),
     stop: vi.fn(),
     setCallbacks: vi.fn(),
     getStatus: vi.fn(() => 'idle'),
     getSignalQuality: vi.fn(() => 0),
   },
+  listCameras: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/services/scgService', () => ({
   scgService: {
-    start: vi.fn(),
+    start: vi.fn().mockResolvedValue({ ok: true }),
     stop: vi.fn(),
     setCallbacks: vi.fn(),
     getStatus: vi.fn(() => 'idle'),
     getQuality: vi.fn(() => 0),
   },
+}));
+
+vi.mock('@/services/permissionService', () => ({
+  requestSensorPermissions: vi.fn().mockResolvedValue({
+    camera: 'granted',
+    motion: 'granted',
+  }),
+  getPermissionDeniedMessage: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock('@/services/sensorFusion', () => ({
@@ -154,5 +165,61 @@ describe('LabTab.vue', () => {
 
     expect(wrapper.text()).toContain('Recent Results');
     expect(wrapper.text()).toContain('No measurements yet');
+  });
+
+  it('collects only the fused beat in dual-sensor mode', async () => {
+    const wrapper = mount(LabTab, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          HrTachogram: true,
+          SignalQualityIndicator: true,
+          HrvMetricsDashboard: true,
+          FrequencySpectrum: true,
+          PoincarePlot: true,
+          ResonanceAssessment: true,
+        },
+      },
+    });
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Freeform')!.trigger('click');
+    await wrapper.findAll('button').find((button) => button.text() === 'Both')!.trigger('click');
+    await wrapper.findAll('button').find((button) => button.text() === 'Start Measurement')!.trigger('click');
+    await flushPromises();
+    const startButton = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Start',
+    );
+    expect(startButton).toBeDefined();
+    startButton!.click();
+    await flushPromises();
+
+    const ppgStart = vi.mocked(ppgService.start);
+    const ppgCallbacks = ppgStart.mock.calls.at(-1)![0] as {
+      callbacks: { onIBI: (sample: { timestamp: number; interval: number; quality: number }) => void };
+    };
+    const fusionCallbacks = vi.mocked(sensorFusionService.setCallbacks).mock.calls.at(-1)![0];
+    const sample = {
+      timestamp: 1_000,
+      interval: 800,
+      quality: 0.9,
+      provenance: { source: 'ppg' as const, method: 'peak-detected' as const },
+    };
+
+    ppgCallbacks.callbacks.onIBI(sample);
+    await wrapper.vm.$nextTick();
+    expect(document.body.querySelector('hr-tachogram-stub')).toBeNull();
+
+    fusionCallbacks.onFusedIBI?.({
+      ...sample,
+      source: 'fused',
+      provenance: { source: 'fused', method: 'peak-detected' },
+      ppgInterval: 800,
+      scgInterval: 805,
+      confidence: 0.85,
+    });
+    await wrapper.vm.$nextTick();
+    expect(document.body.querySelector('hr-tachogram-stub')).not.toBeNull();
+
+    wrapper.unmount();
   });
 });

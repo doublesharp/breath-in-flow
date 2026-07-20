@@ -14,8 +14,8 @@ interface SensorFusionCallbacks {
 
 class SensorFusionService {
   private callbacks: SensorFusionCallbacks = {};
-  private pendingPPG: IBISample | null = null;
-  private pendingSCG: IBISample | null = null;
+  private pendingPPG: IBISample[] = [];
+  private pendingSCG: IBISample[] = [];
   private matchWindowMs = 100; // ±100ms to match beats
   private matchTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private consecutiveMatches = 0;
@@ -27,103 +27,126 @@ class SensorFusionService {
 
   // Called by PPG service when it detects a beat
   addPPGSample(sample: IBISample): void {
-    this.pendingPPG = sample;
+    this.pendingPPG.push({
+      ...sample,
+      provenance: { source: 'ppg', method: 'peak-detected' },
+    });
     this.tryMatch();
   }
 
   // Called by SCG service when it detects a beat
   addSCGSample(sample: IBISample): void {
-    this.pendingSCG = sample;
+    this.pendingSCG.push({
+      ...sample,
+      provenance: { source: 'scg', method: 'peak-detected' },
+    });
     this.tryMatch();
   }
 
   private tryMatch(): void {
-    // If both pending, check if timestamps are within matchWindowMs
-    if (this.pendingPPG && this.pendingSCG) {
-      const timeDiff = Math.abs(this.pendingPPG.timestamp - this.pendingSCG.timestamp);
+    while (this.pendingPPG.length > 0 && this.pendingSCG.length > 0) {
+      let closestPPGIndex = -1;
+      let closestSCGIndex = -1;
+      let closestTimeDiff = Infinity;
 
-      if (timeDiff <= this.matchWindowMs) {
+      for (let ppgIndex = 0; ppgIndex < this.pendingPPG.length; ppgIndex++) {
+        for (let scgIndex = 0; scgIndex < this.pendingSCG.length; scgIndex++) {
+          const timeDiff = Math.abs(
+            this.pendingPPG[ppgIndex].timestamp - this.pendingSCG[scgIndex].timestamp,
+          );
+          if (timeDiff < closestTimeDiff) {
+            closestTimeDiff = timeDiff;
+            closestPPGIndex = ppgIndex;
+            closestSCGIndex = scgIndex;
+          }
+        }
+      }
+
+      if (closestTimeDiff <= this.matchWindowMs) {
+        const [ppgSample] = this.pendingPPG.splice(closestPPGIndex, 1);
+        const [scgSample] = this.pendingSCG.splice(closestSCGIndex, 1);
         // Matched! Both sensors detected the same beat
-        const intervalDiff = Math.abs(this.pendingPPG.interval - this.pendingSCG.interval);
+        const intervalDiff = Math.abs(ppgSample.interval - scgSample.interval);
 
         let fusedInterval: number;
         let confidence: number;
 
         if (intervalDiff <= 30) {
           // Agree closely — quality-weighted average
-          const totalQ = this.pendingPPG.quality + this.pendingSCG.quality;
+          const totalQ = ppgSample.quality + scgSample.quality;
           fusedInterval =
             totalQ > 0
-              ? (this.pendingPPG.interval * this.pendingPPG.quality +
-                  this.pendingSCG.interval * this.pendingSCG.quality) /
+              ? (ppgSample.interval * ppgSample.quality +
+                  scgSample.interval * scgSample.quality) /
                 totalQ
-              : (this.pendingPPG.interval + this.pendingSCG.interval) / 2;
+              : (ppgSample.interval + scgSample.interval) / 2;
           this.consecutiveMatches++;
           confidence = Math.min(
             1,
-            ((this.pendingPPG.quality + this.pendingSCG.quality) / 2) *
+            ((ppgSample.quality + scgSample.quality) / 2) *
               (this.consecutiveMatches >= 5 ? 1.2 : 1.0),
           );
         } else {
           // Disagree — use higher quality source
           fusedInterval =
-            this.pendingPPG.quality >= this.pendingSCG.quality
-              ? this.pendingPPG.interval
-              : this.pendingSCG.interval;
+            ppgSample.quality >= scgSample.quality
+              ? ppgSample.interval
+              : scgSample.interval;
           this.consecutiveMatches = 0;
-          confidence = Math.max(this.pendingPPG.quality, this.pendingSCG.quality) * 0.7;
+          confidence = Math.max(ppgSample.quality, scgSample.quality) * 0.7;
         }
 
         const fused: FusedIBISample = {
-          timestamp: (this.pendingPPG.timestamp + this.pendingSCG.timestamp) / 2,
+          timestamp: (ppgSample.timestamp + scgSample.timestamp) / 2,
           interval: fusedInterval,
           quality: confidence,
+          provenance: { source: 'fused', method: 'peak-detected' },
           source: 'fused',
-          ppgInterval: this.pendingPPG.interval,
-          scgInterval: this.pendingSCG.interval,
+          ppgInterval: ppgSample.interval,
+          scgInterval: scgSample.interval,
           confidence,
         };
 
         this.emit(fused);
-        this.pendingPPG = null;
-        this.pendingSCG = null;
-        this.clearMatchTimeout();
-        return;
+        continue;
       }
+
+      break;
     }
 
-    // Set a timeout — if the other sensor doesn't match within the window, emit the single sample
-    if (!this.matchTimeoutId) {
+    const hasPendingSamples = this.pendingPPG.length > 0 || this.pendingSCG.length > 0;
+    if (hasPendingSamples && !this.matchTimeoutId) {
       this.matchTimeoutId = setTimeout(() => {
         this.flushPending();
       }, this.matchWindowMs);
+    } else if (!hasPendingSamples) {
+      this.clearMatchTimeout();
     }
   }
 
   private flushPending(): void {
     this.clearMatchTimeout();
 
-    if (this.pendingPPG && !this.pendingSCG) {
-      this.emit({
-        ...this.pendingPPG,
-        source: 'ppg',
-        ppgInterval: this.pendingPPG.interval,
-        confidence: this.pendingPPG.quality * 0.8,
-      } as FusedIBISample);
-      this.pendingPPG = null;
-      this.consecutiveMatches = 0;
-    }
+    const pending = [
+      ...this.pendingPPG.map((sample) => ({ sample, source: 'ppg' as const })),
+      ...this.pendingSCG.map((sample) => ({ sample, source: 'scg' as const })),
+    ].sort((a, b) => a.sample.timestamp - b.sample.timestamp);
 
-    if (this.pendingSCG && !this.pendingPPG) {
+    this.pendingPPG = [];
+    this.pendingSCG = [];
+
+    for (const { sample, source } of pending) {
       this.emit({
-        ...this.pendingSCG,
-        source: 'scg',
-        scgInterval: this.pendingSCG.interval,
-        confidence: this.pendingSCG.quality * 0.8,
+        ...sample,
+        provenance: { source, method: 'peak-detected' },
+        source,
+        ...(source === 'ppg'
+          ? { ppgInterval: sample.interval }
+          : { scgInterval: sample.interval }),
+        confidence: sample.quality * 0.8,
       } as FusedIBISample);
-      this.pendingSCG = null;
-      this.consecutiveMatches = 0;
     }
+    this.consecutiveMatches = 0;
   }
 
   private emit(sample: FusedIBISample): void {
@@ -144,8 +167,8 @@ class SensorFusionService {
   }
 
   reset(): void {
-    this.pendingPPG = null;
-    this.pendingSCG = null;
+    this.pendingPPG = [];
+    this.pendingSCG = [];
     this.consecutiveMatches = 0;
     this.fusedQuality = 0;
     this.clearMatchTimeout();
