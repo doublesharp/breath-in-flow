@@ -50,6 +50,7 @@
 ### Task 1: Finalized Analysis Window and Metric Availability
 
 **Files:**
+
 - Create: `packages/shared/src/hrv/finalizeMeasurement.ts`
 - Create: `packages/shared/tests/hrv/finalizeMeasurement.test.ts`
 - Modify: `packages/shared/src/hrv/types.ts`
@@ -65,6 +66,7 @@
 - Modify: `packages/web/tests/components/hrv/HrvMetricsDashboard.test.ts`
 
 **Interfaces:**
+
 - Produces: `finalizeMeasurement(samples, protocol, options): FinalizedMeasurement`.
 - Produces: discriminated `MetricAvailability<T, Reason>` objects for frequency, Poincare, and resonance groups.
 - Produces: `MeasurementSession.stop(finalSamples?)` eligibility based on the exact returned analysis samples.
@@ -114,8 +116,7 @@
 
   ```ts
   export type MetricAvailability<T, Reason extends string> =
-    | { available: true; value: T }
-    | { available: false; reason: Reason };
+    { available: true; value: T } | { available: false; reason: Reason };
   ```
 
   Make `frequencyDomain`, `poincare`, and `resonance` use this contract. Keep raw absolute spectral values internal; expose normalized LF/HF percentages, ratio, peaks, and normalized spectrum to the user contract. Update the dashboard to render values only from available branches and a reason-specific message otherwise.
@@ -142,6 +143,7 @@
 ### Task 2: Sensor Reliability and Offset-Aware Fusion
 
 **Files:**
+
 - Create: `packages/web/src/services/adaptiveMotionGate.ts`
 - Create: `packages/web/tests/services/adaptiveMotionGate.test.ts`
 - Modify: `packages/web/src/services/scgService.ts`
@@ -150,6 +152,7 @@
 - Modify: `packages/web/tests/services/sensorFusion.test.ts`
 
 **Interfaces:**
+
 - Produces: `AdaptiveMotionGate.addSample(magnitude, timestamp): MotionDecision`.
 - Produces: `SensorFusionService` offset-aware pairing with a testable exported factory `createSensorFusionService()`.
 
@@ -188,6 +191,7 @@
 ### Task 3: Mobile Lifecycle, Permission, and Interruption Safety
 
 **Files:**
+
 - Modify: `packages/web/package.json`
 - Modify: `pnpm-lock.yaml`
 - Create: `packages/web/src/composables/useAppLifecycle.ts`
@@ -200,6 +204,7 @@
 - Modify: `packages/web/tests/components/ResonanceAssessment.test.ts`
 
 **Interfaces:**
+
 - Produces: `useAppLifecycle({ onInactive, onActive })` with an async `dispose()`.
 - Consumes: `MeasurementSession.interrupt(reason)` returning a non-success terminal result.
 
@@ -242,6 +247,7 @@
 ### Task 4: Authoritative Storage and Defensive Migration
 
 **Files:**
+
 - Modify: `packages/shared/src/schemas.ts`
 - Modify: `packages/shared/tests/schemas.test.ts`
 - Create: `packages/web/src/utils/storedRecordValidation.ts`
@@ -253,6 +259,7 @@
 - Modify: `packages/web/src/components/ResonanceAssessment.vue`
 
 **Interfaces:**
+
 - Produces: `validateStoredArray({ key, value, schema, normalize, logLimit }): T[]`.
 - Produces: `useHrvStorage().initialize()` and `migrateLegacyAssessments()` as idempotent operations.
 
@@ -290,6 +297,7 @@
 ### Task 5: Complete Resonance, Trends, and Insights
 
 **Files:**
+
 - Create: `packages/web/src/utils/measurementTrends.ts`
 - Create: `packages/web/tests/utils/measurementTrends.test.ts`
 - Modify: `packages/web/src/components/HrvTrends.vue`
@@ -302,6 +310,7 @@
 - Modify: `packages/web/tests/components/ResonanceAssessment.test.ts`
 
 **Interfaces:**
+
 - Produces: `getComparableMeasurements(measurements, anchor): HrvMeasurement[]`.
 - Produces: `buildWithinPersonInsights(measurements): WellnessInsight[]`.
 
@@ -334,6 +343,7 @@
 ### Task 6: Accessible, Reduced-Motion, Offline UX
 
 **Files:**
+
 - Create: `packages/web/src/composables/useModalIsolation.ts`
 - Create: `packages/web/tests/composables/useModalIsolation.test.ts`
 - Modify: `packages/web/src/components/LabTab.vue`
@@ -347,6 +357,7 @@
 - Modify: `packages/web/tests/components/HelpSystem.test.ts`
 
 **Interfaces:**
+
 - Produces: `useModalIsolation(dialogRef, openRef, options)` for focus containment, restoration, and inert background behavior.
 
 - [ ] **Step 1: Add failing modal isolation tests**
@@ -378,6 +389,7 @@
 ### Task 7: Coverage, Build Tooling, Documentation, and Release Verification
 
 **Files:**
+
 - Modify: `packages/web/vitest.config.ts`
 - Modify: `packages/shared/vitest.config.ts`
 - Modify: tests required to satisfy raised gates without excluding production files
@@ -390,6 +402,7 @@
 - Create: `docs/PULSE-VARIABILITY-DEVICE-VALIDATION.md`
 
 **Interfaces:**
+
 - Build script reads the application version from `packages/web/package.json` and exits nonzero when an expected artifact is absent.
 
 - [ ] **Step 1: Add failing build-script checks**

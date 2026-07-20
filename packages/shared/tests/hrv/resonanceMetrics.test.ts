@@ -77,40 +77,24 @@ describe('computeResonanceMetrics', () => {
   });
 
   it('uses the overall heart-rate range when capture is shorter than one breathing cycle', () => {
-    const result = computeResonanceMetrics(
-      [1000, 800],
-      [0, 1000],
-      6,
-      []
-    );
+    const result = computeResonanceMetrics([1000, 800], [0, 1000], 6, []);
 
     expect(result.peakToTroughAmplitude).toBe(15);
   });
 
   it('returns zero phase synchrony for a flat heart-rate signal', () => {
-    const result = computeResonanceMetrics(
-      [1000, 1000, 1000],
-      [0, 1000, 2000],
-      6,
-      []
-    );
+    const result = computeResonanceMetrics([1000, 1000, 1000], [0, 1000, 2000], 6, []);
 
     expect(result.phaseSynchrony).toBe(0);
   });
 
   it('handles spectra with no LF power and one LF point', () => {
-    const noLfPower = computeResonanceMetrics(
-      [1000, 900],
-      [0, 1000],
-      6,
-      [{ frequency: 0.2, power: 10 }]
-    );
-    const oneLfPoint = computeResonanceMetrics(
-      [1000, 900],
-      [0, 1000],
-      6,
-      [{ frequency: 0.1, power: 7 }]
-    );
+    const noLfPower = computeResonanceMetrics([1000, 900], [0, 1000], 6, [
+      { frequency: 0.2, power: 10 },
+    ]);
+    const oneLfPoint = computeResonanceMetrics([1000, 900], [0, 1000], 6, [
+      { frequency: 0.1, power: 7 },
+    ]);
 
     expect(noLfPower).toMatchObject({ waveformSmoothness: 0, lfPeakCount: 0 });
     expect(oneLfPoint).toMatchObject({
@@ -121,18 +105,13 @@ describe('computeResonanceMetrics', () => {
   });
 
   it('counts dominant peaks at both LF spectrum boundaries', () => {
-    const result = computeResonanceMetrics(
-      [1000, 900],
-      [0, 1000],
-      6,
-      [
-        { frequency: 0.04, power: 8 },
-        { frequency: 0.08, power: 1 },
-        { frequency: 0.1, power: 2 },
-        { frequency: 0.12, power: 1 },
-        { frequency: 0.15, power: 9 },
-      ]
-    );
+    const result = computeResonanceMetrics([1000, 900], [0, 1000], 6, [
+      { frequency: 0.04, power: 8 },
+      { frequency: 0.08, power: 1 },
+      { frequency: 0.1, power: 2 },
+      { frequency: 0.12, power: 1 },
+      { frequency: 0.15, power: 9 },
+    ]);
 
     expect(result.lfPeakCount).toBe(3);
     expect(result.lfPeakAmplitude).toBe(9);
