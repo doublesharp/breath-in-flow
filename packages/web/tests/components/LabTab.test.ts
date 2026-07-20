@@ -846,4 +846,68 @@ describe('LabTab.vue', () => {
     expect(vm.permissionError).toBeNull();
     wrapper.unmount();
   });
+
+  it('cancels a pending permission start without reopening prep or starting a sensor', async () => {
+    let resolvePermissions!: (permissions: { camera: 'granted'; motion: 'granted' }) => void;
+    vi.mocked(requestSensorPermissions).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePermissions = resolve;
+      })
+    );
+    const wrapper = mount(LabTab, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          HrTachogram: true,
+          SignalQualityIndicator: true,
+          HrvMetricsDashboard: true,
+          FrequencySpectrum: true,
+          PoincarePlot: true,
+          ResonanceAssessment: true,
+        },
+      },
+    });
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Freeform')!
+      .trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
+    await flushPromises();
+
+    const prepActions = document.body.querySelector('[data-testid="prep-actions"]')!;
+    (
+      Array.from(prepActions.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Start'
+      ) as HTMLButtonElement
+    ).click();
+    await wrapper.vm.$nextTick();
+    expect(requestSensorPermissions).toHaveBeenCalledOnce();
+
+    (
+      Array.from(prepActions.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Cancel'
+      ) as HTMLButtonElement
+    ).click();
+    await wrapper.vm.$nextTick();
+
+    resolvePermissions({ camera: 'granted', motion: 'granted' });
+    await flushPromises();
+
+    const vm = wrapper.vm as unknown as {
+      isMeasuring: boolean;
+      showPrep: boolean;
+      prepProtocol: unknown;
+      isStartPending: boolean;
+    };
+    expect(ppgService.start).not.toHaveBeenCalled();
+    expect(vm.isMeasuring).toBe(false);
+    expect(vm.showPrep).toBe(false);
+    expect(vm.prepProtocol).toBeNull();
+    expect(vm.isStartPending).toBe(false);
+    wrapper.unmount();
+  });
 });

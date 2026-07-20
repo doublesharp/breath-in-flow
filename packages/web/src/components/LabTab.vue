@@ -219,10 +219,7 @@
             Start
           </button>
           <button
-            @click="
-              showPrep = false;
-              prepProtocol = null;
-            "
+            @click="cancelPendingStart"
             class="w-full py-3 rounded-xl font-medium text-white/40 hover:text-white/60"
           >
             Cancel
@@ -982,6 +979,14 @@ async function confirmStart() {
       isStartPending.value = false;
     }
   }
+}
+
+function cancelPendingStart() {
+  startGeneration += 1;
+  pendingStartGeneration = null;
+  isStartPending.value = false;
+  showPrep.value = false;
+  prepProtocol.value = null;
 }
 
 async function enableKeepAwake() {
