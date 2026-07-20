@@ -1,7 +1,5 @@
 type SafeParseSchema<T> = {
-  safeParse(value: unknown):
-    | { success: true; data: T }
-    | { success: false; error: unknown };
+  safeParse(value: unknown): { success: true; data: T } | { success: false; error: unknown };
 };
 
 export interface ValidateStoredArrayOptions<T> {
@@ -10,6 +8,27 @@ export interface ValidateStoredArrayOptions<T> {
   schema: SafeParseSchema<T>;
   normalize?: (value: unknown) => unknown;
   logLimit?: number;
+}
+
+export function createStoredRecordWarningLogger(key: string, logLimit: number = 3) {
+  let skipped = 0;
+  let logged = 0;
+  const boundedLogLimit = Math.max(0, logLimit);
+
+  return {
+    warn(index: number, error?: unknown) {
+      if (logged < boundedLogLimit) {
+        console.warn(`Skipping invalid ${key} record at index ${index}`, error);
+        logged += 1;
+      }
+      skipped += 1;
+    },
+    summarize() {
+      if (skipped > 0) {
+        console.warn(`Skipped ${skipped} invalid records from ${key}`);
+      }
+    },
+  };
 }
 
 /**
@@ -39,9 +58,7 @@ export function validateStoredArray<T>({
   }
 
   const records: T[] = [];
-  let skipped = 0;
-  let logged = 0;
-  const boundedLogLimit = Math.max(0, logLimit);
+  const warnings = createStoredRecordWarningLogger(key, logLimit);
 
   for (const [index, record] of parsed.entries()) {
     try {
@@ -51,22 +68,13 @@ export function validateStoredArray<T>({
         continue;
       }
 
-      if (logged < boundedLogLimit) {
-        console.warn(`Skipping invalid ${key} record at index ${index}`, result.error);
-        logged += 1;
-      }
+      warnings.warn(index, result.error);
     } catch (error) {
-      if (logged < boundedLogLimit) {
-        console.warn(`Skipping invalid ${key} record at index ${index}`, error);
-        logged += 1;
-      }
+      warnings.warn(index, error);
     }
-    skipped += 1;
   }
 
-  if (skipped > 0) {
-    console.warn(`Skipped ${skipped} invalid records from ${key}`);
-  }
+  warnings.summarize();
 
   return records;
 }

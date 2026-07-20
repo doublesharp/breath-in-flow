@@ -24,23 +24,28 @@ function makeMeasurement(overrides: Partial<HrvMeasurement> = {}): HrvMeasuremen
       },
       frequencyDomain: {
         available: true,
-        vlfPower: 100,
-        lfPower: 300,
-        hfPower: 200,
-        totalPower: 600,
-        lfPowerNorm: 60,
-        hfPowerNorm: 40,
-        lfHfRatio: 1.5,
-        lfPeak: 0.1,
-        hfPeak: 0.25,
-        spectrum: [],
+        value: {
+          lfPowerNorm: 60,
+          hfPowerNorm: 40,
+          lfHfRatio: 1.5,
+          lfPeak: 0.1,
+          hfPeak: 0.25,
+          spectrum: [],
+        },
+      },
+      poincare: {
+        available: true,
+        value: { points: [] },
       },
       resonance: {
-        peakToTroughAmplitude: 15,
-        waveformSmoothness: 0.7,
-        phaseSynchrony: 0.8,
-        lfPeakCount: 1,
-        lfPeakAmplitude: 50,
+        available: true,
+        value: {
+          peakToTroughAmplitude: 15,
+          waveformSmoothness: 0.7,
+          phaseSynchrony: 0.8,
+          lfPeakCount: 1,
+          lfPeakAmplitude: 50,
+        },
       },
       quality: {
         totalSamples: 120,
@@ -75,6 +80,22 @@ function makeAssessment(overrides: Partial<AssessmentResult> = {}): AssessmentRe
     },
     ...overrides,
   };
+}
+
+async function putRawRecord(storeName: 'measurements' | 'assessments', value: unknown) {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('breath-in-flow-hrv', 1);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const tx = db.transaction(storeName, 'readwrite');
+  tx.objectStore(storeName).put(value);
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+  db.close();
 }
 
 beforeEach(async () => {
@@ -257,6 +278,21 @@ describe('useHrvStorage', () => {
   });
 
   describe('getMeasurementStats', () => {
+    it('skips malformed nested analysis without hiding valid siblings or crashing stats', async () => {
+      const { saveMeasurement, getMeasurements, getMeasurementStats } = useHrvStorage();
+      const valid = makeMeasurement({ completedAt: new Date() });
+      await saveMeasurement(valid);
+      await putRawRecord('measurements', {
+        ...valid,
+        id: crypto.randomUUID(),
+        completedAt: new Date(Date.now() + 1_000),
+        analysis: {},
+      });
+
+      await expect(getMeasurementStats(30)).resolves.toEqual(expect.objectContaining({ count: 1 }));
+      expect((await getMeasurements()).map((measurement) => measurement.id)).toEqual([valid.id]);
+    });
+
     it('computes correct averages', async () => {
       const { saveMeasurement, getMeasurementStats } = useHrvStorage();
 
@@ -271,8 +307,15 @@ describe('useHrvStorage', () => {
             meanHR: 70,
           },
           frequencyDomain: {
-            ...makeMeasurement().analysis.frequencyDomain,
-            lfPower: 300,
+            available: true,
+            value: {
+              lfPowerNorm: 30,
+              hfPowerNorm: 70,
+              lfHfRatio: 0.43,
+              lfPeak: 0.1,
+              hfPeak: 0.25,
+              spectrum: [],
+            },
           },
         },
       });
@@ -287,8 +330,15 @@ describe('useHrvStorage', () => {
             meanHR: 80,
           },
           frequencyDomain: {
-            ...makeMeasurement().analysis.frequencyDomain,
-            lfPower: 500,
+            available: true,
+            value: {
+              lfPowerNorm: 50,
+              hfPowerNorm: 50,
+              lfHfRatio: 1,
+              lfPeak: 0.1,
+              hfPeak: 0.25,
+              spectrum: [],
+            },
           },
         },
       });
@@ -301,7 +351,7 @@ describe('useHrvStorage', () => {
       expect(stats.avgRmssd).toBe(50); // (40+60)/2
       expect(stats.avgSdnn).toBe(60); // (50+70)/2
       expect(stats.avgMeanHR).toBe(75); // (70+80)/2
-      expect(stats.avgLfPower).toBe(400); // (300+500)/2
+      expect(stats.avgLfPowerNorm).toBe(40); // (30+50)/2
       expect(stats.latestDate).not.toBeNull();
     });
 
@@ -324,9 +374,15 @@ describe('useHrvStorage', () => {
         analysis: {
           ...makeMeasurement().analysis,
           frequencyDomain: {
-            ...makeMeasurement().analysis.frequencyDomain,
             available: true,
-            lfPower: 400,
+            value: {
+              lfPowerNorm: 40,
+              hfPowerNorm: 60,
+              lfHfRatio: 0.67,
+              lfPeak: 0.1,
+              hfPeak: 0.25,
+              spectrum: [],
+            },
           },
         },
       });
@@ -334,10 +390,8 @@ describe('useHrvStorage', () => {
         analysis: {
           ...makeMeasurement().analysis,
           frequencyDomain: {
-            ...makeMeasurement().analysis.frequencyDomain,
             available: false,
-            unavailableReason: 'protocol-not-supported',
-            lfPower: 0,
+            reason: 'protocol-not-supported',
           },
         },
       });
@@ -345,7 +399,7 @@ describe('useHrvStorage', () => {
       await saveMeasurement(available);
       await saveMeasurement(unavailable);
 
-      expect((await getMeasurementStats(30)).avgLfPower).toBe(400);
+      expect((await getMeasurementStats(30)).avgLfPowerNorm).toBe(40);
     });
   });
 
@@ -359,6 +413,20 @@ describe('useHrvStorage', () => {
       const { saveMeasurement, hasAnyMeasurements } = useHrvStorage();
       await saveMeasurement(makeMeasurement());
       expect(await hasAnyMeasurements()).toBe(true);
+    });
+
+    it('does not count a malformed IndexedDB record as a usable measurement', async () => {
+      const { saveMeasurement, deleteMeasurement, hasAnyMeasurements } = useHrvStorage();
+      const seed = makeMeasurement();
+      await saveMeasurement(seed);
+      await deleteMeasurement(seed.id);
+      await putRawRecord('measurements', {
+        ...seed,
+        id: crypto.randomUUID(),
+        analysis: {},
+      });
+
+      expect(await hasAnyMeasurements()).toBe(false);
     });
   });
 
@@ -390,6 +458,24 @@ describe('useHrvStorage', () => {
       const result = await getLatestAssessment();
       expect(result).not.toBeNull();
       expect(result!.id).toBe(a2.id);
+    });
+
+    it('bounds corrupt IndexedDB assessment warnings and summarizes skipped records', async () => {
+      const { saveAssessment, getAssessments } = useHrvStorage();
+      const valid = makeAssessment();
+      await saveAssessment(valid);
+      for (let index = 0; index < 5; index += 1) {
+        await putRawRecord('assessments', {
+          id: crypto.randomUUID(),
+          completedAt: new Date(Date.now() + index + 1),
+        });
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      expect(await getAssessments()).toEqual([expect.objectContaining({ id: valid.id })]);
+      expect(warn).toHaveBeenCalledTimes(4);
+      expect(warn.mock.calls.at(-1)?.[0]).toContain('Skipped 5 invalid records');
+      warn.mockRestore();
     });
   });
 
@@ -494,7 +580,7 @@ describe('useHrvStorage', () => {
       expect(stats.count).toBe(0);
       expect(stats.avgRmssd).toBe(0);
       expect(stats.avgSdnn).toBe(0);
-      expect(stats.avgLfPower).toBe(0);
+      expect(stats.avgLfPowerNorm).toBe(0);
       expect(stats.avgMeanHR).toBe(0);
       expect(stats.latestDate).toBeNull();
     });

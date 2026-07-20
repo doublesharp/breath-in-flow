@@ -6,6 +6,21 @@ import { sensorFusionService } from '@/services/sensorFusion';
 
 enableAutoUnmount(afterEach);
 
+const hrvStorageMock = vi.hoisted(() => ({
+  initialize: vi.fn(),
+  saveMeasurement: vi.fn(),
+  getMeasurements: vi.fn(),
+  getMeasurementById: vi.fn(),
+  deleteMeasurement: vi.fn(),
+  getLatestMeasurement: vi.fn(),
+  getMeasurementStats: vi.fn(),
+  hasAnyMeasurements: vi.fn(),
+  saveAssessment: vi.fn(),
+  getAssessments: vi.fn(),
+  getLatestAssessment: vi.fn(),
+  migrateFromLocalStorage: vi.fn(),
+}));
+
 // Mock all services and storage
 vi.mock('@/services/ppgService', () => ({
   ppgService: {
@@ -47,24 +62,47 @@ vi.mock('@/services/sensorFusion', () => ({
 }));
 
 vi.mock('@/composables/useHrvStorage', () => ({
-  useHrvStorage: () => ({
-    saveMeasurement: vi.fn(),
-    getMeasurements: vi.fn().mockResolvedValue([]),
-    getMeasurementById: vi.fn(),
-    deleteMeasurement: vi.fn(),
-    getLatestMeasurement: vi.fn().mockResolvedValue(null),
-    getMeasurementStats: vi.fn(),
-    hasAnyMeasurements: vi.fn().mockResolvedValue(false),
-    saveAssessment: vi.fn(),
-    getAssessments: vi.fn().mockResolvedValue([]),
-    getLatestAssessment: vi.fn().mockResolvedValue(null),
-    migrateFromLocalStorage: vi.fn(),
-  }),
+  useHrvStorage: () => hrvStorageMock,
 }));
 
 describe('LabTab.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    hrvStorageMock.initialize.mockResolvedValue(undefined);
+    hrvStorageMock.getMeasurements.mockResolvedValue([]);
+    hrvStorageMock.getLatestMeasurement.mockResolvedValue(null);
+    hrvStorageMock.hasAnyMeasurements.mockResolvedValue(false);
+    hrvStorageMock.getAssessments.mockResolvedValue([]);
+    hrvStorageMock.getLatestAssessment.mockResolvedValue(null);
+  });
+
+  it('awaits storage initialization before exposing a migrated legacy assessment', async () => {
+    const migratedAssessment = {
+      id: crypto.randomUUID(),
+      trials: [],
+      selectedRate: 5.5,
+      completedAt: new Date('2026-07-20T00:00:00.000Z'),
+      config: {
+        warmupDurationSeconds: 120,
+        warmupRate: 6,
+        restDurationSeconds: 120,
+      },
+    };
+    hrvStorageMock.initialize.mockImplementationOnce(async () => {
+      hrvStorageMock.getLatestAssessment.mockResolvedValue(migratedAssessment);
+    });
+
+    const wrapper = shallowMount(LabTab);
+    await flushPromises();
+
+    expect(hrvStorageMock.initialize).toHaveBeenCalledOnce();
+    expect(hrvStorageMock.initialize.mock.invocationCallOrder[0]).toBeLessThan(
+      hrvStorageMock.getMeasurements.mock.invocationCallOrder[0]
+    );
+    expect(hrvStorageMock.initialize.mock.invocationCallOrder[0]).toBeLessThan(
+      hrvStorageMock.getLatestAssessment.mock.invocationCallOrder[0]
+    );
+    expect(wrapper.text()).toContain('5.5 BPM');
   });
 
   it('renders guided protocols by default', () => {

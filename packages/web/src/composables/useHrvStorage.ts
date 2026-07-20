@@ -6,7 +6,11 @@ import type {
   SensorSource,
 } from '@breath-in-flow/shared';
 import { AssessmentResultSchema } from '@breath-in-flow/shared';
-import { validateStoredArray } from '@/utils/storedRecordValidation';
+import { isHrvAnalysis } from '@/utils/hrvAnalysisValidation';
+import {
+  createStoredRecordWarningLogger,
+  validateStoredArray,
+} from '@/utils/storedRecordValidation';
 
 export interface HrvMeasurement {
   id: string;
@@ -39,7 +43,7 @@ interface MeasurementStats {
   count: number;
   avgRmssd: number;
   avgSdnn: number;
-  avgLfPower: number;
+  avgLfPowerNorm: number;
   avgMeanHR: number;
   latestDate: Date | null;
 }
@@ -69,7 +73,7 @@ function validateAssessment(value: unknown): AssessmentResult | null {
 }
 
 function validateMeasurement(value: unknown): HrvMeasurement | null {
-  if (!isRecord(value) || !isRecord(value.analysis)) return null;
+  if (!isRecord(value) || !isHrvAnalysis(value.analysis)) return null;
 
   const startedAt = restoreDate(value.startedAt);
   const completedAt = restoreDate(value.completedAt);
@@ -96,7 +100,7 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
     return null;
   }
 
-  return { ...value, startedAt, completedAt } as HrvMeasurement;
+  return { ...value, analysis: value.analysis, startedAt, completedAt } as HrvMeasurement;
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -227,7 +231,7 @@ async function getMeasurementStats(days: number = 30): Promise<MeasurementStats>
       count: 0,
       avgRmssd: 0,
       avgSdnn: 0,
-      avgLfPower: 0,
+      avgLfPowerNorm: 0,
       avgMeanHR: 0,
       latestDate: null,
     };
@@ -236,40 +240,26 @@ async function getMeasurementStats(days: number = 30): Promise<MeasurementStats>
   const count = measurements.length;
   const avgRmssd = measurements.reduce((sum, m) => sum + m.analysis.timeDomain.rmssd, 0) / count;
   const avgSdnn = measurements.reduce((sum, m) => sum + m.analysis.timeDomain.sdnn, 0) / count;
-  const frequencyMeasurements = measurements.filter(
-    (measurement) => measurement.analysis.frequencyDomain.available !== false
+  const availableFrequencyValues = measurements.flatMap((measurement) =>
+    measurement.analysis.frequencyDomain.available
+      ? [measurement.analysis.frequencyDomain.value]
+      : []
   );
-  const avgLfPower =
-    frequencyMeasurements.length > 0
-      ? frequencyMeasurements.reduce(
-          (sum, measurement) => sum + measurement.analysis.frequencyDomain.lfPower,
-          0
-        ) / frequencyMeasurements.length
+  const avgLfPowerNorm =
+    availableFrequencyValues.length > 0
+      ? availableFrequencyValues.reduce((sum, frequency) => sum + frequency.lfPowerNorm, 0) /
+        availableFrequencyValues.length
       : 0;
   const avgMeanHR = measurements.reduce((sum, m) => sum + m.analysis.timeDomain.meanHR, 0) / count;
 
   // measurements are sorted descending so first is latest
   const latestDate = measurements[0].completedAt;
 
-  return { count, avgRmssd, avgSdnn, avgLfPower, avgMeanHR, latestDate };
+  return { count, avgRmssd, avgSdnn, avgLfPowerNorm, avgMeanHR, latestDate };
 }
 
 async function hasAnyMeasurements(): Promise<boolean> {
-  const db = await openDB();
-  const tx = db.transaction('measurements', 'readonly');
-  const store = tx.objectStore('measurements');
-
-  return new Promise((resolve, reject) => {
-    const request = store.count();
-    request.onsuccess = () => {
-      db.close();
-      resolve(request.result > 0);
-    };
-    request.onerror = () => {
-      db.close();
-      reject(request.error);
-    };
-  });
+  return (await getMeasurements({ limit: 1 })).length > 0;
 }
 
 async function saveAssessment(result: AssessmentResult): Promise<void> {
@@ -287,6 +277,8 @@ async function getAssessments(): Promise<AssessmentResult[]> {
   const index = store.index('completedAt');
 
   const results: AssessmentResult[] = [];
+  const warnings = createStoredRecordWarningLogger('IndexedDB resonance assessments');
+  let recordIndex = 0;
 
   await new Promise<void>((resolve, reject) => {
     const request = index.openCursor(null, 'prev'); // descending by completedAt
@@ -294,6 +286,7 @@ async function getAssessments(): Promise<AssessmentResult[]> {
     request.onsuccess = (event) => {
       const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
       if (!cursor) {
+        warnings.summarize();
         resolve();
         return;
       }
@@ -301,8 +294,9 @@ async function getAssessments(): Promise<AssessmentResult[]> {
       if (assessment) {
         results.push(assessment);
       } else {
-        console.warn('Skipping invalid IndexedDB resonance assessment record');
+        warnings.warn(recordIndex);
       }
+      recordIndex += 1;
       cursor.continue();
     };
 
