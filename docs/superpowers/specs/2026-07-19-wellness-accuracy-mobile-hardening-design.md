@@ -26,6 +26,7 @@ This hardening pass will preserve the existing product and in-progress work whil
 - Improve sensor permissions, startup, failure recovery, and native plugin synchronization.
 - Fix confirmed breathing-session and extended-hold lifecycle defects encountered during review.
 - Improve mobile presentation, accessibility, reduced-motion behavior, and interaction feedback.
+- Add a diaphragm resistance training starter preset, reusable routine guidance, and configurable rest between sets.
 - Update direct dependencies to the newest compatible and safe releases.
 - Resolve known dependency advisories without forcing incompatible major upgrades.
 - Add regression and integration coverage, with explicit coverage gates for critical paths.
@@ -171,6 +172,35 @@ Metric groups unlock according to the same elapsed-time and quality rules. Stopp
 - Active full-screen session and measurement surfaces isolate background controls from keyboard and screen-reader interaction.
 - Pause/resume and background recovery retain monotonic elapsed-time behavior without timer drift.
 
+### Rest between sets
+
+Breathing configurations add `restBetweenSetsSeconds`, constrained to 0 through 600 seconds and defaulting to 0 for backward compatibility. A value of 0 preserves the existing manual `SET_COMPLETE` flow. A positive value enters a timed `SET_REST` phase after every non-final set, displays a countdown, and starts the next set automatically when the countdown finishes. The user can start the next set early or finish the session during rest.
+
+The shared timer and Vue timer composable must implement the same phase behavior. Rest time is excluded after the final target set and is included in total planned-session duration calculations.
+
+## Guided Routine Presets
+
+Built-in presets will use the existing breathing configuration rather than a second routine engine. Each preset can also provide structured educational content:
+
+- purpose and expected training emphasis
+- equipment or setup notes
+- step-by-step technique
+- how to get started and progress conservatively
+- comparison of related goals such as endurance and strengthening
+- precautions and clear stop conditions
+
+The first guided preset is **Diaphragm Resistance Training — Starter** with adjustable starting values of a 3-second inhale, 1-second inhale hold, 4-second exhale, 1-second exhale hold, 10 repetitions, 2 sets, and 60 seconds of rest between sets. Extended holds are disabled. The preset is a cadence and session-structure aid; it does not set or measure external resistance.
+
+Its guidance will explain:
+
+- Use a purpose-designed inspiratory resistance trainer according to its instructions when resistance is intended; do not improvise an airway obstruction.
+- Start with gentle resistance that permits a smooth full inhale and controlled exhale without straining.
+- Endurance-oriented work generally uses lighter resistance and more comfortable repetitions or sets, while strength-oriented work generally uses higher resistance, fewer deliberate repetitions, and more recovery.
+- Resistance progression must follow the device manufacturer's instructions or guidance from a qualified professional. Timing alone is not a validated substitute for resistance load.
+- Stop for dizziness, faintness, chest pain, unusual shortness of breath, or loss of controlled technique. People under care for a heart or lung condition, or who have been told to avoid strenuous breathing, should obtain individualized guidance before resistance training.
+
+The expandable guidance is available before loading the preset and remains readable on a narrow mobile viewport. Loading the preset emits only the valid breathing configuration; educational metadata is not accidentally persisted as configuration data. The content model is reusable so the remaining built-in routines can receive equivalent explanations in later content work without changing timer behavior.
+
 ## Mobile UX and Accessibility
 
 The existing warm visual direction and compact bottom navigation will remain. Improvements will focus on clarity and smoothness:
@@ -178,6 +208,7 @@ The existing warm visual direction and compact bottom navigation will remain. Im
 - Camera becomes the visibly recommended sensor; SCG and Both receive Beta labels and short explanations.
 - Protocol descriptions wrap to a useful second line rather than truncating before the distinguishing information.
 - Duration sliders receive visible labels, accessible names, current values, and protocol-specific minimums.
+- Preset cards expose accessible expandable guidance without making the primary Load action hard to reach.
 - Sensor quality language distinguishes no data, weak signal, positioning problems, and motion instead of treating every zero-quality state as excessive motion.
 - Full-screen modals use dialog semantics, focus management, background isolation, and reliable safe-area padding.
 - Primary actions stay reachable above the bottom safe area and keyboard.
@@ -190,6 +221,7 @@ The existing warm visual direction and compact bottom navigation will remain. Im
 ## Persistence and Compatibility
 
 - Existing configurations, sessions, assessments, and HRV measurements remain loadable.
+- Configurations created before `restBetweenSetsSeconds` existed load with a zero-second manual rest.
 - New measurement records add provenance, eligibility, warnings, and algorithm version without rewriting historical data.
 - Date serialization and IndexedDB/localStorage migration remain backward compatible.
 - Invalid or partially corrupted stored entries are skipped with bounded logging rather than crashing the app.
@@ -221,6 +253,9 @@ All behavioral fixes use red-green-refactor development. New tests should extend
 - Protocol-specific metric availability is enforced.
 - Invalid spectra expose unavailable values rather than default-looking peaks.
 - Extended-hold callbacks and persisted modes are correct.
+- Timed set rest counts down without drift, can be skipped, never runs after the final set, and preserves zero-rest manual behavior.
+- The diaphragm resistance starter preset loads the documented cadence, repetitions, sets, and rest value without persisting its guidance metadata.
+- Guided preset content renders accessibly and includes setup, progression, endurance-versus-strengthening context, and precautions.
 - Full-screen dialogs isolate background navigation and expose accessible controls.
 - Permission prompts occur in context, not at Android app launch.
 - Existing storage data remains readable.
@@ -276,6 +311,7 @@ Tests belong in the same commit as the behavior they protect. A commit will not 
 ## Acceptance Criteria
 
 - A normal user can complete breathing practices offline on iOS or Android without granting sensor permissions.
+- A user can load the diaphragm resistance starter routine, review its instructions and precautions, customize it, and complete timed multi-set rests offline.
 - Camera permission appears only when the user starts a camera-based measurement.
 - Camera PPG is the default recommended sensor; SCG and Both are clearly experimental.
 - The app cannot create HRV results from autocorrelation-only or duplicated fusion data.
