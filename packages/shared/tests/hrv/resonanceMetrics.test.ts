@@ -31,17 +31,12 @@ function generateCleanSinusoidalRR(
 
 describe('computeResonanceMetrics', () => {
   it('returns defaults for mismatched or non-increasing timestamps', () => {
-    const mismatched = computeResonanceMetrics(
-      [800, 810, 790],
-      [0, 800],
-      BREATHING_RATE_BPM,
-      [],
-    );
+    const mismatched = computeResonanceMetrics([800, 810, 790], [0, 800], BREATHING_RATE_BPM, []);
     const duplicate = computeResonanceMetrics(
       [800, 810, 790],
       [0, 800, 800],
       BREATHING_RATE_BPM,
-      [],
+      []
     );
 
     expect(mismatched).toEqual({
@@ -61,63 +56,86 @@ describe('computeResonanceMetrics', () => {
   });
 
   it('returns high waveform smoothness for clean sinusoidal oscillation at breathing freq', () => {
-    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(
-      1000, 80, BREATHING_FREQ_HZ, 120
-    );
+    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(1000, 80, BREATHING_FREQ_HZ, 120);
     const freq = computeFrequencyDomainMetrics(rrIntervals, timestamps);
-    const result = computeResonanceMetrics(rrIntervals, timestamps, BREATHING_RATE_BPM, freq.spectrum);
+    const result = computeResonanceMetrics(
+      rrIntervals,
+      timestamps,
+      BREATHING_RATE_BPM,
+      freq.spectrum
+    );
 
     expect(result.waveformSmoothness).toBeGreaterThan(0.5);
   });
 
   it('returns high phase synchrony for clean sinusoidal data', () => {
-    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(
-      1000, 80, BREATHING_FREQ_HZ, 120
-    );
+    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(1000, 80, BREATHING_FREQ_HZ, 120);
     const freq = computeFrequencyDomainMetrics(rrIntervals, timestamps);
-    const result = computeResonanceMetrics(rrIntervals, timestamps, BREATHING_RATE_BPM, freq.spectrum);
+    const result = computeResonanceMetrics(
+      rrIntervals,
+      timestamps,
+      BREATHING_RATE_BPM,
+      freq.spectrum
+    );
 
     expect(result.phaseSynchrony).toBeGreaterThan(0.5);
   });
 
   it('waveform smoothness is between 0 and 1', () => {
-    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(
-      1000, 50, BREATHING_FREQ_HZ, 60
-    );
+    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(1000, 50, BREATHING_FREQ_HZ, 60);
     const freq = computeFrequencyDomainMetrics(rrIntervals, timestamps);
-    const result = computeResonanceMetrics(rrIntervals, timestamps, BREATHING_RATE_BPM, freq.spectrum);
+    const result = computeResonanceMetrics(
+      rrIntervals,
+      timestamps,
+      BREATHING_RATE_BPM,
+      freq.spectrum
+    );
 
     expect(result.waveformSmoothness).toBeGreaterThanOrEqual(0);
     expect(result.waveformSmoothness).toBeLessThanOrEqual(1);
   });
 
   it('phase synchrony is between 0 and 1', () => {
-    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(
-      1000, 50, BREATHING_FREQ_HZ, 60
-    );
+    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(1000, 50, BREATHING_FREQ_HZ, 60);
     const freq = computeFrequencyDomainMetrics(rrIntervals, timestamps);
-    const result = computeResonanceMetrics(rrIntervals, timestamps, BREATHING_RATE_BPM, freq.spectrum);
+    const result = computeResonanceMetrics(
+      rrIntervals,
+      timestamps,
+      BREATHING_RATE_BPM,
+      freq.spectrum
+    );
 
     expect(result.phaseSynchrony).toBeGreaterThanOrEqual(0);
     expect(result.phaseSynchrony).toBeLessThanOrEqual(1);
   });
 
   it('peak-to-trough amplitude is non-negative', () => {
-    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(
-      1000, 50, BREATHING_FREQ_HZ, 60
-    );
+    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(1000, 50, BREATHING_FREQ_HZ, 60);
     const freq = computeFrequencyDomainMetrics(rrIntervals, timestamps);
-    const result = computeResonanceMetrics(rrIntervals, timestamps, BREATHING_RATE_BPM, freq.spectrum);
+    const result = computeResonanceMetrics(
+      rrIntervals,
+      timestamps,
+      BREATHING_RATE_BPM,
+      freq.spectrum
+    );
 
     expect(result.peakToTroughAmplitude).toBeGreaterThanOrEqual(0);
   });
 
   it('noisy data has lower smoothness than clean sinusoidal data', () => {
     const { rrIntervals: cleanRR, timestamps: cleanTS } = generateCleanSinusoidalRR(
-      1000, 80, BREATHING_FREQ_HZ, 120
+      1000,
+      80,
+      BREATHING_FREQ_HZ,
+      120
     );
     const freqClean = computeFrequencyDomainMetrics(cleanRR, cleanTS);
-    const cleanResult = computeResonanceMetrics(cleanRR, cleanTS, BREATHING_RATE_BPM, freqClean.spectrum);
+    const cleanResult = computeResonanceMetrics(
+      cleanRR,
+      cleanTS,
+      BREATHING_RATE_BPM,
+      freqClean.spectrum
+    );
 
     // Generate noisy (random) RR data
     const noisyRR: number[] = [];
@@ -130,40 +148,56 @@ describe('computeResonanceMetrics', () => {
       t += rr;
     }
     const freqNoisy = computeFrequencyDomainMetrics(noisyRR, noisyTS);
-    const noisyResult = computeResonanceMetrics(noisyRR, noisyTS, BREATHING_RATE_BPM, freqNoisy.spectrum);
+    const noisyResult = computeResonanceMetrics(
+      noisyRR,
+      noisyTS,
+      BREATHING_RATE_BPM,
+      freqNoisy.spectrum
+    );
 
     // Clean data should generally have higher smoothness
     // (This is a probabilistic test, may not always hold for random noise)
-    expect(cleanResult.waveformSmoothness).toBeGreaterThanOrEqual(noisyResult.waveformSmoothness * 0.5);
+    expect(cleanResult.waveformSmoothness).toBeGreaterThanOrEqual(
+      noisyResult.waveformSmoothness * 0.5
+    );
   });
 
   it('lfPeakCount is non-negative integer', () => {
-    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(
-      1000, 60, BREATHING_FREQ_HZ, 90
-    );
+    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(1000, 60, BREATHING_FREQ_HZ, 90);
     const freq = computeFrequencyDomainMetrics(rrIntervals, timestamps);
-    const result = computeResonanceMetrics(rrIntervals, timestamps, BREATHING_RATE_BPM, freq.spectrum);
+    const result = computeResonanceMetrics(
+      rrIntervals,
+      timestamps,
+      BREATHING_RATE_BPM,
+      freq.spectrum
+    );
 
     expect(result.lfPeakCount).toBeGreaterThanOrEqual(0);
     expect(Number.isInteger(result.lfPeakCount)).toBe(true);
   });
 
   it('lfPeakAmplitude is non-negative', () => {
-    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(
-      1000, 60, BREATHING_FREQ_HZ, 90
-    );
+    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(1000, 60, BREATHING_FREQ_HZ, 90);
     const freq = computeFrequencyDomainMetrics(rrIntervals, timestamps);
-    const result = computeResonanceMetrics(rrIntervals, timestamps, BREATHING_RATE_BPM, freq.spectrum);
+    const result = computeResonanceMetrics(
+      rrIntervals,
+      timestamps,
+      BREATHING_RATE_BPM,
+      freq.spectrum
+    );
 
     expect(result.lfPeakAmplitude).toBeGreaterThanOrEqual(0);
   });
 
   it('ideal resonance data yields lfPeakCount of 1', () => {
-    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(
-      1000, 80, BREATHING_FREQ_HZ, 150
-    );
+    const { rrIntervals, timestamps } = generateCleanSinusoidalRR(1000, 80, BREATHING_FREQ_HZ, 150);
     const freq = computeFrequencyDomainMetrics(rrIntervals, timestamps);
-    const result = computeResonanceMetrics(rrIntervals, timestamps, BREATHING_RATE_BPM, freq.spectrum);
+    const result = computeResonanceMetrics(
+      rrIntervals,
+      timestamps,
+      BREATHING_RATE_BPM,
+      freq.spectrum
+    );
 
     // Clean single-frequency oscillation should ideally have a single dominant LF peak
     expect(result.lfPeakCount).toBeGreaterThanOrEqual(1);

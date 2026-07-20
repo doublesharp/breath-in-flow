@@ -71,10 +71,7 @@ export interface TimeDomainMetrics {
 }
 
 export type FrequencyDomainUnavailableReason =
-  | 'insufficient-data'
-  | 'invalid-series'
-  | 'no-variability'
-  | 'protocol-not-supported';
+  'insufficient-data' | 'invalid-series' | 'no-variability' | 'protocol-not-supported';
 
 export interface FrequencyDomainMetrics {
   available: boolean;

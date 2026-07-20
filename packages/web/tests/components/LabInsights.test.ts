@@ -156,9 +156,7 @@ describe('LabInsights', () => {
 
   it('shows RMSSD trend insight when recent RMSSD improved >10%', () => {
     // 14 measurements: last 7 days high (50ms), prev 7 days low (30ms) => ~67% improvement
-    const recent = Array.from({ length: 7 }, (_, i) =>
-      makeMeasurement({ daysAgo: i, rmssd: 50 })
-    );
+    const recent = Array.from({ length: 7 }, (_, i) => makeMeasurement({ daysAgo: i, rmssd: 50 }));
     const previous = Array.from({ length: 7 }, (_, i) =>
       makeMeasurement({ daysAgo: i + 7, rmssd: 30 })
     );
@@ -176,9 +174,7 @@ describe('LabInsights', () => {
   });
 
   it('shows RMSSD declined insight when RMSSD dropped >10%', () => {
-    const recent = Array.from({ length: 7 }, (_, i) =>
-      makeMeasurement({ daysAgo: i, rmssd: 20 })
-    );
+    const recent = Array.from({ length: 7 }, (_, i) => makeMeasurement({ daysAgo: i, rmssd: 20 }));
     const previous = Array.from({ length: 7 }, (_, i) =>
       makeMeasurement({ daysAgo: i + 7, rmssd: 50 })
     );
@@ -196,8 +192,9 @@ describe('LabInsights', () => {
   });
 
   it('shows RMSSD stable insight when change is within ±10%', () => {
-    const all = Array.from({ length: 14 }, (_, i) =>
-      makeMeasurement({ daysAgo: i, rmssd: 35 + (i % 2) }) // tiny variation
+    const all = Array.from(
+      { length: 14 },
+      (_, i) => makeMeasurement({ daysAgo: i, rmssd: 35 + (i % 2) }) // tiny variation
     );
 
     const wrapper = mount(LabInsights, {
@@ -214,9 +211,7 @@ describe('LabInsights', () => {
 
   it('shows measurement streak with consecutive daily measurements', () => {
     // 5 consecutive days including today
-    const measurements = Array.from({ length: 5 }, (_, i) =>
-      makeMeasurement({ daysAgo: i })
-    );
+    const measurements = Array.from({ length: 5 }, (_, i) => makeMeasurement({ daysAgo: i }));
 
     const wrapper = mount(LabInsights, {
       props: { measurements, latestAssessment: null },

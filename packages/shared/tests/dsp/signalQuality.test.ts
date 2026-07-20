@@ -5,11 +5,7 @@ import type { DetectedPeak } from '../../src/dsp/peakDetection.js';
 /**
  * Create synthetic perfect peaks at regular intervals.
  */
-function createRegularPeaks(
-  count: number,
-  spacing: number,
-  amplitude = 1,
-): DetectedPeak[] {
+function createRegularPeaks(count: number, spacing: number, amplitude = 1): DetectedPeak[] {
   return Array.from({ length: count }, (_, i) => ({
     index: (i + 1) * spacing,
     amplitude,
@@ -23,10 +19,11 @@ function generateSine(
   frequencyHz: number,
   sampleRateHz: number,
   numSamples: number,
-  amplitude = 1,
+  amplitude = 1
 ): number[] {
-  return Array.from({ length: numSamples }, (_, n) =>
-    amplitude * Math.sin((2 * Math.PI * frequencyHz * n) / sampleRateHz),
+  return Array.from(
+    { length: numSamples },
+    (_, n) => amplitude * Math.sin((2 * Math.PI * frequencyHz * n) / sampleRateHz)
   );
 }
 
@@ -69,9 +66,7 @@ describe('assessSignalQuality', () => {
   it('returns 0 for fewer than 2 peaks', () => {
     const signal = generateSine(1, 100, 200, 1);
     expect(assessSignalQuality(signal, [])).toBe(0);
-    expect(
-      assessSignalQuality(signal, [{ index: 25, amplitude: 1 }]),
-    ).toBe(0);
+    expect(assessSignalQuality(signal, [{ index: 25, amplitude: 1 }])).toBe(0);
   });
 
   it('consistent amplitudes improve quality score', () => {

@@ -10,13 +10,7 @@ import {
 import type { SensorStartResult } from './sensorTypes';
 
 export type MeasurementState =
-  | 'idle'
-  | 'starting'
-  | 'acquiring'
-  | 'measuring'
-  | 'no-data'
-  | 'failed'
-  | 'complete';
+  'idle' | 'starting' | 'acquiring' | 'measuring' | 'no-data' | 'failed' | 'complete';
 
 type MeasurementSensorSource = Exclude<SensorSource, 'fused'>;
 
@@ -42,7 +36,7 @@ export interface MeasurementStartOutcome {
 
 export function limitAnalysisToEligibility(
   analysis: HRVAnalysis,
-  eligibility: MeasurementEligibility,
+  eligibility: MeasurementEligibility
 ): HRVAnalysis {
   if (eligibility.availableMetrics.includes('frequency-domain')) return analysis;
 
@@ -99,7 +93,7 @@ export class MeasurementSession {
   }
 
   async start(
-    sensors: Partial<Record<MeasurementSensorSource, MeasurementSensorAdapter>>,
+    sensors: Partial<Record<MeasurementSensorSource, MeasurementSensorAdapter>>
   ): Promise<MeasurementStartOutcome> {
     if (this.state !== 'idle') {
       return { ok: false, message: 'Measurement session has already started.' };
@@ -114,7 +108,7 @@ export class MeasurementSession {
         source,
         adapter,
         result: await adapter.start(),
-      })),
+      }))
     );
 
     const failedSources: MeasurementSensorSource[] = [];
@@ -141,9 +135,7 @@ export class MeasurementSession {
       this.onElapsed?.(Math.max(0, Math.floor((this.now() - this.startedAtMs) / 1_000)));
     }, 1_000);
 
-    return failedSources.length > 0
-      ? { ok: true, degradedSources: failedSources }
-      : { ok: true };
+    return failedSources.length > 0 ? { ok: true, degradedSources: failedSources } : { ok: true };
   }
 
   addDetectedSample(sample: IBISample): void {
@@ -185,7 +177,7 @@ export class MeasurementSession {
     this.eligibility = evaluateMeasurementEligibility(
       this.samples,
       this.protocol,
-      Math.max(elapsedSeconds, sampleSpanSeconds),
+      Math.max(elapsedSeconds, sampleSpanSeconds)
     );
     this.setState('complete');
     return this.getResult();
@@ -206,7 +198,8 @@ export class MeasurementSession {
     if (this.state !== 'acquiring') return;
     this.clearTimers();
     this.stopActiveSensors();
-    this.errorMessage = 'No detected heart beats were received. Reposition the sensor and try again.';
+    this.errorMessage =
+      'No detected heart beats were received. Reposition the sensor and try again.';
     this.setState('no-data');
   }
 

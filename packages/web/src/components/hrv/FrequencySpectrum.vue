@@ -1,28 +1,22 @@
 <template>
   <div class="frequency-spectrum glass rounded-xl p-4">
-    <h3 class="text-sm font-semibold text-white/70 uppercase tracking-wider mb-3">
-      Frequency Spectrum
-    </h3>
+    <h3 class="text-sm font-semibold text-white/70 uppercase tracking-wider mb-3">Frequency Spectrum</h3>
     <div :style="{ height: height + 'px' }" class="relative">
       <canvas ref="canvasEl" class="w-full h-full" />
     </div>
     <!-- Legend -->
     <div class="flex gap-4 mt-3 flex-wrap">
       <div class="flex items-center gap-1.5">
-        <span class="w-3 h-3 rounded-sm" style="background: rgba(107,114,128,0.5)" />
+        <span class="w-3 h-3 rounded-sm" style="background: rgba(107, 114, 128, 0.5)" />
         <span class="text-xs text-white/50">VLF</span>
       </div>
       <div class="flex items-center gap-1.5">
-        <span class="w-3 h-3 rounded-sm" style="background: rgba(59,130,246,0.5)" />
-        <span class="text-xs text-white/50">
-          LF{{ lfPower != null ? ` · ${formatPower(lfPower)}` : '' }}
-        </span>
+        <span class="w-3 h-3 rounded-sm" style="background: rgba(59, 130, 246, 0.5)" />
+        <span class="text-xs text-white/50"> LF{{ lfPower != null ? ` · ${formatPower(lfPower)}` : '' }} </span>
       </div>
       <div class="flex items-center gap-1.5">
-        <span class="w-3 h-3 rounded-sm" style="background: rgba(34,197,94,0.5)" />
-        <span class="text-xs text-white/50">
-          HF{{ hfPower != null ? ` · ${formatPower(hfPower)}` : '' }}
-        </span>
+        <span class="w-3 h-3 rounded-sm" style="background: rgba(34, 197, 94, 0.5)" />
+        <span class="text-xs text-white/50"> HF{{ hfPower != null ? ` · ${formatPower(hfPower)}` : '' }} </span>
       </div>
     </div>
   </div>

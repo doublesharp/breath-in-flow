@@ -74,7 +74,7 @@ export function computeResonanceMetrics(
   // --- Peak-to-trough amplitude ---
   let peakToTroughAmplitude = 0;
   if (rrIntervals.length >= 2) {
-    const totalDuration = (timestampsSec[timestampsSec.length - 1] - timestampsSec[0]);
+    const totalDuration = timestampsSec[timestampsSec.length - 1] - timestampsSec[0];
     const numCycles = Math.floor(totalDuration / cycleDurationSec);
 
     if (numCycles >= 1) {
@@ -137,9 +137,7 @@ export function computeResonanceMetrics(
       }
     }
 
-    waveformSmoothness = totalLFPower > 0
-      ? Math.min(1, focalPower / totalLFPower)
-      : 0;
+    waveformSmoothness = totalLFPower > 0 ? Math.min(1, focalPower / totalLFPower) : 0;
   }
 
   // --- Phase synchrony ---
@@ -149,12 +147,8 @@ export function computeResonanceMetrics(
   // take the maximum absolute value (equivalent to amplitude of cross-correlation).
   let phaseSynchrony = 0;
   if (instantaneousHR.length >= 2) {
-    const cosRef = timestampsSec.map(
-      (t) => Math.cos(2 * Math.PI * breathingFreqHz * t)
-    );
-    const sinRef = timestampsSec.map(
-      (t) => Math.sin(2 * Math.PI * breathingFreqHz * t)
-    );
+    const cosRef = timestampsSec.map((t) => Math.cos(2 * Math.PI * breathingFreqHz * t));
+    const sinRef = timestampsSec.map((t) => Math.sin(2 * Math.PI * breathingFreqHz * t));
     const corrCos = pearsonCorrelation(instantaneousHR, cosRef);
     const corrSin = pearsonCorrelation(instantaneousHR, sinRef);
     // Amplitude of the complex correlation: sqrt(corrCos² + corrSin²)

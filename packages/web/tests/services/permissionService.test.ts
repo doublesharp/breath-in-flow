@@ -10,7 +10,10 @@ vi.mock('@capacitor/core', () => ({
   },
 }));
 
-import { getPermissionDeniedMessage, requestSensorPermissions } from '../../src/services/permissionService';
+import {
+  getPermissionDeniedMessage,
+  requestSensorPermissions,
+} from '../../src/services/permissionService';
 
 function mockMediaDevices(getUserMedia: () => Promise<MediaStream>): void {
   Object.defineProperty(navigator, 'mediaDevices', {

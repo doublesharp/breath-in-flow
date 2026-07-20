@@ -64,7 +64,13 @@ function makeAnalysis(overrides: {
 
 describe('fuseTrialResults', () => {
   it('passes through PPG-only results with PPG confidence', () => {
-    const ppg = makeAnalysis({ lfPower: 120, amplitude: 12, smoothness: 0.7, synchrony: 0.8, signalQuality: 0.85 });
+    const ppg = makeAnalysis({
+      lfPower: 120,
+      amplitude: 12,
+      smoothness: 0.7,
+      synchrony: 0.8,
+      signalQuality: 0.85,
+    });
     const result = fuseTrialResults(ppg, undefined, 5.5);
 
     expect(result.source).toBe('ppg');
@@ -91,8 +97,20 @@ describe('fuseTrialResults', () => {
   });
 
   it('fuses dual sources with equal quality as simple average', () => {
-    const ppg = makeAnalysis({ lfPower: 100, amplitude: 10, smoothness: 0.6, synchrony: 0.5, signalQuality: 0.8 });
-    const scg = makeAnalysis({ lfPower: 100, amplitude: 10, smoothness: 0.6, synchrony: 0.5, signalQuality: 0.8 });
+    const ppg = makeAnalysis({
+      lfPower: 100,
+      amplitude: 10,
+      smoothness: 0.6,
+      synchrony: 0.5,
+      signalQuality: 0.8,
+    });
+    const scg = makeAnalysis({
+      lfPower: 100,
+      amplitude: 10,
+      smoothness: 0.6,
+      synchrony: 0.5,
+      signalQuality: 0.8,
+    });
     const result = fuseTrialResults(ppg, scg, 5.5);
 
     expect(result.source).toBe('fused');
@@ -115,8 +133,20 @@ describe('fuseTrialResults', () => {
 
   it('boosts confidence when metrics agree within 25%', () => {
     // Same metrics, high quality
-    const ppg = makeAnalysis({ lfPower: 100, amplitude: 10, smoothness: 0.6, synchrony: 0.5, signalQuality: 0.8 });
-    const scg = makeAnalysis({ lfPower: 110, amplitude: 11, smoothness: 0.65, synchrony: 0.55, signalQuality: 0.8 });
+    const ppg = makeAnalysis({
+      lfPower: 100,
+      amplitude: 10,
+      smoothness: 0.6,
+      synchrony: 0.5,
+      signalQuality: 0.8,
+    });
+    const scg = makeAnalysis({
+      lfPower: 110,
+      amplitude: 11,
+      smoothness: 0.65,
+      synchrony: 0.55,
+      signalQuality: 0.8,
+    });
 
     const result = fuseTrialResults(ppg, scg, 5.5);
 
@@ -126,8 +156,20 @@ describe('fuseTrialResults', () => {
 
   it('penalizes confidence when metrics disagree', () => {
     // Widely different metrics
-    const ppg = makeAnalysis({ lfPower: 100, amplitude: 5, smoothness: 0.3, synchrony: 0.2, signalQuality: 0.8 });
-    const scg = makeAnalysis({ lfPower: 300, amplitude: 20, smoothness: 0.9, synchrony: 0.9, signalQuality: 0.7 });
+    const ppg = makeAnalysis({
+      lfPower: 100,
+      amplitude: 5,
+      smoothness: 0.3,
+      synchrony: 0.2,
+      signalQuality: 0.8,
+    });
+    const scg = makeAnalysis({
+      lfPower: 300,
+      amplitude: 20,
+      smoothness: 0.9,
+      synchrony: 0.9,
+      signalQuality: 0.7,
+    });
 
     const result = fuseTrialResults(ppg, scg, 5.5);
 

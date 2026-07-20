@@ -52,7 +52,7 @@ class SensorFusionService {
       for (let ppgIndex = 0; ppgIndex < this.pendingPPG.length; ppgIndex++) {
         for (let scgIndex = 0; scgIndex < this.pendingSCG.length; scgIndex++) {
           const timeDiff = Math.abs(
-            this.pendingPPG[ppgIndex].timestamp - this.pendingSCG[scgIndex].timestamp,
+            this.pendingPPG[ppgIndex].timestamp - this.pendingSCG[scgIndex].timestamp
           );
           if (timeDiff < closestTimeDiff) {
             closestTimeDiff = timeDiff;
@@ -76,22 +76,19 @@ class SensorFusionService {
           const totalQ = ppgSample.quality + scgSample.quality;
           fusedInterval =
             totalQ > 0
-              ? (ppgSample.interval * ppgSample.quality +
-                  scgSample.interval * scgSample.quality) /
+              ? (ppgSample.interval * ppgSample.quality + scgSample.interval * scgSample.quality) /
                 totalQ
               : (ppgSample.interval + scgSample.interval) / 2;
           this.consecutiveMatches++;
           confidence = Math.min(
             1,
             ((ppgSample.quality + scgSample.quality) / 2) *
-              (this.consecutiveMatches >= 5 ? 1.2 : 1.0),
+              (this.consecutiveMatches >= 5 ? 1.2 : 1.0)
           );
         } else {
           // Disagree — use higher quality source
           fusedInterval =
-            ppgSample.quality >= scgSample.quality
-              ? ppgSample.interval
-              : scgSample.interval;
+            ppgSample.quality >= scgSample.quality ? ppgSample.interval : scgSample.interval;
           this.consecutiveMatches = 0;
           confidence = Math.max(ppgSample.quality, scgSample.quality) * 0.7;
         }
@@ -140,9 +137,7 @@ class SensorFusionService {
         ...sample,
         provenance: { source, method: 'peak-detected' },
         source,
-        ...(source === 'ppg'
-          ? { ppgInterval: sample.interval }
-          : { scgInterval: sample.interval }),
+        ...(source === 'ppg' ? { ppgInterval: sample.interval } : { scgInterval: sample.interval }),
         confidence: sample.quality * 0.8,
       } as FusedIBISample);
     }

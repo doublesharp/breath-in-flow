@@ -70,10 +70,7 @@ export class SOSFilter {
  * Compute 2nd order Butterworth lowpass digital coefficients via bilinear transform.
  * Returns [b0, b1, b2, a0, a1, a2] (a0 normalized to 1).
  */
-function butterworth2ndOrderLP(
-  cutoffHz: number,
-  sampleRateHz: number,
-): BiquadFilter {
+function butterworth2ndOrderLP(cutoffHz: number, sampleRateHz: number): BiquadFilter {
   // Pre-warp the cutoff frequency
   const Wd = 2 * sampleRateHz * Math.tan((Math.PI * cutoffHz) / sampleRateHz);
   // Bilinear transform for 2nd order Butterworth LP
@@ -86,7 +83,7 @@ function butterworth2ndOrderLP(
   const b0 = k2 * norm;
   const b1 = 2 * k2 * norm;
   const b2 = k2 * norm;
-  const a1 = (2 * (k2 - 1)) * norm;
+  const a1 = 2 * (k2 - 1) * norm;
   const a2 = (1 - sqrt2 * k + k2) * norm;
 
   return new BiquadFilter([b0, b1, b2], [1, a1, a2]);
@@ -95,10 +92,7 @@ function butterworth2ndOrderLP(
 /**
  * Compute 2nd order Butterworth highpass digital coefficients via bilinear transform.
  */
-function butterworth2ndOrderHP(
-  cutoffHz: number,
-  sampleRateHz: number,
-): BiquadFilter {
+function butterworth2ndOrderHP(cutoffHz: number, sampleRateHz: number): BiquadFilter {
   const k = Math.tan((Math.PI * cutoffHz) / sampleRateHz);
   const k2 = k * k;
   const sqrt2 = Math.SQRT2;
@@ -107,17 +101,13 @@ function butterworth2ndOrderHP(
   const b0 = norm;
   const b1 = -2 * norm;
   const b2 = norm;
-  const a1 = (2 * (k2 - 1)) * norm;
+  const a1 = 2 * (k2 - 1) * norm;
   const a2 = (1 - sqrt2 * k + k2) * norm;
 
   return new BiquadFilter([b0, b1, b2], [1, a1, a2]);
 }
 
-export function createLowpassFilter(
-  cutoffHz: number,
-  sampleRateHz: number,
-  order = 2,
-): SOSFilter {
+export function createLowpassFilter(cutoffHz: number, sampleRateHz: number, order = 2): SOSFilter {
   const numSections = Math.ceil(order / 2);
   const sections: BiquadFilter[] = [];
   for (let i = 0; i < numSections; i++) {
@@ -126,11 +116,7 @@ export function createLowpassFilter(
   return new SOSFilter(sections);
 }
 
-export function createHighpassFilter(
-  cutoffHz: number,
-  sampleRateHz: number,
-  order = 2,
-): SOSFilter {
+export function createHighpassFilter(cutoffHz: number, sampleRateHz: number, order = 2): SOSFilter {
   const numSections = Math.ceil(order / 2);
   const sections: BiquadFilter[] = [];
   for (let i = 0; i < numSections; i++) {
@@ -143,7 +129,7 @@ export function createBandpassFilter(
   lowHz: number,
   highHz: number,
   sampleRateHz: number,
-  order = 2,
+  order = 2
 ): SOSFilter {
   // Implement bandpass as HP followed by LP (cascade approach)
   const numSections = Math.ceil(order / 2);

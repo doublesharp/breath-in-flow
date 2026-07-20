@@ -1,8 +1,5 @@
 export type SensorStartFailureReason =
-  | 'permission-denied'
-  | 'unavailable'
-  | 'device-busy'
-  | 'start-failed';
+  'permission-denied' | 'unavailable' | 'device-busy' | 'start-failed';
 
 export type SensorStartResult =
   | { ok: true }
@@ -14,7 +11,7 @@ export type SensorStartResult =
 
 export function sensorStartFailure(
   reason: SensorStartFailureReason,
-  message: string,
+  message: string
 ): SensorStartResult {
   return { ok: false, reason, message };
 }

@@ -371,9 +371,12 @@ describe('useBreathingTimer', () => {
       expect(timer.phase.value).toBe('EXTENDED_INHALE_HOLD');
       expect(timer.isRecoveryBreath.value).toBe(false);
       expect(onExtendedHoldStart).toHaveBeenCalledTimes(1);
-      expect(onExtendedHoldStart).toHaveBeenCalledWith('INHALE', expect.objectContaining({
-        phase: 'EXTENDED_INHALE_HOLD',
-      }));
+      expect(onExtendedHoldStart).toHaveBeenCalledWith(
+        'INHALE',
+        expect.objectContaining({
+          phase: 'EXTENDED_INHALE_HOLD',
+        })
+      );
     });
 
     it('handles second extended hold of type INHALE (recovery breath) after EXHALE hold', () => {

@@ -28,7 +28,10 @@
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="rmssdCanvas" class="w-full h-full" data-testid="rmssd-canvas" />
-          <div v-if="filteredMeasurements.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+          <div
+            v-if="filteredMeasurements.length === 0"
+            class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
+          >
             No data in selected range
           </div>
         </div>
@@ -42,7 +45,10 @@
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="lfPowerCanvas" class="w-full h-full" data-testid="lf-power-canvas" />
-          <div v-if="filteredMeasurements.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+          <div
+            v-if="filteredMeasurements.length === 0"
+            class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
+          >
             No data in selected range
           </div>
         </div>
@@ -56,18 +62,17 @@
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="hrCanvas" class="w-full h-full" data-testid="hr-canvas" />
-          <div v-if="filteredMeasurements.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+          <div
+            v-if="filteredMeasurements.length === 0"
+            class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
+          >
             No data in selected range
           </div>
         </div>
       </div>
 
       <!-- Morning Readiness Score -->
-      <div
-        v-if="morningReadinessData.length > 0"
-        class="glass rounded-xl p-4"
-        data-testid="readiness-chart-container"
-      >
+      <div v-if="morningReadinessData.length > 0" class="glass rounded-xl p-4" data-testid="readiness-chart-container">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Morning Readiness</h3>
           <span class="text-xs text-slate-500">0–100 score</span>
@@ -129,15 +134,12 @@ const filteredMeasurements = computed(() => {
 // ─── Morning readiness data ───────────────────────────────────────────────────
 
 const morningReadinessData = computed(() => {
-  const morningMeasurements = filteredMeasurements.value.filter(
-    (m) => m.type === 'morning-readiness'
-  );
+  const morningMeasurements = filteredMeasurements.value.filter((m) => m.type === 'morning-readiness');
   if (morningMeasurements.length === 0) return [];
 
   // Compute a baseline RMSSD from all measurements for percentile scoring
   const allRmssds = props.measurements.map((m) => m.analysis.timeDomain.rmssd);
-  const baselineRmssd =
-    allRmssds.reduce((a, b) => a + b, 0) / (allRmssds.length || 1);
+  const baselineRmssd = allRmssds.reduce((a, b) => a + b, 0) / (allRmssds.length || 1);
 
   return morningMeasurements.map((m) => ({
     date: new Date(m.completedAt),
@@ -160,10 +162,7 @@ interface TrendChartOptions {
   formatValue?: (v: number) => string;
 }
 
-function computeMovingAverage(
-  data: { date: Date; value: number }[],
-  window: number
-): (number | null)[] {
+function computeMovingAverage(data: { date: Date; value: number }[], window: number): (number | null)[] {
   return data.map((_, i) => {
     const start = Math.max(0, i - window + 1);
     const slice = data.slice(start, i + 1);
@@ -257,8 +256,7 @@ function drawTrendChart(ctx: CanvasRenderingContext2D, options: TrendChartOption
   const firstDay = new Date(xMin);
   firstDay.setHours(0, 0, 0, 0);
   // align to even boundary
-  const alignedStart =
-    Math.ceil(firstDay.getTime() / xStepMs) * xStepMs;
+  const alignedStart = Math.ceil(firstDay.getTime() / xStepMs) * xStepMs;
 
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   for (let t = alignedStart; t <= xMax; t += xStepMs) {

@@ -56,10 +56,7 @@ export function lombScargle(
     // Normalized Lomb-Scargle power (units: ms²)
     let power = 0;
     if (cosDenom > 1e-12 && sinDenom > 1e-12) {
-      power = 0.5 * (
-        (cosNumer * cosNumer) / cosDenom +
-        (sinNumer * sinNumer) / sinDenom
-      );
+      power = 0.5 * ((cosNumer * cosNumer) / cosDenom + (sinNumer * sinNumer) / sinDenom);
     }
 
     // Normalize to PSD: divide by N/2 to get ms²/Hz
@@ -168,7 +165,7 @@ function findPeakFrequency(
 
 function getFrequencySeriesIssue(
   rrIntervals: number[],
-  timestamps: number[],
+  timestamps: number[]
 ): FrequencyDomainUnavailableReason | null {
   if (rrIntervals.length !== timestamps.length) return 'invalid-series';
   if (!rrIntervals.every((rr) => Number.isFinite(rr) && rr > 0)) return 'invalid-series';
@@ -183,7 +180,7 @@ function getFrequencySeriesIssue(
 }
 
 function unavailableFrequencyDomain(
-  unavailableReason: FrequencyDomainUnavailableReason,
+  unavailableReason: FrequencyDomainUnavailableReason
 ): FrequencyDomainMetrics {
   return {
     available: false,
@@ -260,9 +257,27 @@ export function computeFrequencyDomainMetrics(
   }));
 
   // Integrate band powers
-  const vlfPower = integrateBand(frequencies, psd, FREQUENCY_BANDS.VLF.low, FREQUENCY_BANDS.VLF.high, FREQ_STEP);
-  const lfPower = integrateBand(frequencies, psd, FREQUENCY_BANDS.LF.low, FREQUENCY_BANDS.LF.high, FREQ_STEP);
-  const hfPower = integrateBand(frequencies, psd, FREQUENCY_BANDS.HF.low, FREQUENCY_BANDS.HF.high, FREQ_STEP);
+  const vlfPower = integrateBand(
+    frequencies,
+    psd,
+    FREQUENCY_BANDS.VLF.low,
+    FREQUENCY_BANDS.VLF.high,
+    FREQ_STEP
+  );
+  const lfPower = integrateBand(
+    frequencies,
+    psd,
+    FREQUENCY_BANDS.LF.low,
+    FREQUENCY_BANDS.LF.high,
+    FREQ_STEP
+  );
+  const hfPower = integrateBand(
+    frequencies,
+    psd,
+    FREQUENCY_BANDS.HF.low,
+    FREQUENCY_BANDS.HF.high,
+    FREQ_STEP
+  );
   const totalPower = vlfPower + lfPower + hfPower;
 
   // Normalized powers
@@ -272,8 +287,18 @@ export function computeFrequencyDomainMetrics(
   const lfHfRatio = hfPower > 0 ? lfPower / hfPower : 0;
 
   // Peak frequencies
-  const lfPeak = findPeakFrequency(frequencies, psd, FREQUENCY_BANDS.LF.low, FREQUENCY_BANDS.LF.high);
-  const hfPeak = findPeakFrequency(frequencies, psd, FREQUENCY_BANDS.HF.low, FREQUENCY_BANDS.HF.high);
+  const lfPeak = findPeakFrequency(
+    frequencies,
+    psd,
+    FREQUENCY_BANDS.LF.low,
+    FREQUENCY_BANDS.LF.high
+  );
+  const hfPeak = findPeakFrequency(
+    frequencies,
+    psd,
+    FREQUENCY_BANDS.HF.low,
+    FREQUENCY_BANDS.HF.high
+  );
 
   return {
     available: true,

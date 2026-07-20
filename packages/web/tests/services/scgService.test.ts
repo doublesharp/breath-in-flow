@@ -13,14 +13,14 @@ import type { HeartRateEstimate, IBISample } from '@breath-in-flow/shared';
  */
 function dispatchMotionEvent(
   acceleration: { x: number; y: number; z: number },
-  interval: number = 10,
+  interval: number = 10
 ): void {
   window.dispatchEvent(makeMotionEvent(acceleration, interval));
 }
 
 function makeMotionEvent(
   acceleration: { x: number; y: number; z: number },
-  interval: number = 10,
+  interval: number = 10
 ): DeviceMotionEvent {
   const event = new Event('devicemotion') as DeviceMotionEvent;
   Object.defineProperty(event, 'accelerationIncludingGravity', { value: acceleration });
@@ -40,16 +40,25 @@ type TestSCGService = {
   lastIntervalMs: number;
   measurementStartMonotonicMs: number;
   lpFilter: { filter: (value: number) => number } | null;
-  peakDetector: { addSample: (value: number, timestamp?: number) => { index: number; amplitude: number; timestamp?: number } | null } | null;
+  peakDetector: {
+    addSample: (
+      value: number,
+      timestamp?: number
+    ) => { index: number; amplitude: number; timestamp?: number } | null;
+  } | null;
   rateEstimated: boolean;
   sampleRateHz: number;
 };
 
-function generateSineWave(sampleRateHz: number, durationSeconds: number, frequencyHz: number): number[] {
+function generateSineWave(
+  sampleRateHz: number,
+  durationSeconds: number,
+  frequencyHz: number
+): number[] {
   const totalSamples = Math.round(sampleRateHz * durationSeconds);
-  return Array.from({ length: totalSamples }, (_, i) => (
+  return Array.from({ length: totalSamples }, (_, i) =>
     Math.sin((2 * Math.PI * frequencyHz * i) / sampleRateHz)
-  ));
+  );
 }
 
 /**
@@ -66,7 +75,7 @@ function generateSineWave(sampleRateHz: number, durationSeconds: number, frequen
 function generateSCGSequence(
   heartRateBPM: number,
   durationSeconds: number,
-  sampleRateHz: number,
+  sampleRateHz: number
 ): {
   samples: { x: number; y: number; z: number }[];
   beatIndices: number[];
@@ -301,7 +310,8 @@ describe('scgService', () => {
       const service = scgService as unknown as TestSCGService;
       const identityFilter = { filter: (value: number) => value };
       const peakDetector = {
-        addSample: vi.fn()
+        addSample: vi
+          .fn()
           .mockReturnValueOnce({ index: 10, amplitude: 1, timestamp: 1000 })
           .mockReturnValueOnce({ index: 20, amplitude: 1, timestamp: 1800 }),
       };
@@ -461,12 +471,15 @@ describe('scgService', () => {
         // Alternate between near-zero and very high acceleration to create
         // large variance in the magnitude (sqrt(x²+y²+z²)) signal
         const intensity = i % 4 < 2 ? 15 : 0.1;
-        const sign = () => Math.random() > 0.5 ? 1 : -1;
-        dispatchMotionEvent({
-          x: sign() * intensity * Math.random(),
-          y: sign() * intensity * Math.random(),
-          z: sign() * intensity * Math.random(),
-        }, INTERVAL_MS);
+        const sign = () => (Math.random() > 0.5 ? 1 : -1);
+        dispatchMotionEvent(
+          {
+            x: sign() * intensity * Math.random(),
+            y: sign() * intensity * Math.random(),
+            z: sign() * intensity * Math.random(),
+          },
+          INTERVAL_MS
+        );
       }
 
       // The service should have emitted a quality=0 change event

@@ -85,8 +85,6 @@ const ENVELOPE_SMOOTH_SECONDS = 0.15;
 /** Maximum plausible heart rate (limits minimum peak distance in samples). */
 const MAX_HEART_RATE_BPM = 200;
 
-
-
 /** Time without a detected peak before quality is zeroed (synthetic ms). */
 const NO_PEAK_TIMEOUT_MS = 3000;
 
@@ -103,7 +101,7 @@ const SCG_DEBUG = import.meta.env.DEV && import.meta.env.VITE_SCG_DEBUG === 'tru
 
 export function resolveMotionInterval(
   eventIntervalMs: number | undefined,
-  fallbackIntervalMs: number,
+  fallbackIntervalMs: number
 ): number {
   if (
     typeof eventIntervalMs === 'number' &&
@@ -144,8 +142,9 @@ class SCGService {
 
   // Envelope smoothing (moving average post-Hilbert)
   private envelopeBuffer: number[] = [];
-  private envelopeSmoothSamples: number = Math.round(DEFAULT_SAMPLE_RATE_HZ * ENVELOPE_SMOOTH_SECONDS);
-
+  private envelopeSmoothSamples: number = Math.round(
+    DEFAULT_SAMPLE_RATE_HZ * ENVELOPE_SMOOTH_SECONDS
+  );
 
   // IBI tracking
   private lastPeakElapsedMs: number | null = null;
@@ -276,7 +275,9 @@ class SCGService {
     if (this.sampleCount < 3) {
       const acc = event.accelerationIncludingGravity || event.acceleration;
       const mag = acc ? Math.sqrt((acc.x ?? 0) ** 2 + (acc.y ?? 0) ** 2 + (acc.z ?? 0) ** 2) : 0;
-      this.debug(`SCG event #${this.sampleCount}: x=${acc?.x?.toFixed(3)} y=${acc?.y?.toFixed(3)} z=${acc?.z?.toFixed(3)} mag=${mag.toFixed(3)} interval=${event.interval}`);
+      this.debug(
+        `SCG event #${this.sampleCount}: x=${acc?.x?.toFixed(3)} y=${acc?.y?.toFixed(3)} z=${acc?.z?.toFixed(3)} mag=${mag.toFixed(3)} interval=${event.interval}`
+      );
     }
 
     // ── 1. Advance synthetic clock ──
@@ -334,8 +335,7 @@ class SCGService {
     if (this.envelopeBuffer.length > this.envelopeSmoothSamples) {
       this.envelopeBuffer.shift();
     }
-    const envelope =
-      this.envelopeBuffer.reduce((s, v) => s + v, 0) / this.envelopeBuffer.length;
+    const envelope = this.envelopeBuffer.reduce((s, v) => s + v, 0) / this.envelopeBuffer.length;
 
     // ── 6. Peak detection ──
     const peak = this.peakDetector!.addSample(envelope, this.elapsedMs);
@@ -407,12 +407,16 @@ class SCGService {
     if (this.filteredHistory.length >= 20) {
       // Use last ~0.5s of filtered data
       const recentFiltered = this.filteredHistory.slice(-Math.round(this.sampleRateHz * 0.5));
-      const filteredVariance = recentFiltered.length > 1 ? standardDeviation(recentFiltered) ** 2 : 0;
+      const filteredVariance =
+        recentFiltered.length > 1 ? standardDeviation(recentFiltered) ** 2 : 0;
 
       // Debug: log every ~2 seconds with more detail
       if (this.sampleCount % Math.round(this.sampleRateHz * 2) < 1) {
-        const env = this.envelopeBuffer.length > 0 ? this.envelopeBuffer[this.envelopeBuffer.length - 1] : 0;
-        this.debug(`SCG: fltVar=${filteredVariance.toFixed(4)} flt=${filtered.toFixed(4)} env=${env.toFixed(4)} z=${z.toFixed(1)} peaks=${this.recentIBIs.length} q=${this.currentQuality.toFixed(2)} n=${this.sampleCount}`);
+        const env =
+          this.envelopeBuffer.length > 0 ? this.envelopeBuffer[this.envelopeBuffer.length - 1] : 0;
+        this.debug(
+          `SCG: fltVar=${filteredVariance.toFixed(4)} flt=${filtered.toFixed(4)} env=${env.toFixed(4)} z=${z.toFixed(1)} peaks=${this.recentIBIs.length} q=${this.currentQuality.toFixed(2)} n=${this.sampleCount}`
+        );
       }
 
       // TODO: Re-enable motion gate after tuning with real device data
@@ -606,16 +610,21 @@ class SCGService {
         else this.bestAxis = 'z';
 
         this.axisCalibrated = true;
-        this.debug(`SCG: Auto-calibrated axis=${this.bestAxis} (avgX=${avgX.toFixed(2)} avgY=${avgY.toFixed(2)} avgZ=${avgZ.toFixed(2)})`);
+        this.debug(
+          `SCG: Auto-calibrated axis=${this.bestAxis} (avgX=${avgX.toFixed(2)} avgY=${avgY.toFixed(2)} avgZ=${avgZ.toFixed(2)})`
+        );
       }
       return z; // Use Z during calibration
     }
 
     // Return the gravity-aligned axis
     switch (this.bestAxis) {
-      case 'x': return x;
-      case 'y': return y;
-      case 'z': return z;
+      case 'x':
+        return x;
+      case 'y':
+        return y;
+      case 'z':
+        return z;
     }
   }
 
@@ -642,9 +651,7 @@ class SCGService {
     this.rateEstimated = true;
     this.rebuildFiltersAndDetector();
     if (hz < MIN_RECOMMENDED_SAMPLE_RATE_HZ) {
-      console.warn(
-        `SCG: low sample rate detected (${hz.toFixed(1)} Hz). Accuracy may be reduced.`,
-      );
+      console.warn(`SCG: low sample rate detected (${hz.toFixed(1)} Hz). Accuracy may be reduced.`);
     }
   }
 
@@ -658,7 +665,7 @@ class SCGService {
     this.TEMPLATE_WINDOW_SAMPLES = Math.round(fs * 0.1); // ±100 ms
     this.filteredHistoryMaxLen = Math.max(
       2 * this.TEMPLATE_WINDOW_SAMPLES + 1,
-      Math.round(fs * 6), // 6 seconds for autocorrelation
+      Math.round(fs * 6) // 6 seconds for autocorrelation
     );
 
     // Rebuild Hilbert coefficients for the (potentially new) sample rate
@@ -672,9 +679,9 @@ class SCGService {
     const minPeakDistance = Math.max(1, Math.floor(fs * (60 / MAX_HEART_RATE_BPM)));
     this.peakDetector = new StreamingPeakDetector({
       minPeakDistance,
-      thresholdFactor: 0.3,  // Lower for quantized accelerometer data (0.1 m/s² resolution)
+      thresholdFactor: 0.3, // Lower for quantized accelerometer data (0.1 m/s² resolution)
       adaptiveWindow: Math.max(10, Math.round(fs * 0.5)),
-      minProminence: 0.1,    // Lower — cardiac peaks are small with quantized data
+      minProminence: 0.1, // Lower — cardiac peaks are small with quantized data
     });
   }
 
@@ -697,18 +704,20 @@ class SCGService {
     mean /= N;
 
     // Center
-    const centered = segment.map(v => v - mean);
+    const centered = segment.map((v) => v - mean);
 
     // Autocorrelation for lags corresponding to 40-150 BPM
-    const minLag = Math.round(this.sampleRateHz * 60 / 150); // ~25 at 60Hz
-    const maxLag = Math.round(this.sampleRateHz * 60 / 40);  // ~90 at 60Hz
+    const minLag = Math.round((this.sampleRateHz * 60) / 150); // ~25 at 60Hz
+    const maxLag = Math.round((this.sampleRateHz * 60) / 40); // ~90 at 60Hz
 
     const correlations: Array<{ lag: number; ncc: number }> = [];
     let bestLag = 0;
     let bestCorr = -Infinity;
 
     for (let lag = minLag; lag <= maxLag && lag < N; lag++) {
-      let corr = 0, norm1 = 0, norm2 = 0;
+      let corr = 0,
+        norm1 = 0,
+        norm2 = 0;
       const len = N - lag;
       for (let i = 0; i < len; i++) {
         corr += centered[i] * centered[i + lag];
@@ -737,7 +746,9 @@ class SCGService {
     const intervalMs = (bestLag / this.sampleRateHz) * 1000;
     const hr = 60000 / intervalMs;
 
-    this.debug(`SCG autocorr: corr=${bestCorr.toFixed(3)} lag=${bestLag} HR=${hr.toFixed(1)} BPM interval=${intervalMs.toFixed(0)}ms`);
+    this.debug(
+      `SCG autocorr: corr=${bestCorr.toFixed(3)} lag=${bestLag} HR=${hr.toFixed(1)} BPM interval=${intervalMs.toFixed(0)}ms`
+    );
 
     if (
       bestCorr < 0.15 ||

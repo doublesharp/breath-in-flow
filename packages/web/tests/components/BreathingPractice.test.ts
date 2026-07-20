@@ -321,7 +321,9 @@ describe('BreathingPractice.vue', () => {
     await nextTick();
     await nextTick();
 
-    const confirmation = document.body.querySelector('[data-testid="stop-confirmation"]') as HTMLElement;
+    const confirmation = document.body.querySelector(
+      '[data-testid="stop-confirmation"]'
+    ) as HTMLElement;
     expect(confirmation.style.display).not.toBe('none');
     expect((document.activeElement as HTMLElement).dataset.testid).toBe('cancel-stop');
 

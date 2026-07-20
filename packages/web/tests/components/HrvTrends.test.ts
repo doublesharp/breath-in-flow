@@ -41,7 +41,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function makeMeasurement(overrides: Partial<HrvMeasurement> & { daysAgo?: number } = {}): HrvMeasurement {
+function makeMeasurement(
+  overrides: Partial<HrvMeasurement> & { daysAgo?: number } = {}
+): HrvMeasurement {
   const { daysAgo = 0, ...rest } = overrides;
   const completedAt = new Date(Date.now() - daysAgo * 86400000);
   return {
@@ -155,10 +157,7 @@ describe('HrvTrends', () => {
   });
 
   it('switching time range filters data', async () => {
-    const measurements = [
-      makeMeasurement({ daysAgo: 5 }),
-      makeMeasurement({ daysAgo: 60 }),
-    ];
+    const measurements = [makeMeasurement({ daysAgo: 5 }), makeMeasurement({ daysAgo: 60 })];
     const wrapper = mount(HrvTrends, {
       props: { measurements },
     });

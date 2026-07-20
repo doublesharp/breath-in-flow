@@ -53,9 +53,27 @@ describe('scoreTrial', () => {
 describe('findSuggestedRate', () => {
   it('picks trial with highest score', () => {
     const trials = [
-      makeTrial({ rate: 6.5, comfortRating: 3, hrAmplitude: 'small', waveformSmoothness: 'jagged', symptoms: [] }),
-      makeTrial({ rate: 5.5, comfortRating: 5, hrAmplitude: 'large', waveformSmoothness: 'verySmooth', symptoms: [] }),
-      makeTrial({ rate: 4.5, comfortRating: 4, hrAmplitude: 'medium', waveformSmoothness: 'somewhatSmooth', symptoms: [] }),
+      makeTrial({
+        rate: 6.5,
+        comfortRating: 3,
+        hrAmplitude: 'small',
+        waveformSmoothness: 'jagged',
+        symptoms: [],
+      }),
+      makeTrial({
+        rate: 5.5,
+        comfortRating: 5,
+        hrAmplitude: 'large',
+        waveformSmoothness: 'verySmooth',
+        symptoms: [],
+      }),
+      makeTrial({
+        rate: 4.5,
+        comfortRating: 4,
+        hrAmplitude: 'medium',
+        waveformSmoothness: 'somewhatSmooth',
+        symptoms: [],
+      }),
     ];
     expect(findSuggestedRate(trials)).toBe(5.5);
   });

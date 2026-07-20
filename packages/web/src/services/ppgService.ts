@@ -60,8 +60,8 @@ export async function listCameras(): Promise<{ deviceId: string; label: string }
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     return devices
-      .filter(d => d.kind === 'videoinput')
-      .map(d => ({ deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0, 8)}` }));
+      .filter((d) => d.kind === 'videoinput')
+      .map((d) => ({ deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0, 8)}` }));
   } catch {
     return [];
   }
@@ -214,12 +214,16 @@ class PPGService {
   }
 
   public async start(
-    callbacksOrOptions?: PPGCallbacks | PPGStartOptions,
+    callbacksOrOptions?: PPGCallbacks | PPGStartOptions
   ): Promise<SensorStartResult> {
     // Support both old signature (callbacks only) and new options object
     let options: PPGStartOptions = {};
     if (callbacksOrOptions) {
-      if ('callbacks' in callbacksOrOptions || 'cameraDeviceId' in callbacksOrOptions || 'torchEnabled' in callbacksOrOptions) {
+      if (
+        'callbacks' in callbacksOrOptions ||
+        'cameraDeviceId' in callbacksOrOptions ||
+        'torchEnabled' in callbacksOrOptions
+      ) {
         options = callbacksOrOptions as PPGStartOptions;
         if (options.callbacks) this.callbacks = options.callbacks;
       } else {
@@ -239,9 +243,7 @@ class PPGService {
       // Request camera access
       const mediaDevices = navigator.mediaDevices;
       if (!mediaDevices || !mediaDevices.getUserMedia) {
-        throw new Error(
-          'Camera not available on this device. Please use a device with a camera.',
-        );
+        throw new Error('Camera not available on this device. Please use a device with a camera.');
       }
 
       // Build video constraints — use specific camera if provided
@@ -261,22 +263,11 @@ class PPGService {
       const error = err instanceof Error ? err : new Error(String(err));
       let message = error.message;
 
-      if (
-        error.name === 'NotAllowedError' ||
-        error.name === 'PermissionDeniedError'
-      ) {
-        message =
-          'Camera permission denied. Please allow camera access and try again.';
-      } else if (
-        error.name === 'NotFoundError' ||
-        error.name === 'DevicesNotFoundError'
-      ) {
-        message =
-          'No camera found on this device. A rear camera is required for PPG capture.';
-      } else if (
-        error.name === 'NotReadableError' ||
-        error.name === 'TrackStartError'
-      ) {
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        message = 'Camera permission denied. Please allow camera access and try again.';
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        message = 'No camera found on this device. A rear camera is required for PPG capture.';
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
         message =
           'Camera is in use by another application. Please close other apps using the camera.';
       }
@@ -464,7 +455,8 @@ class PPGService {
     let normalized = 0;
     if (this.normBuffer.length >= 10) {
       const mean = this.normBuffer.reduce((s, v) => s + v, 0) / this.normBuffer.length;
-      const variance = this.normBuffer.reduce((s, v) => s + (v - mean) ** 2, 0) / this.normBuffer.length;
+      const variance =
+        this.normBuffer.reduce((s, v) => s + (v - mean) ** 2, 0) / this.normBuffer.length;
       const std = Math.sqrt(variance);
       normalized = std > 1e-8 ? (filtered - mean) / std : 0;
     }
@@ -532,13 +524,13 @@ class PPGService {
     mean /= N;
 
     // Subtract mean
-    const centered = data.map(v => v - mean);
+    const centered = data.map((v) => v - mean);
 
     // Compute autocorrelation for lags corresponding to 40-180 BPM
     // 40 BPM = 1.5s = 45 samples at 30fps
     // 180 BPM = 0.33s = 10 samples at 30fps
-    const minLag = Math.round(this.SAMPLE_RATE * 60 / 180); // ~10
-    const maxLag = Math.round(this.SAMPLE_RATE * 60 / 40);  // ~45
+    const minLag = Math.round((this.SAMPLE_RATE * 60) / 180); // ~10
+    const maxLag = Math.round((this.SAMPLE_RATE * 60) / 40); // ~45
 
     let bestLag = 0;
     let bestCorr = -Infinity;
@@ -599,22 +591,24 @@ class PPGService {
   private updateAdaptiveFilter(): void {
     if (this.recentIBIsMs.length < 3) {
       // Not enough data — revert to defaults if we drifted
-      if (this.currentLowCut !== DEFAULT_LOW_CUT_HZ || this.currentHighCut !== DEFAULT_HIGH_CUT_HZ) {
+      if (
+        this.currentLowCut !== DEFAULT_LOW_CUT_HZ ||
+        this.currentHighCut !== DEFAULT_HIGH_CUT_HZ
+      ) {
         this.currentLowCut = DEFAULT_LOW_CUT_HZ;
         this.currentHighCut = DEFAULT_HIGH_CUT_HZ;
         this.bandpassFilter = createBandpassFilter(
           this.currentLowCut,
           this.currentHighCut,
           this.SAMPLE_RATE,
-          DEFAULT_FILTER_ORDER,
+          DEFAULT_FILTER_ORDER
         );
       }
       return;
     }
 
     // Estimate HR from mean IBI
-    const meanIBI =
-      this.recentIBIsMs.reduce((sum, v) => sum + v, 0) / this.recentIBIsMs.length;
+    const meanIBI = this.recentIBIsMs.reduce((sum, v) => sum + v, 0) / this.recentIBIsMs.length;
     const hrHz = 1000 / meanIBI; // convert ms to Hz
 
     // Adjust cutoffs: low = HR * 0.5, high = HR * 2.5, clamped to [0.7, 3.5]
@@ -632,7 +626,7 @@ class PPGService {
         this.currentLowCut,
         this.currentHighCut,
         this.SAMPLE_RATE,
-        ADAPTIVE_FILTER_ORDER,
+        ADAPTIVE_FILTER_ORDER
       );
     }
   }
@@ -648,12 +642,7 @@ class PPGService {
     }
     this.lastFrameTime = timestamp;
 
-    if (
-      !this.video ||
-      !this.canvas ||
-      !this.ctx ||
-      this.video.readyState < 2
-    ) {
+    if (!this.video || !this.canvas || !this.ctx || this.video.readyState < 2) {
       this.scheduleNextFrame();
       return;
     }
@@ -675,7 +664,7 @@ class PPGService {
     let greenSum = 0;
     const pixelCount = roiW * roiH;
     for (let i = 0; i < pixels.length; i += 4) {
-      redSum += pixels[i];     // red channel
+      redSum += pixels[i]; // red channel
       greenSum += pixels[i + 1]; // green channel
     }
     const redAvg = pixelCount > 0 ? redSum / pixelCount : 0;
@@ -693,11 +682,7 @@ class PPGService {
     // Green channel can saturate to 0 on some Android cameras when flash is on.
     // Pick the channel that's not at 0 and not at 255 (saturated).
     const primarySignal =
-      greenAvg < 1 || greenAvg > 254
-        ? redAvg
-        : redAvg < 1 || redAvg > 254
-          ? greenAvg
-          : redAvg;
+      greenAvg < 1 || greenAvg > 254 ? redAvg : redAvg < 1 || redAvg > 254 ? greenAvg : redAvg;
     this.processSignalSample(primarySignal, timestamp);
 
     this.frameCount++;

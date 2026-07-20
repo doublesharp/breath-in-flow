@@ -1374,9 +1374,7 @@ watch(
   { immediate: true }
 );
 
-const isSessionVisible = computed(
-  () => isRunning.value || timer.phase.value === 'SESSION_COMPLETE'
-);
+const isSessionVisible = computed(() => isRunning.value || timer.phase.value === 'SESSION_COMPLETE');
 let focusBeforeSession: HTMLElement | null = null;
 let bodyOverflowBeforeSession = '';
 

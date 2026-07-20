@@ -7,10 +7,10 @@ export interface PreprocessingResult {
   artifactCount: number;
 }
 
-const MIN_INTERVAL_MS = 300;   // 200 BPM max
-const MAX_INTERVAL_MS = 2000;  // 30 BPM min
-const ECTOPIC_THRESHOLD = 0.20; // 20% deviation from local median
-const LOCAL_WINDOW = 5;         // 5-beat window for local median
+const MIN_INTERVAL_MS = 300; // 200 BPM max
+const MAX_INTERVAL_MS = 2000; // 30 BPM min
+const ECTOPIC_THRESHOLD = 0.2; // 20% deviation from local median
+const LOCAL_WINDOW = 5; // 5-beat window for local median
 
 /**
  * Detects and corrects artifacts in IBI (Inter-Beat Interval) series.
@@ -20,10 +20,7 @@ const LOCAL_WINDOW = 5;         // 5-beat window for local median
  * 2. Ectopic detection: flag intervals >20% from local 5-beat median
  * 3. Linear interpolation correction for flagged intervals
  */
-export function preprocessIBI(
-  intervals: number[],
-  timestamps: number[]
-): PreprocessingResult {
+export function preprocessIBI(intervals: number[], timestamps: number[]): PreprocessingResult {
   if (intervals.length === 0) {
     return {
       cleanedIntervals: [],

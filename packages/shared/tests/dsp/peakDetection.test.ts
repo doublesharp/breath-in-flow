@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  detectPeaks,
-  StreamingPeakDetector,
-} from '../../src/dsp/peakDetection.js';
+import { detectPeaks, StreamingPeakDetector } from '../../src/dsp/peakDetection.js';
 
 /**
  * Generate a sine wave signal.
@@ -12,13 +9,10 @@ function generateSine(
   sampleRateHz: number,
   numSamples: number,
   amplitude = 1,
-  offset = 0,
+  offset = 0
 ): number[] {
   return Array.from({ length: numSamples }, (_, n) => {
-    return (
-      offset +
-      amplitude * Math.sin((2 * Math.PI * frequencyHz * n) / sampleRateHz)
-    );
+    return offset + amplitude * Math.sin((2 * Math.PI * frequencyHz * n) / sampleRateHz);
   });
 }
 
@@ -194,9 +188,7 @@ describe('StreamingPeakDetector', () => {
       adaptiveWindow: 30,
     });
 
-    const peaks = signal
-      .map((val, idx) => detector.addSample(val, idx))
-      .filter((p) => p !== null);
+    const peaks = signal.map((val, idx) => detector.addSample(val, idx)).filter((p) => p !== null);
 
     expect(peaks.length).toBeGreaterThanOrEqual(3);
     expect(peaks.length).toBeLessThanOrEqual(6);
@@ -210,9 +202,7 @@ describe('StreamingPeakDetector', () => {
       thresholdFactor: 0.3,
     });
 
-    const peaks = signal
-      .map((val) => detector.addSample(val))
-      .filter((p) => p !== null);
+    const peaks = signal.map((val) => detector.addSample(val)).filter((p) => p !== null);
 
     for (let i = 1; i < peaks.length; i++) {
       const distance = peaks[i]!.index - peaks[i - 1]!.index;
@@ -223,9 +213,7 @@ describe('StreamingPeakDetector', () => {
   it('returns no peaks for a flat signal', () => {
     const signal = new Array(100).fill(5);
     const detector = new StreamingPeakDetector({ minPeakDistance: 10 });
-    const peaks = signal
-      .map((val) => detector.addSample(val))
-      .filter((p) => p !== null);
+    const peaks = signal.map((val) => detector.addSample(val)).filter((p) => p !== null);
     expect(peaks).toHaveLength(0);
   });
 
@@ -237,15 +225,11 @@ describe('StreamingPeakDetector', () => {
       adaptiveWindow: 30,
     });
 
-    const run1 = signal
-      .map((val, idx) => detector.addSample(val, idx))
-      .filter((p) => p !== null);
+    const run1 = signal.map((val, idx) => detector.addSample(val, idx)).filter((p) => p !== null);
 
     detector.reset();
 
-    const run2 = signal
-      .map((val, idx) => detector.addSample(val, idx))
-      .filter((p) => p !== null);
+    const run2 = signal.map((val, idx) => detector.addSample(val, idx)).filter((p) => p !== null);
 
     expect(run1.length).toBe(run2.length);
     run1.forEach((peak, i) => {
@@ -282,9 +266,7 @@ describe('StreamingPeakDetector', () => {
     const batchPeaks = detectPeaks(signal, opts);
 
     const detector = new StreamingPeakDetector(opts);
-    const streamPeaks = signal
-      .map((val) => detector.addSample(val))
-      .filter((p) => p !== null);
+    const streamPeaks = signal.map((val) => detector.addSample(val)).filter((p) => p !== null);
 
     // Streaming detects peaks one sample late (needs the next sample to confirm)
     // so indices may differ by 0-1, but counts should be close
@@ -296,9 +278,17 @@ describe('StreamingPeakDetector', () => {
     // Build signal: one tall peak, then one shallow bump, separated enough
     const signal: number[] = new Array(80).fill(0);
     // Tall peak at index 10
-    signal[8] = 3; signal[9] = 7; signal[10] = 10; signal[11] = 7; signal[12] = 3;
+    signal[8] = 3;
+    signal[9] = 7;
+    signal[10] = 10;
+    signal[11] = 7;
+    signal[12] = 3;
     // Shallow bump at index 50 (prominence ~1, below 30% of range ~10)
-    signal[48] = 0.4; signal[49] = 0.8; signal[50] = 1.0; signal[51] = 0.8; signal[52] = 0.4;
+    signal[48] = 0.4;
+    signal[49] = 0.8;
+    signal[50] = 1.0;
+    signal[51] = 0.8;
+    signal[52] = 0.4;
 
     const detectorWithProminence = new StreamingPeakDetector({
       minPeakDistance: 5,

@@ -140,9 +140,7 @@ describe('useHrvStorage', () => {
       const { saveMeasurement, getMeasurements } = useHrvStorage();
 
       for (let i = 0; i < 5; i++) {
-        await saveMeasurement(
-          makeMeasurement({ completedAt: new Date(Date.now() + i * 1000) })
-        );
+        await saveMeasurement(makeMeasurement({ completedAt: new Date(Date.now() + i * 1000) }));
       }
 
       const results = await getMeasurements({ limit: 3 });

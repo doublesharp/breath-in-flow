@@ -136,8 +136,7 @@ function draw() {
       const x1 = Math.max(padL, toX(phase.start));
       const x2 = Math.min(padL + plotW, toX(phase.end));
       if (x2 < padL || x1 > padL + plotW) continue;
-      ctx.fillStyle =
-        phase.type === 'inhale' ? 'rgba(74, 222, 128, 0.1)' : 'rgba(96, 165, 250, 0.1)';
+      ctx.fillStyle = phase.type === 'inhale' ? 'rgba(74, 222, 128, 0.1)' : 'rgba(96, 165, 250, 0.1)';
       ctx.fillRect(x1, padT, x2 - x1, plotH);
     }
   }
@@ -171,8 +170,7 @@ function draw() {
     for (let i = 1; i <= visibleData.length; i++) {
       const prevQuality = visibleData[segStart].quality;
       const atEnd = i === visibleData.length;
-      const qualityChanged =
-        !atEnd && Math.abs(visibleData[i].quality - prevQuality) > 0.1;
+      const qualityChanged = !atEnd && Math.abs(visibleData[i].quality - prevQuality) > 0.1;
 
       if (atEnd || qualityChanged) {
         ctx.beginPath();

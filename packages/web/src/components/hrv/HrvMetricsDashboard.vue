@@ -152,12 +152,7 @@
 
     <!-- Empty state -->
     <div v-else class="flex flex-col items-center justify-center py-10 text-white/40">
-      <svg
-        class="w-10 h-10 mb-3 opacity-50"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
+      <svg class="w-10 h-10 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -172,10 +167,7 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h } from 'vue';
-import type {
-  FrequencyDomainUnavailableReason,
-  HRVAnalysis,
-} from '@breath-in-flow/shared';
+import type { FrequencyDomainUnavailableReason, HRVAnalysis } from '@breath-in-flow/shared';
 
 const props = withDefaults(
   defineProps<{
@@ -187,11 +179,7 @@ const props = withDefaults(
   }
 );
 
-const gridClass = computed(() =>
-  props.compact
-    ? 'grid grid-cols-2 gap-2'
-    : 'grid grid-cols-2 sm:grid-cols-3 gap-3'
-);
+const gridClass = computed(() => (props.compact ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 sm:grid-cols-3 gap-3'));
 
 function fmtBPM(v: number) {
   return v.toFixed(1);
@@ -232,15 +220,15 @@ function frequencyUnavailableMessage(reason?: FrequencyDomainUnavailableReason):
 type MetricColor = 'blue' | 'red' | 'green' | 'purple' | 'indigo' | 'cyan' | 'teal' | 'amber' | 'orange';
 
 const colorMap: Record<MetricColor, { bg: string; text: string }> = {
-  blue:   { bg: 'rgba(59,130,246,0.1)',  text: '#60a5fa' },
-  red:    { bg: 'rgba(239,68,68,0.1)',   text: '#f87171' },
-  green:  { bg: 'rgba(34,197,94,0.1)',   text: '#4ade80' },
-  purple: { bg: 'rgba(168,85,247,0.1)',  text: '#c084fc' },
-  indigo: { bg: 'rgba(99,102,241,0.1)',  text: '#818cf8' },
-  cyan:   { bg: 'rgba(6,182,212,0.1)',   text: '#22d3ee' },
-  teal:   { bg: 'rgba(20,184,166,0.1)',  text: '#2dd4bf' },
-  amber:  { bg: 'rgba(245,158,11,0.1)',  text: '#fbbf24' },
-  orange: { bg: 'rgba(249,115,22,0.1)',  text: '#fb923c' },
+  blue: { bg: 'rgba(59,130,246,0.1)', text: '#60a5fa' },
+  red: { bg: 'rgba(239,68,68,0.1)', text: '#f87171' },
+  green: { bg: 'rgba(34,197,94,0.1)', text: '#4ade80' },
+  purple: { bg: 'rgba(168,85,247,0.1)', text: '#c084fc' },
+  indigo: { bg: 'rgba(99,102,241,0.1)', text: '#818cf8' },
+  cyan: { bg: 'rgba(6,182,212,0.1)', text: '#22d3ee' },
+  teal: { bg: 'rgba(20,184,166,0.1)', text: '#2dd4bf' },
+  amber: { bg: 'rgba(245,158,11,0.1)', text: '#fbbf24' },
+  orange: { bg: 'rgba(249,115,22,0.1)', text: '#fb923c' },
 };
 
 // Inline MetricCard component

@@ -24,7 +24,7 @@ export interface FusedTrialResult {
 export function fuseTrialResults(
   ppgAnalysis: HRVAnalysis | undefined,
   scgAnalysis: HRVAnalysis | undefined,
-  rate: number,
+  rate: number
 ): FusedTrialResult {
   // Neither source
   if (!ppgAnalysis && !scgAnalysis) {
@@ -98,34 +98,22 @@ export function fuseTrialResults(
     };
   }
 
-  const fuse = (ppgVal: number, scgVal: number): number =>
-    (ppgVal * wPpg + scgVal * wScg) / wTotal;
+  const fuse = (ppgVal: number, scgVal: number): number => (ppgVal * wPpg + scgVal * wScg) / wTotal;
 
-  const fusedLfPower = fuse(
-    ppg.frequencyDomain.lfPower,
-    scg.frequencyDomain.lfPower,
-  );
+  const fusedLfPower = fuse(ppg.frequencyDomain.lfPower, scg.frequencyDomain.lfPower);
   const fusedAmplitude = fuse(
     ppg.resonance.peakToTroughAmplitude,
-    scg.resonance.peakToTroughAmplitude,
+    scg.resonance.peakToTroughAmplitude
   );
-  const fusedSmoothness = fuse(
-    ppg.resonance.waveformSmoothness,
-    scg.resonance.waveformSmoothness,
-  );
-  const fusedSynchrony = fuse(
-    ppg.resonance.phaseSynchrony,
-    scg.resonance.phaseSynchrony,
-  );
+  const fusedSmoothness = fuse(ppg.resonance.waveformSmoothness, scg.resonance.waveformSmoothness);
+  const fusedSynchrony = fuse(ppg.resonance.phaseSynchrony, scg.resonance.phaseSynchrony);
 
   // Determine if metrics agree (within 25% relative difference)
   const metricsAgree = checkMetricsAgree(ppg, scg);
   const avgQuality = (wPpg + wScg) / 2;
   const maxQuality = Math.max(wPpg, wScg);
 
-  const confidence = metricsAgree
-    ? Math.min(1, avgQuality * 1.2)
-    : maxQuality * 0.7;
+  const confidence = metricsAgree ? Math.min(1, avgQuality * 1.2) : maxQuality * 0.7;
 
   return {
     rate,
@@ -170,7 +158,7 @@ function checkMetricsAgree(ppg: HRVAnalysis, scg: HRVAnalysis): boolean {
  */
 export function fuseAssessmentRuns(
   ppgTrials: { rate: number; analysis: HRVAnalysis }[],
-  scgTrials: { rate: number; analysis: HRVAnalysis }[],
+  scgTrials: { rate: number; analysis: HRVAnalysis }[]
 ): FusedTrialResult[] {
   // Collect all unique rates
   const rateSet = new Set<number>();

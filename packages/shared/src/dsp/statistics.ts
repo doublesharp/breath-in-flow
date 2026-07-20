@@ -18,9 +18,7 @@ export function median(data: number[]): number {
   if (data.length === 0) return 0;
   const sorted = [...data].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2;
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 export function rms(data: number[]): number {
@@ -41,10 +39,7 @@ export function movingAverage(data: number[], windowSize: number): number[] {
   return result;
 }
 
-export function movingStandardDeviation(
-  data: number[],
-  windowSize: number,
-): number[] {
+export function movingStandardDeviation(data: number[], windowSize: number): number[] {
   if (data.length === 0 || windowSize <= 0) return [];
   const result: number[] = [];
   for (let i = 0; i < data.length; i++) {

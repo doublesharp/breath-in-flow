@@ -7,6 +7,7 @@ A standalone heart rate variability (HRV) sensing system built into the breathin
 ## Motivation
 
 The resonance frequency assessment currently requires users to manually score trials using subjective observations from an external HRV app. By building HRV sensing directly into the app, we can:
+
 - Auto-capture RR intervals during breathing trials
 - Auto-compute LF power, peak-to-trough amplitude, and waveform smoothness
 - Auto-populate assessment scoring fields with objective data
@@ -17,12 +18,14 @@ The resonance frequency assessment currently requires users to manually score tr
 
 **Simultaneous dual-sensor mode ("phone-on-chest"):**
 Phone placed screen-down flat on the chest, finger covering the rear camera lens. Both sensors run simultaneously on the same heartbeats:
+
 - Rear camera + flash → PPG from fingertip (flash illuminates finger from below)
 - Accelerometer → SCG from chest wall vibrations
 - Audio-only breathing guidance (screen is face-down)
 - Real-time sensor fusion: cross-validate IBI detections per beat for highest accuracy
 
 **Single-sensor modes:**
+
 - **Camera only:** Finger on rear camera (any position). Audio-only guidance.
 - **Accelerometer only:** Phone flat on chest. Audio-only guidance.
 - **No sensor:** Manual scoring mode (existing behavior) for users who use an external app like Elite HRV.
@@ -67,12 +70,14 @@ Shared digital signal processing primitives used by both PPG and SCG services.
 ### Components
 
 **Butterworth IIR Filter** (`filters.ts`)
+
 - Second-order sections (SOS) implementation for numerical stability
 - Factory functions: `lowpass(fc, fs)`, `highpass(fc, fs)`, `bandpass(fLow, fHigh, fs)`
 - Real-time streaming filter via `filter(sample)` method (maintains internal state)
 - `reset()` to clear filter state between sessions
 
 **Peak Detection** (`peakDetection.ts`)
+
 - Adaptive threshold peak detector based on Pan-Tompkins principles
 - Configurable minimum peak distance (based on physiological HR range: 30-240 BPM)
 - Returns peak indices and amplitudes
@@ -81,11 +86,13 @@ Shared digital signal processing primitives used by both PPG and SCG services.
 - `StreamingPeakDetector` class for real-time use
 
 **Signal Quality Index** (`signalQuality.ts`)
+
 - `assessQuality(signal, peaks)` → 0.0-1.0 score
 - Based on: peak regularity, signal-to-noise ratio, morphology consistency
 - Thresholds: >0.8 = good, 0.5-0.8 = acceptable, <0.5 = poor
 
 **Moving Average / RMS** (`statistics.ts`)
+
 - `movingAverage(data, windowSize)`
 - `rms(data)`
 - `standardDeviation(data)`
@@ -101,9 +108,9 @@ Pure mathematical analysis of IBI (inter-beat interval) data. No sensor dependen
 
 ```typescript
 interface IBISample {
-  timestamp: number;    // ms since epoch
-  interval: number;     // ms between beats
-  quality: number;      // 0-1 signal quality
+  timestamp: number; // ms since epoch
+  interval: number; // ms between beats
+  quality: number; // 0-1 signal quality
 }
 ```
 
@@ -118,25 +125,27 @@ interface IBISample {
 
 ```typescript
 interface TimeDomainMetrics {
-  meanRR: number;        // Mean RR interval (ms)
-  sdnn: number;          // Standard deviation of NN intervals (ms)
-  rmssd: number;         // Root mean square of successive differences (ms)
-  pnn50: number;         // Percentage of successive differences > 50ms (%)
-  meanHR: number;        // Mean heart rate (BPM)
-  minHR: number;         // Minimum heart rate (BPM)
-  maxHR: number;         // Maximum heart rate (BPM)
-  hrRange: number;       // Max HR - Min HR (peak-to-trough amplitude)
+  meanRR: number; // Mean RR interval (ms)
+  sdnn: number; // Standard deviation of NN intervals (ms)
+  rmssd: number; // Root mean square of successive differences (ms)
+  pnn50: number; // Percentage of successive differences > 50ms (%)
+  meanHR: number; // Mean heart rate (BPM)
+  minHR: number; // Minimum heart rate (BPM)
+  maxHR: number; // Maximum heart rate (BPM)
+  hrRange: number; // Max HR - Min HR (peak-to-trough amplitude)
 }
 ```
 
 ### Frequency-Domain Metrics (`frequencyDomain.ts`)
 
 **Method: Lomb-Scargle Periodogram**
+
 - Chosen because RR intervals are inherently unevenly sampled — no resampling/interpolation needed
 - Directly computes power spectral density from raw IBI timestamps
 - Superior to FFT for HRV analysis per published research (Moody 1993, Laguna 1998)
 
 **Implementation:**
+
 - Custom TypeScript implementation of the Lomb-Scargle algorithm
 - Evaluate at frequencies 0.003-0.4 Hz with 0.001 Hz resolution
 - Frequency bands per European Society of Cardiology / North American Society of Pacing and Electrophysiology standards:
@@ -153,15 +162,15 @@ interface FrequencyDomainMetrics {
   totalPower: number;
 
   // Normalized power (%)
-  lfPowerNorm: number;   // LF / (LF + HF) × 100
-  hfPowerNorm: number;   // HF / (LF + HF) × 100
+  lfPowerNorm: number; // LF / (LF + HF) × 100
+  hfPowerNorm: number; // HF / (LF + HF) × 100
 
   // Ratios
   lfHfRatio: number;
 
   // Peak frequencies (Hz)
-  lfPeak: number;        // Frequency of max power in LF band
-  hfPeak: number;        // Frequency of max power in HF band
+  lfPeak: number; // Frequency of max power in LF band
+  hfPeak: number; // Frequency of max power in HF band
 
   // Full spectrum for visualization
   spectrum: { frequency: number; power: number }[];
@@ -214,9 +223,9 @@ interface HRVAnalysis {
     meanSignalQuality: number;
   };
   raw: {
-    rrIntervals: number[];       // Cleaned RR intervals (ms)
-    timestamps: number[];        // Corresponding timestamps
-    instantaneousHR: number[];   // 60000/RR for each interval
+    rrIntervals: number[]; // Cleaned RR intervals (ms)
+    timestamps: number[]; // Corresponding timestamps
+    instantaneousHR: number[]; // 60000/RR for each interval
   };
 }
 ```
@@ -251,8 +260,8 @@ Captures video frames from the phone camera with flash on, extracts PPG signal f
 ```typescript
 interface PPGService {
   // Lifecycle
-  start(): Promise<void>;       // Request camera, start capture
-  stop(): void;                  // Release camera, clean up
+  start(): Promise<void>; // Request camera, start capture
+  stop(): void; // Release camera, clean up
   isActive(): boolean;
 
   // Real-time data streams (callbacks)
@@ -262,7 +271,7 @@ interface PPGService {
   onError(callback: (error: Error) => void): void;
 
   // State
-  getSignalQuality(): number;    // Current quality 0-1
+  getSignalQuality(): number; // Current quality 0-1
   getStatus(): 'idle' | 'initializing' | 'capturing' | 'error';
 }
 ```
@@ -348,7 +357,7 @@ interface FusedIBISample extends IBISample {
   source: 'ppg' | 'scg' | 'fused';
   ppgInterval?: number;
   scgInterval?: number;
-  confidence: number;    // 0-1, higher when sensors agree
+  confidence: number; // 0-1, higher when sensors agree
 }
 ```
 
@@ -381,6 +390,7 @@ For static post-analysis charts where interactivity is needed, consider a small 
 ### Real-Time Displays (during measurement)
 
 **1. HR Tachogram** (`HrTachogram.vue`)
+
 - Scrolling line chart showing instantaneous heart rate over time
 - X-axis: time (last 60 seconds, scrolling)
 - Y-axis: heart rate (BPM), auto-scaled
@@ -388,11 +398,13 @@ For static post-analysis charts where interactivity is needed, consider a small 
 - Shows breathing cycle overlay (inhale/exhale phases shaded)
 
 **2. Signal Quality Indicator** (`SignalQualityIndicator.vue`)
+
 - Simple bar/ring showing current signal quality (0-100%)
 - Color transitions: green → yellow → red
 - Text status: "Good signal" / "Adjust finger" / "Keep still"
 
 **3. Raw Signal Preview** (`RawSignalPreview.vue`)
+
 - Small waveform display showing raw PPG or SCG signal
 - Helps user verify sensor placement
 - Shows detected peaks marked with dots
@@ -400,6 +412,7 @@ For static post-analysis charts where interactivity is needed, consider a small 
 ### Post-Trial Analysis Displays
 
 **4. Frequency Spectrum** (`FrequencySpectrum.vue`)
+
 - Power spectral density plot from Lomb-Scargle
 - X-axis: frequency (0-0.5 Hz)
 - Y-axis: power (ms²/Hz)
@@ -408,18 +421,21 @@ For static post-analysis charts where interactivity is needed, consider a small 
 - Peak annotations showing LF power, HF power values
 
 **5. Poincaré Plot** (`PoincarePlot.vue`)
+
 - Scatter plot: RR[n] vs RR[n+1]
 - Reveals beat-to-beat variability patterns
 - Ellipse fit showing SD1 (short-term) and SD2 (long-term) variability
 - Classic HRV visualization — visually striking
 
 **6. Trial Comparison** (`TrialComparison.vue`)
+
 - Side-by-side or stacked comparison of all 5 assessment trials
 - Bar chart comparing: LF power, peak-to-trough amplitude, waveform smoothness
 - Highlight the winning trial
 - Radar/spider chart showing multi-metric comparison per trial
 
 **7. HR Oscillation Waveform** (`HrOscillation.vue`)
+
 - The key visualization for resonance assessment
 - Shows HR waveform over the full 2-minute trial
 - Breathing cycle overlay (expected inhale/exhale based on trial rate)
@@ -429,6 +445,7 @@ For static post-analysis charts where interactivity is needed, consider a small 
 ### Metrics Dashboard (`HrvMetricsDashboard.vue`)
 
 Card-based layout (similar to Elite HRV screenshots) showing:
+
 - Heart Rate: MIN / MAX / AVG
 - Signal quality badge
 - Time-Domain: RMSSD, SDNN, pNN50, Mean RR, HRV CV
@@ -442,6 +459,7 @@ Wires the HRV sensing system into the resonance frequency assessment flow.
 ### Audio-Only Breathing Mode
 
 When HRV measurement is active during a breathing trial:
+
 - **Visual mode disabled**: BreathingVisualizer is hidden
 - **Audio-only guidance**: TTS announces "Breathe in" and "Breathe out" at the correct timing
 - **Measurement UI shown instead**: Real-time HR tachogram, signal quality indicator, raw signal preview
@@ -452,22 +470,26 @@ When HRV measurement is active during a breathing trial:
 The existing assessment flow (INTRO → WARMUP → TRIAL → REST → SCORING → RESULT) gains these modifications:
 
 **INTRO phase additions:**
+
 - Sensor selection: "Camera (finger)", "Accelerometer (chest)", or "Both"
 - Brief calibration: 10-second signal check to verify sensor works before starting
 - If "Both" selected, one sensor captures during trials and the other could capture during rest (or both simultaneously if UX allows)
 
 **TRIAL_BREATHING phase:**
+
 - If sensor active: switch to audio-only breathing guidance
 - Show real-time HR tachogram and signal quality instead of BreathingVisualizer
 - Collect IBI data throughout the 2-minute trial
 - Compute HRV metrics at end of trial
 
 **TRIAL_REST phase:**
+
 - Stop sensor capture
 - Display just-completed trial's HRV results as preview cards
 - Show HR oscillation waveform for the trial that just finished
 
 **SCORING phase:**
+
 - Auto-populate from computed metrics:
   - `hrAmplitude`: mapped from peak-to-trough amplitude (thresholds: <5 BPM = small, 5-15 = medium, >15 = large)
   - `waveformSmoothness`: mapped from smoothness score (thresholds: <0.3 = jagged, 0.3-0.7 = somewhatSmooth, >0.7 = verySmooth)
@@ -477,6 +499,7 @@ The existing assessment flow (INTRO → WARMUP → TRIAL → REST → SCORING �
 - User can still override auto-populated fields
 
 **RESULT phase:**
+
 - Enhanced with trial comparison charts
 - Frequency spectrum overlay for all 5 trials
 - Clear visual showing which trial had best LF power, amplitude, smoothness

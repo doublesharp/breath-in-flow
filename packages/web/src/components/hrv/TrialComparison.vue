@@ -211,11 +211,12 @@ function drawChart() {
   for (let i = 0; i <= gridCount; i++) {
     const val = maxVal * (1 - i / gridCount);
     const y = padT + (i / gridCount) * plotH;
-    const label = key === 'lfPower' && val >= 1000
-      ? `${(val / 1000).toFixed(0)}k`
-      : val >= 10
-      ? Math.round(val).toString()
-      : val.toFixed(2);
+    const label =
+      key === 'lfPower' && val >= 1000
+        ? `${(val / 1000).toFixed(0)}k`
+        : val >= 10
+          ? Math.round(val).toString()
+          : val.toFixed(2);
     ctx.fillText(label, padL - 4, y + 4);
   }
 

@@ -7,12 +7,22 @@
         <div class="flex gap-1">
           <button
             @click="mode = 'guided'"
-            :class="['px-3 py-1 rounded-lg text-xs font-medium transition-all', mode === 'guided' ? 'text-white bg-emerald-600' : 'text-white/40 bg-white/5']"
-          >Guided</button>
+            :class="[
+              'px-3 py-1 rounded-lg text-xs font-medium transition-all',
+              mode === 'guided' ? 'text-white bg-emerald-600' : 'text-white/40 bg-white/5',
+            ]"
+          >
+            Guided
+          </button>
           <button
             @click="mode = 'freeform'"
-            :class="['px-3 py-1 rounded-lg text-xs font-medium transition-all', mode === 'freeform' ? 'text-white bg-emerald-600' : 'text-white/40 bg-white/5']"
-          >Freeform</button>
+            :class="[
+              'px-3 py-1 rounded-lg text-xs font-medium transition-all',
+              mode === 'freeform' ? 'text-white bg-emerald-600' : 'text-white/40 bg-white/5',
+            ]"
+          >
+            Freeform
+          </button>
         </div>
       </div>
 
@@ -24,8 +34,12 @@
           :data-testid="`sensor-${s.value}`"
           @click="selectedSensor = s.value"
           :aria-pressed="selectedSensor === s.value"
-          :class="['min-h-11 px-2 py-2 rounded-lg border text-center text-xs font-medium transition-all',
-            selectedSensor === s.value ? 'border-emerald-500 bg-emerald-500/10 text-white' : 'border-white/10 bg-white/5 text-white/50']"
+          :class="[
+            'min-h-11 px-2 py-2 rounded-lg border text-center text-xs font-medium transition-all',
+            selectedSensor === s.value
+              ? 'border-emerald-500 bg-emerald-500/10 text-white'
+              : 'border-white/10 bg-white/5 text-white/50',
+          ]"
         >
           <span class="block">{{ s.label }}</span>
           <span v-if="s.badge" class="mt-0.5 block text-[9px] uppercase tracking-wide text-emerald-300/80">
@@ -38,19 +52,21 @@
       <div v-if="permissionError" class="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-xs text-red-400">
         {{ permissionError }}
       </div>
-      <div v-if="measurementNotice" class="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-xs text-amber-300" role="status">
+      <div
+        v-if="measurementNotice"
+        class="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-xs text-amber-300"
+        role="status"
+      >
         {{ measurementNotice }}
       </div>
-      <div
-        v-if="showRecoveryActions"
-        class="rounded-xl border border-amber-400/20 bg-amber-500/5 p-3"
-        role="alert"
-      >
+      <div v-if="showRecoveryActions" class="rounded-xl border border-amber-400/20 bg-amber-500/5 p-3" role="alert">
         <p class="text-sm text-amber-100">Choose how you want to continue.</p>
         <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <button class="btn-primary min-h-11 rounded-lg px-3" @click="retryMeasurement">Retry</button>
           <button class="btn-secondary min-h-11 rounded-lg px-3" @click="chooseAnotherSensor">Change sensor</button>
-          <button class="min-h-11 rounded-lg px-3 text-white/60 hover:bg-white/5" @click="dismissRecovery">Cancel</button>
+          <button class="min-h-11 rounded-lg px-3 text-white/60 hover:bg-white/5" @click="dismissRecovery">
+            Cancel
+          </button>
         </div>
       </div>
 
@@ -162,15 +178,26 @@
               <span class="text-sm text-white/60">Flash / Torch</span>
               <button
                 @click="useTorch = !useTorch"
-                :class="['relative w-11 h-6 rounded-full transition-colors', useTorch ? 'bg-emerald-500' : 'bg-white/10']"
+                :class="[
+                  'relative w-11 h-6 rounded-full transition-colors',
+                  useTorch ? 'bg-emerald-500' : 'bg-white/10',
+                ]"
               >
-                <span :class="['absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform', useTorch ? 'translate-x-5' : '']" />
+                <span
+                  :class="[
+                    'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform',
+                    useTorch ? 'translate-x-5' : '',
+                  ]"
+                />
               </button>
             </div>
           </div>
 
           <!-- Permission error -->
-          <div v-if="permissionError" class="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400 mb-4 max-w-sm">
+          <div
+            v-if="permissionError"
+            class="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400 mb-4 max-w-sm"
+          >
             {{ permissionError }}
           </div>
         </div>
@@ -180,7 +207,13 @@
           <button @click="confirmStart" class="w-full btn-primary min-h-11 py-4 rounded-2xl font-bold text-lg">
             Start
           </button>
-          <button @click="showPrep = false; prepProtocol = null" class="w-full py-3 rounded-xl font-medium text-white/40 hover:text-white/60">
+          <button
+            @click="
+              showPrep = false;
+              prepProtocol = null;
+            "
+            class="w-full py-3 rounded-xl font-medium text-white/40 hover:text-white/60"
+          >
             Cancel
           </button>
         </div>
@@ -189,7 +222,10 @@
 
     <!-- ═══ FULLSCREEN MEASUREMENT MODAL ═══ -->
     <Teleport to="body">
-      <div v-if="isMeasuring || showResults" class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom">
+      <div
+        v-if="isMeasuring || showResults"
+        class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom"
+      >
         <!-- Measuring view -->
         <div v-if="isMeasuring" class="flex flex-col h-full p-4">
           <!-- Header -->
@@ -209,10 +245,7 @@
           </div>
 
           <!-- Progress bar -->
-          <div
-            v-if="selectedProtocol"
-            class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-3"
-          >
+          <div v-if="selectedProtocol" class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-3">
             <div
               class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-1000"
               :style="{ width: `${Math.min(100, (elapsedSeconds / customDuration) * 100)}%` }"
@@ -221,7 +254,13 @@
 
           <!-- Sensor instructions -->
           <p class="text-xs text-white/40 mb-3">
-            {{ selectedSensor === 'camera' ? 'Finger on rear camera lens. Keep still.' : selectedSensor === 'accelerometer' ? 'Phone flat on chest. Breathe normally.' : 'Phone on chest, finger on camera.' }}
+            {{
+              selectedSensor === 'camera'
+                ? 'Finger on rear camera lens. Keep still.'
+                : selectedSensor === 'accelerometer'
+                  ? 'Phone flat on chest. Breathe normally.'
+                  : 'Phone on chest, finger on camera.'
+            }}
           </p>
 
           <!-- Charts area — fills remaining space -->
@@ -229,7 +268,11 @@
             <!-- HR tachogram -->
             <div v-if="hrDataPoints.length > 0">
               <div class="text-xs text-white/40 mb-1">Heart Rate</div>
-              <HrTachogram :hr-data="hrDataPoints" :duration="Math.min(60, Math.max(15, elapsedSeconds))" :height="100" />
+              <HrTachogram
+                :hr-data="hrDataPoints"
+                :duration="Math.min(60, Math.max(15, elapsedSeconds))"
+                :height="100"
+              />
             </div>
             <div v-else class="min-h-20 rounded-xl bg-white/5 p-4 text-center text-sm text-white/50" role="status">
               {{ signalGuidance }}
@@ -242,16 +285,26 @@
             </div>
 
             <!-- Debug toggle + log -->
-            <button v-if="debugControlsEnabled" @click="showDebug = !showDebug" class="text-[10px] text-white/15 hover:text-white/30 w-full text-center">
+            <button
+              v-if="debugControlsEnabled"
+              @click="showDebug = !showDebug"
+              class="text-[10px] text-white/15 hover:text-white/30 w-full text-center"
+            >
               {{ showDebug ? 'Hide' : 'Show' }} Debug
             </button>
-            <div v-if="debugControlsEnabled && showDebug" class="rounded-lg bg-black/50 border border-white/5 p-2 max-h-32 overflow-y-auto font-mono text-[9px] text-white/40 space-y-px">
+            <div
+              v-if="debugControlsEnabled && showDebug"
+              class="rounded-lg bg-black/50 border border-white/5 p-2 max-h-32 overflow-y-auto font-mono text-[9px] text-white/40 space-y-px"
+            >
               <div v-for="(line, i) in debugLog" :key="i">{{ line }}</div>
             </div>
           </div>
 
           <!-- Stop button — pinned to bottom -->
-          <button @click="stopMeasurement" class="mobile-action-dock mt-3 w-full btn-danger min-h-11 pt-3 rounded-xl font-semibold shrink-0">
+          <button
+            @click="stopMeasurement"
+            class="mobile-action-dock mt-3 w-full btn-danger min-h-11 pt-3 rounded-xl font-semibold shrink-0"
+          >
             Stop Measurement
           </button>
         </div>
@@ -270,7 +323,12 @@
 
           <div class="card-solid !p-4">
             <label class="text-sm font-medium text-white/80 block mb-2">Notes</label>
-            <textarea v-model="measurementNotes" rows="2" class="form-input resize-none w-full" placeholder="Add notes..." />
+            <textarea
+              v-model="measurementNotes"
+              rows="2"
+              class="form-input resize-none w-full"
+              placeholder="Add notes..."
+            />
           </div>
 
           <div class="flex gap-3">
@@ -442,12 +500,14 @@ const measurementNotes = ref('');
 const measurementStartTime = ref<Date>(new Date());
 const currentEligibility = ref<MeasurementEligibility | null>(null);
 const currentSampleProvenance = ref<SampleProvenance[]>([]);
-const recentMeasurements = ref<Array<{
-  id: string;
-  type: string;
-  completedAt: Date;
-  analysis: HRVAnalysis;
-}>>([]);
+const recentMeasurements = ref<
+  Array<{
+    id: string;
+    type: string;
+    completedAt: Date;
+    analysis: HRVAnalysis;
+  }>
+>([]);
 const latestAssessment = ref<AssessmentResult | null>(null);
 const hrDataPoints = ref<Array<{ time: number; hr: number; quality: number }>>([]);
 const rawSignalData = ref<Array<{ time: number; value: number }>>([]);
@@ -472,7 +532,10 @@ const DEBUG_LOG_MAX = 100;
 
 function addDebugLine(msg: string) {
   const now = new Date();
-  const ts = now.toLocaleTimeString('en-US', { hour12: false }) + '.' + String(now.getMilliseconds()).padStart(3, '0').slice(0, 1);
+  const ts =
+    now.toLocaleTimeString('en-US', { hour12: false }) +
+    '.' +
+    String(now.getMilliseconds()).padStart(3, '0').slice(0, 1);
   debugLog.value.push(`[${ts}] ${msg}`);
   if (debugLog.value.length > DEBUG_LOG_MAX) debugLog.value.shift();
 }
@@ -492,7 +555,8 @@ async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementSt
     onStateChange: (state) => {
       if (state === 'no-data') {
         if (selectedSensor.value === 'dual') sensorFusionService.reset();
-        permissionError.value = measurementSession?.getResult().errorMessage ??
+        permissionError.value =
+          measurementSession?.getResult().errorMessage ??
           'No detected heart beats were received. Reposition the sensor and try again.';
         isMeasuring.value = false;
         showRecoveryActions.value = true;
@@ -508,38 +572,45 @@ async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementSt
         measurementSession?.addDetectedSample(sample);
         addHrDataPoint(sample);
       },
-      onQualityChange: (q: number) => { sensorQuality.value = q; },
+      onQualityChange: (q: number) => {
+        sensorQuality.value = q;
+      },
     });
 
     // Detected beats flow through fusion exactly once. If only one sensor sees
     // a beat, fusion emits that source after its short match window.
     const ppgCallbacks = {
-        onIBI: (sample) => {
-          sensorFusionService.addPPGSample(sample);
-        },
-        onHeartRateEstimate: recordHeartRateEstimate,
-        onRawSignal: (value: number, timestamp: number) => {
-          rawSignalData.value.push({ time: timestamp, value });
-          if (rawSignalData.value.length > RAW_SIGNAL_MAX_POINTS) {
-            rawSignalData.value.splice(0, rawSignalData.value.length - RAW_SIGNAL_MAX_POINTS);
-          }
-        },
-        onQualityChange: (q: number) => { sensorQuality.value = Math.max(sensorQuality.value, q); },
-      } satisfies PPGCallbacks;
+      onIBI: (sample) => {
+        sensorFusionService.addPPGSample(sample);
+      },
+      onHeartRateEstimate: recordHeartRateEstimate,
+      onRawSignal: (value: number, timestamp: number) => {
+        rawSignalData.value.push({ time: timestamp, value });
+        if (rawSignalData.value.length > RAW_SIGNAL_MAX_POINTS) {
+          rawSignalData.value.splice(0, rawSignalData.value.length - RAW_SIGNAL_MAX_POINTS);
+        }
+      },
+      onQualityChange: (q: number) => {
+        sensorQuality.value = Math.max(sensorQuality.value, q);
+      },
+    } satisfies PPGCallbacks;
     scgService.setCallbacks({
       onIBI: (sample) => {
         sensorFusionService.addSCGSample(sample);
       },
       onHeartRateEstimate: recordHeartRateEstimate,
-      onQualityChange: (q: number) => { sensorQuality.value = Math.max(sensorQuality.value, q); },
+      onQualityChange: (q: number) => {
+        sensorQuality.value = Math.max(sensorQuality.value, q);
+      },
     });
     return measurementSession.start({
       ppg: {
-        start: () => ppgService.start({
-          callbacks: ppgCallbacks,
-          cameraDeviceId: selectedCameraId.value || undefined,
-          torchEnabled: useTorch.value,
-        }),
+        start: () =>
+          ppgService.start({
+            callbacks: ppgCallbacks,
+            cameraDeviceId: selectedCameraId.value || undefined,
+            torchEnabled: useTorch.value,
+          }),
         stop: () => ppgService.stop(),
       },
       scg: {
@@ -552,7 +623,9 @@ async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementSt
       onIBI: (sample: IBISample) => {
         measurementSession?.addDetectedSample(sample);
         addHrDataPoint(sample);
-        addDebugLine(`IBI: ${sample.interval.toFixed(0)}ms (${(60000/sample.interval).toFixed(0)} BPM) q=${sample.quality.toFixed(2)}`);
+        addDebugLine(
+          `IBI: ${sample.interval.toFixed(0)}ms (${(60000 / sample.interval).toFixed(0)} BPM) q=${sample.quality.toFixed(2)}`
+        );
       },
       onHeartRateEstimate: recordHeartRateEstimate,
       onRawSignal: (value: number, timestamp: number) => {
@@ -574,11 +647,12 @@ async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementSt
       addDebugLine(`Starting camera PPG (torch=${useTorch.value}, camera=${selectedCameraId.value || 'default'})...`);
       return measurementSession.start({
         ppg: {
-          start: () => ppgService.start({
-            callbacks,
-            cameraDeviceId: selectedCameraId.value || undefined,
-            torchEnabled: useTorch.value,
-          }),
+          start: () =>
+            ppgService.start({
+              callbacks,
+              cameraDeviceId: selectedCameraId.value || undefined,
+              torchEnabled: useTorch.value,
+            }),
           stop: () => ppgService.stop(),
         },
       });
@@ -657,8 +731,13 @@ function drawRawSignal() {
   const smoothed: number[] = [];
   const SMOOTH_W = 5;
   for (let i = 0; i < visible.length; i++) {
-    let sum = 0, count = 0;
-    for (let j = Math.max(0, i - Math.floor(SMOOTH_W / 2)); j <= Math.min(visible.length - 1, i + Math.floor(SMOOTH_W / 2)); j++) {
+    let sum = 0,
+      count = 0;
+    for (
+      let j = Math.max(0, i - Math.floor(SMOOTH_W / 2));
+      j <= Math.min(visible.length - 1, i + Math.floor(SMOOTH_W / 2));
+      j++
+    ) {
       sum += visible[j].value;
       count++;
     }
@@ -709,9 +788,9 @@ function drawRawSignal() {
 
   // Overlay detected heartbeat markers from recent IBIs
   if (hrDataPoints.value.length > 0) {
-    const recentBeats = hrDataPoints.value.filter(p => {
+    const recentBeats = hrDataPoints.value.filter((p) => {
       const beatTimeMs = p.time * 1000; // p.time is in seconds elapsed
-      return beatTimeMs >= (elapsedSeconds.value * 1000 - VISIBLE_SECONDS * 1000);
+      return beatTimeMs >= elapsedSeconds.value * 1000 - VISIBLE_SECONDS * 1000;
     });
 
     // Show beat markers as vertical ticks at the top of the chart
@@ -821,13 +900,21 @@ async function checkPermissions(): Promise<boolean> {
 
 async function enableKeepAwake() {
   if (Capacitor.isNativePlatform()) {
-    try { await KeepAwake.keepAwake(); } catch { /* ignore */ }
+    try {
+      await KeepAwake.keepAwake();
+    } catch {
+      /* ignore */
+    }
   }
 }
 
 async function disableKeepAwake() {
   if (Capacitor.isNativePlatform()) {
-    try { await KeepAwake.allowSleep(); } catch { /* ignore */ }
+    try {
+      await KeepAwake.allowSleep();
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -903,8 +990,8 @@ function stopMeasurement() {
   measurementSession = null;
   collectedIBIs.value = sessionResult?.samples ?? [];
   currentEligibility.value = sessionResult?.eligibility ?? null;
-  currentSampleProvenance.value = sessionResult?.samples
-    .flatMap((sample) => sample.provenance ? [sample.provenance] : []) ?? [];
+  currentSampleProvenance.value =
+    sessionResult?.samples.flatMap((sample) => (sample.provenance ? [sample.provenance] : [])) ?? [];
   isMeasuring.value = false;
 
   // Trim first 5 seconds and last 3 seconds of IBI data.
@@ -916,12 +1003,11 @@ function stopMeasurement() {
     const startTime = ibis[0].timestamp;
     const endTime = ibis[ibis.length - 1].timestamp;
     const trimStartMs = 5000; // discard first 5 seconds
-    const trimEndMs = 3000;   // discard last 3 seconds
-    ibis = ibis.filter(s =>
-      s.timestamp >= startTime + trimStartMs &&
-      s.timestamp <= endTime - trimEndMs
+    const trimEndMs = 3000; // discard last 3 seconds
+    ibis = ibis.filter((s) => s.timestamp >= startTime + trimStartMs && s.timestamp <= endTime - trimEndMs);
+    addDebugLine(
+      `Trimmed IBIs: ${collectedIBIs.value.length} → ${ibis.length} (removed ${trimStartMs / 1000}s start, ${trimEndMs / 1000}s end)`
     );
-    addDebugLine(`Trimmed IBIs: ${collectedIBIs.value.length} → ${ibis.length} (removed ${trimStartMs/1000}s start, ${trimEndMs/1000}s end)`);
   }
 
   if (sessionResult?.eligibility && !sessionResult.eligibility.eligible) {
@@ -937,7 +1023,8 @@ function stopMeasurement() {
     soundService.playCompletionChime();
   } else {
     addDebugLine(`Not enough IBIs after trimming: ${ibis.length} (need >= 10)`);
-    permissionError.value = 'There were not enough clean pulse beats for a reliable result. Reposition the sensor and try again.';
+    permissionError.value =
+      'There were not enough clean pulse beats for a reliable result. Reposition the sensor and try again.';
     showRecoveryActions.value = true;
   }
 }
@@ -1044,7 +1131,7 @@ function formatType(type: string): string {
     'quick-check': 'Quick Check',
     'full-analysis': 'Full Analysis',
     'morning-readiness': 'Morning Readiness',
-    'freeform': 'Freeform',
+    freeform: 'Freeform',
     'assessment-trial': 'Assessment Trial',
   };
   return names[type] ?? type;

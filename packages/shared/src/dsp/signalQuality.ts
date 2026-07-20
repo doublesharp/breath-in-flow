@@ -14,10 +14,7 @@ import { mean, standardDeviation, median } from './statistics.js';
  * - Amplitude consistency: std dev / mean of peak amplitudes (lower = better)
  * - Minimum peak count: need enough peaks to assess quality
  */
-export function assessSignalQuality(
-  signal: number[],
-  peaks: DetectedPeak[],
-): number {
+export function assessSignalQuality(signal: number[], peaks: DetectedPeak[]): number {
   if (peaks.length < 2) return 0;
 
   // Inter-peak intervals
@@ -39,8 +36,7 @@ export function assessSignalQuality(
 
   // SNR: ratio of peak amplitude to noise floor (estimated as signal std dev)
   const signalStd = standardDeviation(signal);
-  const snrScore =
-    signalStd > 0 ? Math.min(1, ampMean / (2 * signalStd)) : 0;
+  const snrScore = signalStd > 0 ? Math.min(1, ampMean / (2 * signalStd)) : 0;
 
   // Convert CVs to scores (0 = bad, 1 = perfect)
   // CV of 0 = perfect regularity, CV of 1+ = poor

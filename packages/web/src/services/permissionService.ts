@@ -35,9 +35,12 @@ async function requestCameraPermission(): Promise<PermissionStatus> {
  */
 async function requestMotionPermission(): Promise<PermissionStatus> {
   // iOS 13+ requires explicit permission
-  if (typeof window !== 'undefined' && 'DeviceMotionEvent' in window &&
+  if (
+    typeof window !== 'undefined' &&
+    'DeviceMotionEvent' in window &&
     typeof (DeviceMotionEvent as unknown as { requestPermission?: () => Promise<string> })
-      .requestPermission === 'function') {
+      .requestPermission === 'function'
+  ) {
     try {
       const permission = await (
         DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> }
@@ -84,7 +87,10 @@ export async function requestSensorPermissions(
 /**
  * Get a user-friendly message for denied permissions.
  */
-export function getPermissionDeniedMessage(perms: { camera: PermissionStatus; motion: PermissionStatus }): string | null {
+export function getPermissionDeniedMessage(perms: {
+  camera: PermissionStatus;
+  motion: PermissionStatus;
+}): string | null {
   const denied: string[] = [];
   if (perms.camera === 'denied') denied.push('Camera');
   if (perms.motion === 'denied') denied.push('Motion sensor');

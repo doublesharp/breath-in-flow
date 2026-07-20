@@ -10,9 +10,7 @@
         <span class="text-blue-400 text-lg">ℹ</span>
         <div>
           <p class="text-sm font-medium text-slate-200">Getting started</p>
-          <p class="text-sm text-slate-400 mt-0.5">
-            Take a few more HRV measurements to start seeing insights
-          </p>
+          <p class="text-sm text-slate-400 mt-0.5">Take a few more HRV measurements to start seeing insights</p>
         </div>
       </div>
     </div>
@@ -23,10 +21,7 @@
         v-for="insight in visibleInsights"
         :key="insight.id"
         :data-testid="`insight-card-${insight.id}`"
-        :class="[
-          'glass rounded-xl p-4 border-l-4 transition-all',
-          borderColorClass(insight),
-        ]"
+        :class="['glass rounded-xl p-4 border-l-4 transition-all', borderColorClass(insight)]"
       >
         <div class="flex items-start justify-between gap-3">
           <div class="flex items-start gap-3 flex-1">
@@ -138,9 +133,7 @@ const insights = computed<Insight[]>(() => {
 
   // 2. RMSSD Trend Insight
   if (props.measurements.length >= 7) {
-    const recent = props.measurements.filter(
-      (m) => new Date(m.completedAt).getTime() >= now - 7 * msPerDay
-    );
+    const recent = props.measurements.filter((m) => new Date(m.completedAt).getTime() >= now - 7 * msPerDay);
     const previous = props.measurements.filter((m) => {
       const t = new Date(m.completedAt).getTime();
       return t >= now - 14 * msPerDay && t < now - 7 * msPerDay;
@@ -223,9 +216,12 @@ const insights = computed<Insight[]>(() => {
     }
 
     // Group into periods
-    let morningTotal = 0, morningCount = 0;
-    let afternoonTotal = 0, afternoonCount = 0;
-    let eveningTotal = 0, eveningCount = 0;
+    let morningTotal = 0,
+      morningCount = 0;
+    let afternoonTotal = 0,
+      afternoonCount = 0;
+    let eveningTotal = 0,
+      eveningCount = 0;
 
     for (const [hourStr, values] of Object.entries(byHour)) {
       const hour = parseInt(hourStr, 10);
@@ -244,7 +240,8 @@ const insights = computed<Insight[]>(() => {
 
     const periods: { name: string; avg: number; count: number }[] = [];
     if (morningCount > 0) periods.push({ name: 'morning', avg: morningTotal / morningCount, count: morningCount });
-    if (afternoonCount > 0) periods.push({ name: 'afternoon', avg: afternoonTotal / afternoonCount, count: afternoonCount });
+    if (afternoonCount > 0)
+      periods.push({ name: 'afternoon', avg: afternoonTotal / afternoonCount, count: afternoonCount });
     if (eveningCount > 0) periods.push({ name: 'evening', avg: eveningTotal / eveningCount, count: eveningCount });
 
     if (periods.length > 1) {
@@ -262,45 +259,60 @@ const insights = computed<Insight[]>(() => {
   return cards;
 });
 
-const visibleInsights = computed(() =>
-  insights.value.filter((c) => !dismissed.value.has(c.id))
-);
+const visibleInsights = computed(() => insights.value.filter((c) => !dismissed.value.has(c.id)));
 
 // ─── UI helpers ───────────────────────────────────────────────────────────────
 
 function borderColorClass(insight: Insight): string {
   switch (insight.type) {
-    case 'recommendation': return 'border-emerald-500';
-    case 'trend': return insight.message.toLowerCase().includes('declin')
-      ? 'border-amber-500'
-      : insight.message.toLowerCase().includes('improv')
-        ? 'border-emerald-500'
-        : 'border-slate-500';
-    case 'streak': return 'border-emerald-500';
-    case 'info': return 'border-blue-500';
-    default: return 'border-slate-500';
+    case 'recommendation':
+      return 'border-emerald-500';
+    case 'trend':
+      return insight.message.toLowerCase().includes('declin')
+        ? 'border-amber-500'
+        : insight.message.toLowerCase().includes('improv')
+          ? 'border-emerald-500'
+          : 'border-slate-500';
+    case 'streak':
+      return 'border-emerald-500';
+    case 'info':
+      return 'border-blue-500';
+    default:
+      return 'border-slate-500';
   }
 }
 
 function iconColorClass(insight: Insight): string {
   switch (insight.type) {
-    case 'recommendation': return 'text-emerald-400';
-    case 'trend': return insight.message.toLowerCase().includes('declin')
-      ? 'text-amber-400'
-      : 'text-emerald-400';
-    case 'streak': return 'text-emerald-400';
-    case 'info': return 'text-blue-400';
-    default: return 'text-slate-400';
+    case 'recommendation':
+      return 'text-emerald-400';
+    case 'trend':
+      return insight.message.toLowerCase().includes('declin') ? 'text-amber-400' : 'text-emerald-400';
+    case 'streak':
+      return 'text-emerald-400';
+    case 'info':
+      return 'text-blue-400';
+    default:
+      return 'text-slate-400';
   }
 }
 
 function insightIcon(insight: Insight): string {
   switch (insight.type) {
-    case 'recommendation': return '★';
-    case 'trend': return insight.message.toLowerCase().includes('declin') ? '↓' : insight.message.toLowerCase().includes('improv') ? '↑' : '→';
-    case 'streak': return '🔥';
-    case 'info': return 'ℹ';
-    default: return '•';
+    case 'recommendation':
+      return '★';
+    case 'trend':
+      return insight.message.toLowerCase().includes('declin')
+        ? '↓'
+        : insight.message.toLowerCase().includes('improv')
+          ? '↑'
+          : '→';
+    case 'streak':
+      return '🔥';
+    case 'info':
+      return 'ℹ';
+    default:
+      return '•';
   }
 }
 

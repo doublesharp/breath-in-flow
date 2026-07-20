@@ -224,10 +224,7 @@ describe('computeFrequencyDomainMetrics', () => {
     const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);
     const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
 
-    expect(result.totalPower).toBeCloseTo(
-      result.vlfPower + result.lfPower + result.hfPower,
-      3
-    );
+    expect(result.totalPower).toBeCloseTo(result.vlfPower + result.lfPower + result.hfPower, 3);
   });
 
   it('returns sensible defaults for very short input', () => {
@@ -242,10 +239,7 @@ describe('computeFrequencyDomainMetrics', () => {
   });
 
   it('returns defaults for mismatched timestamps', () => {
-    const result = computeFrequencyDomainMetrics(
-      [800, 810, 790, 805],
-      [0, 800, 1610],
-    );
+    const result = computeFrequencyDomainMetrics([800, 810, 790, 805], [0, 800, 1610]);
 
     expect(result.spectrum).toHaveLength(0);
     expect(result.totalPower).toBe(0);
@@ -254,14 +248,8 @@ describe('computeFrequencyDomainMetrics', () => {
   });
 
   it('returns defaults for duplicate or unordered timestamps', () => {
-    const duplicate = computeFrequencyDomainMetrics(
-      [800, 810, 790, 805],
-      [0, 800, 800, 2400],
-    );
-    const unordered = computeFrequencyDomainMetrics(
-      [800, 810, 790, 805],
-      [0, 1610, 800, 2400],
-    );
+    const duplicate = computeFrequencyDomainMetrics([800, 810, 790, 805], [0, 800, 800, 2400]);
+    const unordered = computeFrequencyDomainMetrics([800, 810, 790, 805], [0, 1610, 800, 2400]);
 
     expect(duplicate.spectrum).toHaveLength(0);
     expect(duplicate.totalPower).toBe(0);

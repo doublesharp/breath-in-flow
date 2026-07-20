@@ -84,8 +84,7 @@ function drawChart() {
       const end = Math.min(t + halfCycle, duration);
       const x1 = toX(t);
       const x2 = toX(end);
-      ctx.fillStyle =
-        phase === 0 ? 'rgba(74,222,128,0.08)' : 'rgba(96,165,250,0.08)';
+      ctx.fillStyle = phase === 0 ? 'rgba(74,222,128,0.08)' : 'rgba(96,165,250,0.08)';
       ctx.fillRect(x1, padT, x2 - x1, plotH);
       t += halfCycle;
       phase = 1 - phase;

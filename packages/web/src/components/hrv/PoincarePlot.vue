@@ -1,8 +1,6 @@
 <template>
   <div class="poincare-plot glass rounded-xl p-4">
-    <h3 class="text-sm font-semibold text-white/70 uppercase tracking-wider mb-3">
-      Poincaré Plot
-    </h3>
+    <h3 class="text-sm font-semibold text-white/70 uppercase tracking-wider mb-3">Poincaré Plot</h3>
     <div :style="{ height: size + 'px' }" class="relative">
       <canvas ref="canvasEl" class="w-full h-full" />
     </div>

@@ -29,9 +29,7 @@ type TestPPGService = {
 function makeMockTrack(opts: { torchSupported?: boolean } = {}): MediaStreamTrack {
   return {
     stop: vi.fn(),
-    getCapabilities: vi.fn().mockReturnValue(
-      opts.torchSupported ? { torch: true } : {}
-    ),
+    getCapabilities: vi.fn().mockReturnValue(opts.torchSupported ? { torch: true } : {}),
     applyConstraints: opts.torchSupported
       ? vi.fn().mockResolvedValue(undefined)
       : vi.fn().mockRejectedValue(new Error('torch not supported')),
@@ -111,7 +109,7 @@ function generateSyntheticPPG(
   heartRateHz: number,
   durationSeconds: number,
   sampleRateHz = 30,
-  startTime = 0,
+  startTime = 0
 ): { values: number[]; timestamps: number[] } {
   const nSamples = Math.floor(durationSeconds * sampleRateHz);
   const values: number[] = [];
@@ -181,7 +179,9 @@ describe('ppgService', () => {
 
       // Stub video.play so it resolves immediately
       let playResolve: () => void;
-      void new Promise<void>((res) => { playResolve = res; });
+      void new Promise<void>((res) => {
+        playResolve = res;
+      });
 
       vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
         if (tag === 'video') {
@@ -478,7 +478,7 @@ describe('ppgService', () => {
 
       const service = ppgService as unknown as TestPPGService;
       service.rawBuffer = Array.from({ length: 150 }, (_, index) =>
-        Math.sin((2 * Math.PI * index) / 30),
+        Math.sin((2 * Math.PI * index) / 30)
       );
       vi.spyOn(performance, 'now').mockReturnValue(12_345);
 
@@ -510,8 +510,7 @@ describe('ppgService', () => {
       expect(steadyState.length).toBeGreaterThanOrEqual(3);
 
       // Average interval should be close to 1000ms
-      const avgInterval =
-        steadyState.reduce((sum, s) => sum + s.interval, 0) / steadyState.length;
+      const avgInterval = steadyState.reduce((sum, s) => sum + s.interval, 0) / steadyState.length;
       expect(avgInterval).toBeGreaterThan(800);
       expect(avgInterval).toBeLessThan(1200);
     });
@@ -529,8 +528,7 @@ describe('ppgService', () => {
       const steadyState = ibiSamples.slice(2);
       expect(steadyState.length).toBeGreaterThanOrEqual(3);
 
-      const avgInterval =
-        steadyState.reduce((sum, s) => sum + s.interval, 0) / steadyState.length;
+      const avgInterval = steadyState.reduce((sum, s) => sum + s.interval, 0) / steadyState.length;
       // 90 BPM = 667ms. Allow ±200ms tolerance.
       expect(avgInterval).toBeGreaterThan(467);
       expect(avgInterval).toBeLessThan(867);
@@ -726,19 +724,17 @@ describe('ppgService', () => {
       for (let i = 0; i < values.length; i++) {
         ppgService.processSignalSample(values[i], timestamps[i]);
       }
-      expect(
-        (ppgService as unknown as { rawBuffer: number[] }).rawBuffer.length,
-      ).toBeGreaterThan(0);
+      expect((ppgService as unknown as { rawBuffer: number[] }).rawBuffer.length).toBeGreaterThan(
+        0
+      );
 
       // Force status to capturing so stop() runs cleanup
       (ppgService as unknown as { status: PPGStatus }).status = 'capturing';
       ppgService.stop();
 
+      expect((ppgService as unknown as { rawBuffer: number[] }).rawBuffer.length).toBe(0);
       expect(
-        (ppgService as unknown as { rawBuffer: number[] }).rawBuffer.length,
-      ).toBe(0);
-      expect(
-        (ppgService as unknown as { lastPeakTimestamp: number | null }).lastPeakTimestamp,
+        (ppgService as unknown as { lastPeakTimestamp: number | null }).lastPeakTimestamp
       ).toBeNull();
       expect(ppgService.getSignalQuality()).toBe(0);
     });
@@ -826,7 +822,7 @@ describe('ppgService', () => {
       await ppgService.start();
 
       expect(track.applyConstraints).toHaveBeenCalledWith(
-        expect.objectContaining({ advanced: [{ torch: true }] }),
+        expect.objectContaining({ advanced: [{ torch: true }] })
       );
     });
 
@@ -917,7 +913,9 @@ describe('ppgService', () => {
       await ppgService.start({ onRawSignal: (v) => rawValues.push(v) });
 
       // Manually trigger a frame via captureFrame
-      const captureFrame = (ppgService as unknown as { captureFrame: (t: number) => void }).captureFrame.bind(ppgService);
+      const captureFrame = (
+        ppgService as unknown as { captureFrame: (t: number) => void }
+      ).captureFrame.bind(ppgService);
       // Set lastFrameTime far enough back to not throttle
       (ppgService as unknown as { lastFrameTime: number }).lastFrameTime = 0;
       captureFrame(10000);
@@ -998,8 +996,7 @@ describe('ppgService', () => {
       const steadyState = ibiSamples.slice(2);
       expect(steadyState.length).toBeGreaterThanOrEqual(2);
 
-      const avgInterval =
-        steadyState.reduce((sum, s) => sum + s.interval, 0) / steadyState.length;
+      const avgInterval = steadyState.reduce((sum, s) => sum + s.interval, 0) / steadyState.length;
       expect(avgInterval).toBeGreaterThan(700);
       expect(avgInterval).toBeLessThan(1300);
     });

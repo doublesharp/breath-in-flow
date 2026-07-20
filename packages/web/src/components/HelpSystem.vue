@@ -261,9 +261,17 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Sensor choices</h4>
                   <ul class="help-list">
-                    <li><strong>Camera Pulse</strong> - Recommended phone-only option; cover the rear lens gently and keep still.</li>
-                    <li><strong>Chest Motion</strong> - Experimental (Beta); phone motion can be mistaken for heart timing.</li>
-                    <li><strong>Camera + Chest</strong> - Experimental (Beta); requires both signals to remain steady.</li>
+                    <li>
+                      <strong>Camera Pulse</strong> - Recommended phone-only option; cover the rear lens gently and keep
+                      still.
+                    </li>
+                    <li>
+                      <strong>Chest Motion</strong> - Experimental (Beta); phone motion can be mistaken for heart
+                      timing.
+                    </li>
+                    <li>
+                      <strong>Camera + Chest</strong> - Experimental (Beta); requires both signals to remain steady.
+                    </li>
                   </ul>
                 </div>
 

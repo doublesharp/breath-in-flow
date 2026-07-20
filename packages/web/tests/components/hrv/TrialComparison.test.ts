@@ -5,10 +5,50 @@ import { sampleAnalysis } from './fixtures';
 
 const sampleTrials = [
   { rate: 6.5, analysis: sampleAnalysis },
-  { rate: 6.0, analysis: { ...sampleAnalysis, resonance: { ...sampleAnalysis.resonance, peakToTroughAmplitude: 14.1, waveformSmoothness: 0.71 } } },
-  { rate: 5.5, analysis: { ...sampleAnalysis, resonance: { ...sampleAnalysis.resonance, peakToTroughAmplitude: 17.8, waveformSmoothness: 0.79 } } },
-  { rate: 5.0, analysis: { ...sampleAnalysis, resonance: { ...sampleAnalysis.resonance, peakToTroughAmplitude: 19.2, waveformSmoothness: 0.82 } } },
-  { rate: 4.5, analysis: { ...sampleAnalysis, resonance: { ...sampleAnalysis.resonance, peakToTroughAmplitude: 15.0, waveformSmoothness: 0.69 } } },
+  {
+    rate: 6.0,
+    analysis: {
+      ...sampleAnalysis,
+      resonance: {
+        ...sampleAnalysis.resonance,
+        peakToTroughAmplitude: 14.1,
+        waveformSmoothness: 0.71,
+      },
+    },
+  },
+  {
+    rate: 5.5,
+    analysis: {
+      ...sampleAnalysis,
+      resonance: {
+        ...sampleAnalysis.resonance,
+        peakToTroughAmplitude: 17.8,
+        waveformSmoothness: 0.79,
+      },
+    },
+  },
+  {
+    rate: 5.0,
+    analysis: {
+      ...sampleAnalysis,
+      resonance: {
+        ...sampleAnalysis.resonance,
+        peakToTroughAmplitude: 19.2,
+        waveformSmoothness: 0.82,
+      },
+    },
+  },
+  {
+    rate: 4.5,
+    analysis: {
+      ...sampleAnalysis,
+      resonance: {
+        ...sampleAnalysis.resonance,
+        peakToTroughAmplitude: 15.0,
+        waveformSmoothness: 0.69,
+      },
+    },
+  },
 ];
 
 describe('TrialComparison', () => {

@@ -31,8 +31,8 @@ describe('HelpSystem.vue', () => {
     await wrapper.find('button.help-trigger').trigger('click');
     await wrapper.vm.$nextTick();
 
-    const labTab = Array.from(document.body.querySelectorAll('.help-tab')).find(
-      (button) => button.textContent?.includes('Lab')
+    const labTab = Array.from(document.body.querySelectorAll('.help-tab')).find((button) =>
+      button.textContent?.includes('Lab')
     ) as HTMLElement;
     expect(labTab).toBeTruthy();
     labTab.click();
@@ -43,8 +43,8 @@ describe('HelpSystem.vue', () => {
     expect(document.body.textContent?.toLowerCase()).toContain('experimental');
     expect(document.body.textContent).toContain('five minutes');
 
-    const techniquesTab = Array.from(document.body.querySelectorAll('.help-tab')).find(
-      (button) => button.textContent?.includes('Techniques')
+    const techniquesTab = Array.from(document.body.querySelectorAll('.help-tab')).find((button) =>
+      button.textContent?.includes('Techniques')
     ) as HTMLElement;
     techniquesTab.click();
     await wrapper.vm.$nextTick();

@@ -14,21 +14,22 @@
 
 ## File Structure
 
-| File | Action | Responsibility |
-|------|--------|---------------|
-| `packages/shared/src/schemas.ts` | Modify | Add assessment Zod schemas and types |
-| `packages/shared/src/index.ts` | Modify | Export new assessment types |
-| `packages/web/src/composables/useStorage.ts` | Modify | Add assessment CRUD methods |
-| `packages/web/src/components/ResonanceAssessment.vue` | Create | Assessment state machine, all phase UIs, scoring, result |
-| `packages/web/src/components/BreathingPractice.vue` | Modify | Add "Find My Resonance Frequency" button, toggle to assessment view |
-| `packages/web/tests/composables/useStorage.test.ts` | Modify | Tests for assessment storage methods |
-| `packages/web/tests/components/ResonanceAssessment.test.ts` | Create | Tests for assessment component |
+| File                                                        | Action | Responsibility                                                      |
+| ----------------------------------------------------------- | ------ | ------------------------------------------------------------------- |
+| `packages/shared/src/schemas.ts`                            | Modify | Add assessment Zod schemas and types                                |
+| `packages/shared/src/index.ts`                              | Modify | Export new assessment types                                         |
+| `packages/web/src/composables/useStorage.ts`                | Modify | Add assessment CRUD methods                                         |
+| `packages/web/src/components/ResonanceAssessment.vue`       | Create | Assessment state machine, all phase UIs, scoring, result            |
+| `packages/web/src/components/BreathingPractice.vue`         | Modify | Add "Find My Resonance Frequency" button, toggle to assessment view |
+| `packages/web/tests/composables/useStorage.test.ts`         | Modify | Tests for assessment storage methods                                |
+| `packages/web/tests/components/ResonanceAssessment.test.ts` | Create | Tests for assessment component                                      |
 
 ---
 
 ### Task 1: Assessment Schemas in Shared Package
 
 **Files:**
+
 - Modify: `packages/shared/src/schemas.ts` (append after line 373)
 - Modify: `packages/shared/src/index.ts` (add exports)
 
@@ -136,6 +137,7 @@ git commit -m "feat: add resonance frequency assessment schemas"
 ### Task 2: Assessment Storage Methods
 
 **Files:**
+
 - Modify: `packages/web/src/composables/useStorage.ts`
 - Modify: `packages/web/tests/composables/useStorage.test.ts`
 
@@ -209,11 +211,13 @@ Expected: FAIL — `getAssessments` and `saveAssessment` not defined
 In `packages/web/src/composables/useStorage.ts`:
 
 1. Add a module-level ref:
+
 ```typescript
 const assessments = ref<AssessmentResult[]>([]);
 ```
 
 2. In `loadFromStorage()`, add:
+
 ```typescript
 const storedAssessments = localStorage.getItem('breath-in-flow-assessments');
 if (storedAssessments) {
@@ -227,16 +231,19 @@ if (storedAssessments) {
 ```
 
 3. In `saveToStorage()`, add:
+
 ```typescript
 localStorage.setItem('breath-in-flow-assessments', JSON.stringify(assessments.value));
 ```
 
 4. Add to `resetStorageForTesting()`:
+
 ```typescript
 assessments.value = [];
 ```
 
 5. Inside the `useStorage()` function, add:
+
 ```typescript
 function getAssessments(): AssessmentResult[] {
   return assessments.value;
@@ -249,6 +256,7 @@ function saveAssessment(result: AssessmentResult): void {
 ```
 
 6. Add to the return object:
+
 ```typescript
 // Assessment operations
 getAssessments,
@@ -256,6 +264,7 @@ saveAssessment,
 ```
 
 7. Add imports at top:
+
 ```typescript
 import type { AssessmentResult } from '@breath-in-flow/shared';
 ```
@@ -281,6 +290,7 @@ The scoring logic should be a testable pure function inside the assessment compo
 However, since it's pure logic, we can extract it to a small utility and test it directly first.
 
 **Files:**
+
 - Create: `packages/web/src/utils/assessmentScoring.ts`
 - Create: `packages/web/tests/utils/assessmentScoring.test.ts`
 
@@ -344,9 +354,27 @@ describe('scoreTrial', () => {
 describe('findSuggestedRate', () => {
   it('picks trial with highest score', () => {
     const trials = [
-      makeTrial({ rate: 6.5, comfortRating: 3, hrAmplitude: 'small', waveformSmoothness: 'jagged', symptoms: [] }),
-      makeTrial({ rate: 5.5, comfortRating: 5, hrAmplitude: 'large', waveformSmoothness: 'verySmooth', symptoms: [] }),
-      makeTrial({ rate: 4.5, comfortRating: 4, hrAmplitude: 'medium', waveformSmoothness: 'somewhatSmooth', symptoms: [] }),
+      makeTrial({
+        rate: 6.5,
+        comfortRating: 3,
+        hrAmplitude: 'small',
+        waveformSmoothness: 'jagged',
+        symptoms: [],
+      }),
+      makeTrial({
+        rate: 5.5,
+        comfortRating: 5,
+        hrAmplitude: 'large',
+        waveformSmoothness: 'verySmooth',
+        symptoms: [],
+      }),
+      makeTrial({
+        rate: 4.5,
+        comfortRating: 4,
+        hrAmplitude: 'medium',
+        waveformSmoothness: 'somewhatSmooth',
+        symptoms: [],
+      }),
     ];
     expect(findSuggestedRate(trials)).toBe(5.5);
   });
@@ -473,6 +501,7 @@ git commit -m "feat: add assessment scoring algorithm with tests"
 This is the core component. We build it in stages: first the state machine skeleton with INTRO/WARMUP/TRIAL_BREATHING/TRIAL_REST phases, then scoring/result in the next task.
 
 **Files:**
+
 - Create: `packages/web/src/components/ResonanceAssessment.vue`
 - Create: `packages/web/tests/components/ResonanceAssessment.test.ts`
 
@@ -574,6 +603,7 @@ Expected: FAIL — component does not exist
 Create `packages/web/src/components/ResonanceAssessment.vue`. This is a large component — the full implementation is outlined here with key sections:
 
 **Template structure:**
+
 ```
 <template>
   <!-- Cancel Confirmation Modal -->
@@ -819,6 +849,7 @@ defineExpose({ setPhaseForTesting });
 ```
 
 The template should include:
+
 - `data-testid="cancel-btn"` on the cancel/back button
 - `data-testid="start-btn"` on the Start Assessment button
 - `data-testid="breathing-visualizer"` wrapper div around BreathingVisualizer
@@ -842,6 +873,7 @@ git commit -m "feat: add ResonanceAssessment component with state machine"
 ### Task 5: Scoring & Result Phases
 
 **Files:**
+
 - Modify: `packages/web/src/components/ResonanceAssessment.vue` (add SCORING and RESULT template sections + logic)
 - Modify: `packages/web/tests/components/ResonanceAssessment.test.ts` (add scoring/result tests)
 
@@ -884,12 +916,14 @@ Expected: FAIL
 - [ ] **Step 3: Add SCORING template section**
 
 In the template, add the SCORING phase UI:
+
 - Scrollable list of 5 trial cards, each with `data-testid="trial-card"`
 - Each card shows: rate label (e.g., "6.5 BPM"), comfort rating (1-5 star/button selector with `data-testid="comfort-rating"`), symptom toggle chips (air hunger, dizziness, chest effort, urge to sigh), optional HR amplitude radio group (small/medium/large), optional waveform smoothness radio group (jagged/somewhat smooth/very smooth), optional notes textarea
 - Guidance text at top: "If you used a heart rate monitor, rate the HR fields based on what you observed. Skip these if you didn't use one."
 - "Calculate Result" button at bottom
 
 In the script, add:
+
 ```typescript
 function calculateResult() {
   const suggested = findSuggestedRate(trials.value);
@@ -901,6 +935,7 @@ function calculateResult() {
 - [ ] **Step 4: Add RESULT template section**
 
 In the template, add the RESULT phase UI:
+
 - "Suggested Rate" heading with the rate highlighted
 - All 5 rates listed with their scores (from `scoreTrial`)
 - Radio/tap selection to override the suggestion
@@ -908,6 +943,7 @@ In the template, add the RESULT phase UI:
 - "Save & Create Preset" button
 
 In the script, add the preset creation and save logic:
+
 ```typescript
 const storage = useStorage();
 const selectedRate = ref<number>(5.5);
@@ -918,9 +954,7 @@ function saveResult() {
   // Create preset
   const presetName = `My Resonance Frequency — ${selectedRate.value} BPM`;
   const existingConfigs = storage.getAllConfigs();
-  const existing = existingConfigs.find((c) =>
-    c.name.startsWith('My Resonance Frequency')
-  );
+  const existing = existingConfigs.find((c) => c.name.startsWith('My Resonance Frequency'));
 
   const presetInput = {
     ...DEFAULT_BREATHING_CONFIG,
@@ -982,6 +1016,7 @@ git commit -m "feat: add scoring and result phases to assessment"
 ### Task 6: Entry Point in BreathingPractice
 
 **Files:**
+
 - Modify: `packages/web/src/components/BreathingPractice.vue`
 
 - [ ] **Step 1: Add import and state for assessment mode**
@@ -1030,13 +1065,13 @@ At the top of the non-running content area (around line 784, before `<!-- Regula
 />
 
 <!-- Regular Configuration View (when not running and not in assessment) -->
-<div v-else class="space-y-4 sm:space-y-6">
+<div v-else class="space-y-4 sm:space-y-6"></div>
 ```
 
 **Important:** The `v-if="showAssessment"` / `v-else` must wrap at a level that also hides the fullscreen session Teleport. Add `&& !showAssessment` to the `v-if="isRunning"` guard on the fullscreen session modal (around line 118), so the assessment and running session don't overlap:
 
 ```html
-<div v-if="isRunning && !showAssessment" class="fixed inset-0 z-50 ...">
+<div v-if="isRunning && !showAssessment" class="fixed inset-0 z-50 ..."></div>
 ```
 
 - [ ] **Step 3: Add the "Find My Resonance Frequency" button**
@@ -1046,9 +1081,19 @@ After the "Start Practice" button (around line 869), add:
 ```html
 <button @click="showAssessment = true" class="btn-secondary btn-action">
   <span class="flex items-center gap-2 justify-center">
-    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      class="w-6 h-6"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+      />
     </svg>
     Find My Resonance Frequency
   </span>
@@ -1083,6 +1128,7 @@ Run: `cd packages/web && pnpm dev`
 - [ ] **Step 2: Manual verification checklist**
 
 Verify each of these in the browser:
+
 - [ ] "Find My Resonance Frequency" button visible in Practice tab
 - [ ] Clicking button shows INTRO screen with warmup config
 - [ ] Back button returns to normal practice view

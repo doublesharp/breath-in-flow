@@ -1,17 +1,22 @@
 <template>
   <div class="min-h-screen" style="background: linear-gradient(135deg, #1f1a15 0%, #2a241d 40%, #1f1a15 100%)">
     <div class="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8">
-
       <!-- ======================== INTRO PHASE ======================== -->
       <template v-if="phase === 'INTRO'">
         <div class="card-solid animate-scale-in">
           <h1 class="text-2xl sm:text-3xl font-bold text-white mb-4">Resonance Frequency Assessment</h1>
 
           <!-- Safety Notice -->
-          <div class="p-4 rounded-2xl mb-6" style="background: linear-gradient(135deg, rgba(194, 106, 79, 0.15) 0%, rgba(194, 106, 79, 0.05) 100%); border: 1px solid rgba(194, 106, 79, 0.25);">
+          <div
+            class="p-4 rounded-2xl mb-6"
+            style="
+              background: linear-gradient(135deg, rgba(194, 106, 79, 0.15) 0%, rgba(194, 106, 79, 0.05) 100%);
+              border: 1px solid rgba(194, 106, 79, 0.25);
+            "
+          >
             <p class="text-sm text-slate-300 leading-relaxed">
-              Breathe through your nose. Keep breathing comfortable and shallow — do not breathe deeply.
-              If you feel faint, dizzy, or your heart beats too hard, take shallower, smoother breaths.
+              Breathe through your nose. Keep breathing comfortable and shallow — do not breathe deeply. If you feel
+              faint, dizzy, or your heart beats too hard, take shallower, smoother breaths.
             </p>
           </div>
 
@@ -19,7 +24,8 @@
           <div class="mb-6">
             <h3 class="font-semibold text-slate-200 mb-2">Protocol</h3>
             <p class="text-sm text-slate-400 leading-relaxed">
-              5 breathing trials from 6.5 to 4.5 BPM, approximately 2 minutes each, with 2-minute rest periods between trials.
+              5 breathing trials from 6.5 to 4.5 BPM, approximately 2 minutes each, with 2-minute rest periods between
+              trials.
             </p>
           </div>
 
@@ -52,12 +58,15 @@
             <label class="text-sm font-medium text-white/80">Heart Rate Measurement</label>
             <div class="grid grid-cols-1 gap-2">
               <button
-                v-for="mode in sensorModes" :key="mode.value"
+                v-for="mode in sensorModes"
+                :key="mode.value"
                 @click="selectedSensorMode = mode.value"
-                :class="['p-3 rounded-lg border text-left transition-all',
+                :class="[
+                  'p-3 rounded-lg border text-left transition-all',
                   selectedSensorMode === mode.value
                     ? 'border-emerald-500 bg-emerald-500/10'
-                    : 'border-white/10 bg-white/5']"
+                    : 'border-white/10 bg-white/5',
+                ]"
               >
                 <div class="font-medium text-white">{{ mode.label }}</div>
                 <div class="text-xs text-white/50 mt-1">{{ mode.description }}</div>
@@ -67,9 +76,7 @@
 
           <!-- Action Buttons -->
           <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
-            <button data-testid="cancel-btn" @click="requestCancel" class="btn-secondary">
-              Back
-            </button>
+            <button data-testid="cancel-btn" @click="requestCancel" class="btn-secondary">Back</button>
             <button data-testid="start-btn" @click="startAssessment" class="btn-success btn-action flex-1">
               Start Assessment
             </button>
@@ -93,8 +100,14 @@
           </div>
 
           <!-- Sensor-active trial view (replaces BreathingVisualizer) -->
-          <div v-if="selectedSensorMode !== 'none' && phase === 'TRIAL_BREATHING'" class="flex flex-col items-center gap-6 py-8">
-            <SignalQualityIndicator :quality="sensorQuality" :sensor-type="selectedSensorMode === 'camera' ? 'ppg' : 'scg'" />
+          <div
+            v-if="selectedSensorMode !== 'none' && phase === 'TRIAL_BREATHING'"
+            class="flex flex-col items-center gap-6 py-8"
+          >
+            <SignalQualityIndicator
+              :quality="sensorQuality"
+              :sensor-type="selectedSensorMode === 'camera' ? 'ppg' : 'scg'"
+            />
             <div class="text-sm text-white/60 text-center">
               {{ sensorInstructions }}
             </div>
@@ -116,7 +129,9 @@
 
           <!-- Breathing Pattern Display -->
           <div class="mt-4 text-center">
-            <div class="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/50 rounded-xl text-slate-300 text-sm sm:text-base">
+            <div
+              class="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/50 rounded-xl text-slate-300 text-sm sm:text-base"
+            >
               <span class="text-emerald-400 font-semibold">{{ timerConfig.inhaleTime }}s</span>
               <span class="text-slate-500">&rarr;</span>
               <span class="text-blue-400 font-semibold">{{ timerConfig.exhaleTime }}s</span>
@@ -130,9 +145,7 @@
             <button @click="togglePause" :class="isPaused ? 'btn-primary' : 'btn-warning'" class="btn-action">
               {{ isPaused ? 'Resume' : 'Pause' }}
             </button>
-            <button data-testid="cancel-btn" @click="requestCancel" class="btn-danger">
-              Cancel
-            </button>
+            <button data-testid="cancel-btn" @click="requestCancel" class="btn-danger">Cancel</button>
           </div>
         </div>
       </template>
@@ -146,18 +159,14 @@
             {{ formatTime(restTimeRemaining) }}
           </p>
 
-          <p class="text-slate-400 mb-6">
-            Next trial: {{ trials[currentTrialIndex + 1]?.rate }} BPM
-          </p>
+          <p class="text-slate-400 mb-6">Next trial: {{ trials[currentTrialIndex + 1]?.rate }} BPM</p>
 
           <!-- Controls -->
           <div class="flex flex-col sm:flex-row justify-center gap-3">
             <button @click="togglePause" :class="isPaused ? 'btn-primary' : 'btn-warning'" class="btn-action">
               {{ isPaused ? 'Resume' : 'Pause' }}
             </button>
-            <button data-testid="cancel-btn" @click="requestCancel" class="btn-danger">
-              Cancel
-            </button>
+            <button data-testid="cancel-btn" @click="requestCancel" class="btn-danger">Cancel</button>
           </div>
         </div>
       </template>
@@ -168,17 +177,13 @@
           <div class="card-solid">
             <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Rate Your Trials</h2>
             <p class="text-sm text-slate-400 leading-relaxed">
-              If you used a heart rate monitor, rate the following based on what you observed. Skip these if you didn't use one.
+              If you used a heart rate monitor, rate the following based on what you observed. Skip these if you didn't
+              use one.
             </p>
           </div>
 
           <!-- Trial Cards -->
-          <div
-            v-for="(trial, index) in trials"
-            :key="trial.rate"
-            data-testid="trial-card"
-            class="card-solid"
-          >
+          <div v-for="(trial, index) in trials" :key="trial.rate" data-testid="trial-card" class="card-solid">
             <h3 class="text-lg font-bold text-white mb-4">{{ trial.rate }} BPM</h3>
 
             <!-- HRV Chart (when sensor data available) -->
@@ -195,15 +200,21 @@
                 <div class="mt-2 grid grid-cols-3 gap-2 text-center">
                   <div class="bg-white/5 rounded-lg p-2">
                     <div class="text-xs text-white/50">LF Power</div>
-                    <div class="text-sm font-semibold text-blue-400">{{ Math.round(trialAnalyses[index]!.frequencyDomain.lfPower) }} ms²</div>
+                    <div class="text-sm font-semibold text-blue-400">
+                      {{ Math.round(trialAnalyses[index]!.frequencyDomain.lfPower) }} ms²
+                    </div>
                   </div>
                   <div class="bg-white/5 rounded-lg p-2">
                     <div class="text-xs text-white/50">Amplitude</div>
-                    <div class="text-sm font-semibold text-amber-400">{{ trialAnalyses[index]!.resonance.peakToTroughAmplitude.toFixed(1) }} BPM</div>
+                    <div class="text-sm font-semibold text-amber-400">
+                      {{ trialAnalyses[index]!.resonance.peakToTroughAmplitude.toFixed(1) }} BPM
+                    </div>
                   </div>
                   <div class="bg-white/5 rounded-lg p-2">
                     <div class="text-xs text-white/50">Smoothness</div>
-                    <div class="text-sm font-semibold text-purple-400">{{ trialAnalyses[index]!.resonance.waveformSmoothness.toFixed(2) }}</div>
+                    <div class="text-sm font-semibold text-purple-400">
+                      {{ trialAnalyses[index]!.resonance.waveformSmoothness.toFixed(2) }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -227,7 +238,7 @@
                     'w-10 h-10 rounded-xl font-bold text-sm transition-all duration-200',
                     trial.comfortRating === rating
                       ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10'
+                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10',
                   ]"
                 >
                   {{ rating }}
@@ -247,7 +258,7 @@
                     'px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200',
                     trial.symptoms.includes(symptom.value)
                       ? 'bg-red-500/20 text-red-300 border border-red-500/40'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10'
+                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10',
                   ]"
                 >
                   {{ symptom.label }}
@@ -267,7 +278,7 @@
                     'px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200',
                     trial.hrAmplitude === opt.value
                       ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10'
+                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10',
                   ]"
                 >
                   {{ opt.label }}
@@ -287,7 +298,7 @@
                     'px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200',
                     trial.waveformSmoothness === opt.value
                       ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10'
+                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10',
                   ]"
                 >
                   {{ opt.label }}
@@ -309,16 +320,10 @@
 
           <!-- Calculate Button -->
           <div class="text-center pb-4">
-            <button
-              @click="calculateResult"
-              :disabled="!allTrialsRated"
-              class="btn-success btn-action"
-            >
+            <button @click="calculateResult" :disabled="!allTrialsRated" class="btn-success btn-action">
               Calculate Result
             </button>
-            <p v-if="!allTrialsRated" class="text-sm text-slate-500 mt-2">
-              Rate comfort for all 5 trials to continue
-            </p>
+            <p v-if="!allTrialsRated" class="text-sm text-slate-500 mt-2">Rate comfort for all 5 trials to continue</p>
           </div>
         </div>
       </template>
@@ -329,15 +334,14 @@
           <div class="card-solid text-center">
             <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Suggested Rate</h2>
             <p class="text-5xl font-bold text-emerald-400 mb-1">{{ selectedRate }} BPM</p>
-            <p class="text-sm text-slate-400">Score: {{ trialScores.find(s => s.rate === selectedRate)?.score ?? 0 }}</p>
+            <p class="text-sm text-slate-400">
+              Score: {{ trialScores.find((s) => s.rate === selectedRate)?.score ?? 0 }}
+            </p>
           </div>
 
           <!-- HRV Trial Comparison (when sensor data available) -->
           <template v-if="hasAnyHrvData">
-            <TrialComparison
-              :trials="trialComparisonData"
-              :selected-rate="selectedRate"
-            />
+            <TrialComparison :trials="trialComparisonData" :selected-rate="selectedRate" />
 
             <template v-if="selectedTrialAnalysis">
               <FrequencySpectrum
@@ -359,9 +363,7 @@
               @click="selectedRate = ts.rate"
               :class="[
                 'stat-card cursor-pointer transition-all duration-200',
-                selectedRate === ts.rate
-                  ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900'
-                  : ''
+                selectedRate === ts.rate ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : '',
               ]"
             >
               <div class="text-lg font-bold text-white">{{ ts.rate }} BPM</div>
@@ -378,9 +380,7 @@
 
           <!-- Save Button -->
           <div class="text-center pb-4">
-            <button @click="saveResult" class="btn-success btn-action">
-              Save &amp; Create Preset
-            </button>
+            <button @click="saveResult" class="btn-success btn-action">Save &amp; Create Preset</button>
           </div>
         </div>
       </template>
@@ -394,8 +394,19 @@
         <div class="card-solid max-w-md w-full animate-scale-in">
           <div class="flex items-start gap-4">
             <div class="p-3 rounded-xl bg-red-500/10">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="w-6 h-6 text-red-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
             </div>
             <div class="flex-1">
@@ -409,7 +420,6 @@
           </div>
         </div>
       </div>
-
     </div>
   </div>
 </template>
@@ -446,10 +456,7 @@ import { ppgService } from '../services/ppgService';
 import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
 import type { FusedIBISample } from '../services/sensorFusion';
-import {
-  MeasurementSession,
-  type MeasurementStartOutcome,
-} from '../services/measurementSession';
+import { MeasurementSession, type MeasurementStartOutcome } from '../services/measurementSession';
 import { ttsService } from '../services/ttsService';
 import { scoreTrial, findSuggestedRate } from '../utils/assessmentScoring';
 import { v4 as uuidv4 } from 'uuid';
@@ -581,9 +588,7 @@ const expandedTrialHrv = reactive<boolean[]>([false, false, false, false, false]
 
 const currentTrial = computed(() => trials.value[currentTrialIndex.value]);
 
-const isBreathingPhase = computed(
-  () => phase.value === 'WARMUP' || phase.value === 'TRIAL_BREATHING'
-);
+const isBreathingPhase = computed(() => phase.value === 'WARMUP' || phase.value === 'TRIAL_BREATHING');
 
 const phaseHeaderText = computed(() => {
   if (phase.value === 'WARMUP') return `Warmup \u2014 ${assessmentConfig.warmupRate} BPM`;
@@ -592,9 +597,7 @@ const phaseHeaderText = computed(() => {
   return '';
 });
 
-const allTrialsRated = computed(() =>
-  trials.value.every((t) => t.comfortRating != null)
-);
+const allTrialsRated = computed(() => trials.value.every((t) => t.comfortRating != null));
 
 const trialScores = computed(() =>
   trials.value.map((t) => ({
@@ -603,9 +606,7 @@ const trialScores = computed(() =>
   }))
 );
 
-const hasAnyHrvData = computed(() =>
-  trialAnalyses.value.some((a) => a !== null)
-);
+const hasAnyHrvData = computed(() => trialAnalyses.value.some((a) => a !== null));
 
 const trialComparisonData = computed(() =>
   trials.value
@@ -625,10 +626,14 @@ const selectedTrialAnalysis = computed(() => {
 
 const sensorInstructions = computed(() => {
   switch (selectedSensorMode.value) {
-    case 'dual': return 'Phone flat on chest (screen down), finger covering rear camera';
-    case 'camera': return 'Keep your finger covering the camera lens';
-    case 'accelerometer': return 'Keep the phone flat on your chest';
-    default: return '';
+    case 'dual':
+      return 'Phone flat on chest (screen down), finger covering rear camera';
+    case 'camera':
+      return 'Keep your finger covering the camera lens';
+    case 'accelerometer':
+      return 'Keep the phone flat on your chest';
+    default:
+      return '';
   }
 });
 
@@ -675,7 +680,8 @@ async function startSensor(): Promise<MeasurementStartOutcome> {
     protocol: 'resonance-trial',
     onStateChange: (state) => {
       if (state === 'no-data') {
-        sensorStatusMessage.value = measurementSession?.getResult().errorMessage ??
+        sensorStatusMessage.value =
+          measurementSession?.getResult().errorMessage ??
           'No detected heart beats were received. Continue with manual scoring or retry the sensor.';
         if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
       }
@@ -686,13 +692,14 @@ async function startSensor(): Promise<MeasurementStartOutcome> {
     sensorFusionService.reset();
     sensorFusionService.setCallbacks({
       onFusedIBI: (sample: FusedIBISample) => measurementSession?.addDetectedSample(sample),
-      onQualityChange: (q: number) => { sensorQuality.value = q; },
+      onQualityChange: (q: number) => {
+        sensorQuality.value = q;
+      },
     });
 
     const ppgCallbacks = {
       onIBI: (sample: IBISample) => sensorFusionService.addPPGSample(sample),
-      onHeartRateEstimate: (estimate: HeartRateEstimate) =>
-        measurementSession?.addHeartRateEstimate(estimate),
+      onHeartRateEstimate: (estimate: HeartRateEstimate) => measurementSession?.addHeartRateEstimate(estimate),
       onQualityChange: () => {}, // fusion handles quality
     };
     scgService.setCallbacks({
@@ -713,9 +720,10 @@ async function startSensor(): Promise<MeasurementStartOutcome> {
   } else {
     const callbacks = {
       onIBI: (sample: IBISample) => measurementSession?.addDetectedSample(sample),
-      onHeartRateEstimate: (estimate: HeartRateEstimate) =>
-        measurementSession?.addHeartRateEstimate(estimate),
-      onQualityChange: (q: number) => { sensorQuality.value = q; },
+      onHeartRateEstimate: (estimate: HeartRateEstimate) => measurementSession?.addHeartRateEstimate(estimate),
+      onQualityChange: (q: number) => {
+        sensorQuality.value = q;
+      },
     };
 
     if (selectedSensorMode.value === 'camera') {
@@ -782,8 +790,7 @@ async function disableKeepAwake() {
 
 function startAssessment() {
   enableKeepAwake();
-  const warmupTrial =
-    ASSESSMENT_TRIALS.find((t) => t.rate === assessmentConfig.warmupRate) ?? ASSESSMENT_TRIALS[1];
+  const warmupTrial = ASSESSMENT_TRIALS.find((t) => t.rate === assessmentConfig.warmupRate) ?? ASSESSMENT_TRIALS[1];
   const warmupReps = Math.round(
     assessmentConfig.warmupDurationSeconds / (warmupTrial.inhaleTime + warmupTrial.exhaleTime)
   );

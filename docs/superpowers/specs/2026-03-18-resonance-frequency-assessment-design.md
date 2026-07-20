@@ -11,12 +11,12 @@ Resonance frequency breathing maximizes heart-rate variability by matching breat
 ## Trial Parameters (Fixed)
 
 | BPM | Sec/Breath | Inhale (s) | Exhale (s) |
-|-----|-----------|------------|------------|
-| 6.5 | 9.23      | 3.7        | 5.5        |
-| 6.0 | 10.00     | 4.0        | 6.0        |
-| 5.5 | 10.91     | 4.4        | 6.5        |
-| 5.0 | 12.00     | 4.8        | 7.2        |
-| 4.5 | 13.33     | 5.3        | 8.0        |
+| --- | ---------- | ---------- | ---------- |
+| 6.5 | 9.23       | 3.7        | 5.5        |
+| 6.0 | 10.00      | 4.0        | 6.0        |
+| 5.5 | 10.91      | 4.4        | 6.5        |
+| 5.0 | 12.00      | 4.8        | 7.2        |
+| 4.5 | 13.33      | 5.3        | 8.0        |
 
 All trials: no hold times, inhale/exhale only. The inhale/exhale ratio is standardized at ~40:60 (longer exhalation), per the Lehrer/Shaffer practical guide recommendation. Note: recent research (Van Diest et al., 2024) found no significant HRV difference between 1:1 and 1:2 ratios at slow-paced breathing, but the longer exhalation is retained here to match the published clinical protocol.
 
@@ -27,12 +27,12 @@ The 5-step protocol always runs in full (6.5, 6.0, 5.5, 5.0, 4.5). Rest periods 
 Trials use a repetition count rather than a strict 120-second timer, since `useBreathingTimer` is rep-based. Repetitions per trial are computed as `Math.round(120 / secPerBreath)`:
 
 | BPM | Inhale+Exhale | Reps | Actual Duration |
-|-----|--------------|------|-----------------|
-| 6.5 | 9.2s         | 13   | 119.6s          |
-| 6.0 | 10.0s        | 12   | 120.0s          |
-| 5.5 | 10.9s        | 11   | 119.9s          |
-| 5.0 | 12.0s        | 10   | 120.0s          |
-| 4.5 | 13.3s        | 9    | 119.7s          |
+| --- | ------------- | ---- | --------------- |
+| 6.5 | 9.2s          | 13   | 119.6s          |
+| 6.0 | 10.0s         | 12   | 120.0s          |
+| 5.5 | 10.9s         | 11   | 119.9s          |
+| 5.0 | 12.0s         | 10   | 120.0s          |
+| 4.5 | 13.3s         | 9    | 119.7s          |
 
 Durations are computed from literal `inhaleTime + exhaleTime` (not theoretical secPerBreath). All are within 0.4s of 2 minutes — close enough that no timer modification is needed. The warmup uses the same formula with `warmupDurationSeconds`.
 
@@ -64,9 +64,9 @@ User-configurable warmup settings:
 
 ```typescript
 {
-  warmupDurationSeconds: number   // default 120 (2 min), user-configurable
-  warmupRate: number              // default 6.0 BPM, user-configurable
-  restDurationSeconds: 120        // fixed, not user-configurable
+  warmupDurationSeconds: number; // default 120 (2 min), user-configurable
+  warmupRate: number; // default 6.0 BPM, user-configurable
+  restDurationSeconds: 120; // fixed, not user-configurable
 }
 ```
 

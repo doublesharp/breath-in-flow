@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  limitAnalysisToEligibility,
-  MeasurementSession,
-} from '@/services/measurementSession';
+import { limitAnalysisToEligibility, MeasurementSession } from '@/services/measurementSession';
 import { analyzeHRV, evaluateMeasurementEligibility } from '@breath-in-flow/shared';
 import type { IBISample } from '@breath-in-flow/shared';
 
@@ -15,7 +12,9 @@ function detectedSample(timestamp: number, source: 'ppg' | 'scg' = 'ppg'): IBISa
   };
 }
 
-function sensor(startResult: { ok: true } | { ok: false; reason: 'start-failed'; message: string }) {
+function sensor(
+  startResult: { ok: true } | { ok: false; reason: 'start-failed'; message: string }
+) {
   return {
     start: vi.fn().mockResolvedValue(startResult),
     stop: vi.fn(),

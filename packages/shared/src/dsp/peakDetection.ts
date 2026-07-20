@@ -26,7 +26,7 @@ export interface DetectedPeak {
 function computeAdaptiveThreshold(
   signal: number[],
   windowSize: number,
-  thresholdFactor: number,
+  thresholdFactor: number
 ): number[] {
   const thresholds: number[] = [];
   for (let i = 0; i < signal.length; i++) {
@@ -69,10 +69,7 @@ function minInRange(signal: number[], start: number, end: number): number {
  * A peak is a local maximum above the adaptive threshold, with minimum distance enforced.
  * Optional prominence filter rejects small bumps relative to the signal range.
  */
-export function detectPeaks(
-  signal: number[],
-  options: PeakDetectionOptions,
-): DetectedPeak[] {
+export function detectPeaks(signal: number[], options: PeakDetectionOptions): DetectedPeak[] {
   const { minPeakDistance } = options;
   const thresholdFactor = options.thresholdFactor ?? 0.5;
   const adaptiveWindow = options.adaptiveWindow ?? 10;
@@ -80,11 +77,7 @@ export function detectPeaks(
 
   if (signal.length < 3) return [];
 
-  const thresholds = computeAdaptiveThreshold(
-    signal,
-    adaptiveWindow,
-    thresholdFactor,
-  );
+  const thresholds = computeAdaptiveThreshold(signal, adaptiveWindow, thresholdFactor);
   const candidatePeaks: DetectedPeak[] = [];
   let lastPeakIndex = -minPeakDistance; // allow first peak at index 0
 
@@ -118,17 +111,16 @@ export function detectPeaks(
 
     // Find valley to the left: minimum between previous peak (or start) and this peak
     const leftBoundary = pi > 0 ? candidatePeaks[pi - 1].index : 0;
-    const leftValley = leftBoundary < peakIdx
-      ? minInRange(signal, leftBoundary, peakIdx)
-      : signal[0];
+    const leftValley =
+      leftBoundary < peakIdx ? minInRange(signal, leftBoundary, peakIdx) : signal[0];
 
     // Find valley to the right: minimum between this peak and next peak (or end)
-    const rightBoundary = pi < candidatePeaks.length - 1
-      ? candidatePeaks[pi + 1].index
-      : signal.length - 1;
-    const rightValley = peakIdx < rightBoundary
-      ? minInRange(signal, peakIdx, rightBoundary)
-      : signal[signal.length - 1];
+    const rightBoundary =
+      pi < candidatePeaks.length - 1 ? candidatePeaks[pi + 1].index : signal.length - 1;
+    const rightValley =
+      peakIdx < rightBoundary
+        ? minInRange(signal, peakIdx, rightBoundary)
+        : signal[signal.length - 1];
 
     // Prominence = peak height minus the higher of the two surrounding valleys
     const referenceValley = Math.max(leftValley, rightValley);
@@ -149,9 +141,7 @@ function median(arr: number[]): number {
   if (arr.length === 0) return 0;
   const sorted = [...arr].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 /**
@@ -224,8 +214,7 @@ export class StreamingPeakDetector {
     const window = this.buffer.slice(windowStart, candidateBufferIdx + 1);
     const windowMean = mean(window);
     const windowStd = standardDeviation(window);
-    const threshold =
-      windowMean + this.options.thresholdFactor * windowStd;
+    const threshold = windowMean + this.options.thresholdFactor * windowStd;
 
     if (candidateValue <= threshold) {
       return null;
@@ -271,7 +260,7 @@ export class StreamingPeakDetector {
         // Set refractory to 40% of median interval, but not less than configured minimum
         this.currentRefractoryPeriod = Math.max(
           this.options.minPeakDistance,
-          Math.round(medianInterval * 0.4),
+          Math.round(medianInterval * 0.4)
         );
       }
     }

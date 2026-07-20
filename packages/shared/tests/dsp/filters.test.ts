@@ -27,14 +27,13 @@ function generateSineSignal(
   frequencies: number[],
   amplitudes: number[],
   sampleRateHz: number,
-  numSamples: number,
+  numSamples: number
 ): number[] {
   const signal: number[] = [];
   for (let n = 0; n < numSamples; n++) {
     let sample = 0;
     for (let f = 0; f < frequencies.length; f++) {
-      sample +=
-        amplitudes[f] * Math.sin((2 * Math.PI * frequencies[f] * n) / sampleRateHz);
+      sample += amplitudes[f] * Math.sin((2 * Math.PI * frequencies[f] * n) / sampleRateHz);
     }
     signal.push(sample);
   }
@@ -171,9 +170,7 @@ describe('createHighpassFilter', () => {
     const filtered = filter.filterBatch(dcSignal);
     // Steady-state output should be near zero for DC
     const steadyState = filtered.slice(500);
-    const avg = Math.abs(
-      steadyState.reduce((a, b) => a + b, 0) / steadyState.length,
-    );
+    const avg = Math.abs(steadyState.reduce((a, b) => a + b, 0) / steadyState.length);
     expect(avg).toBeLessThan(0.1);
   });
 });

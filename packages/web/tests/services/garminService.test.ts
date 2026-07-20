@@ -17,10 +17,18 @@ describe('GarminService', () => {
     // Mock localStorage using Object.defineProperty for happy-dom compatibility
     const localStorageMock = {
       getItem: vi.fn((key: string) => mockStorage[key] ?? null),
-      setItem: vi.fn((key: string, value: string) => { mockStorage[key] = value; }),
-      removeItem: vi.fn((key: string) => { delete mockStorage[key]; }),
-      clear: vi.fn(() => { Object.keys(mockStorage).forEach((key) => delete mockStorage[key]); }),
-      get length() { return Object.keys(mockStorage).length; },
+      setItem: vi.fn((key: string, value: string) => {
+        mockStorage[key] = value;
+      }),
+      removeItem: vi.fn((key: string) => {
+        delete mockStorage[key];
+      }),
+      clear: vi.fn(() => {
+        Object.keys(mockStorage).forEach((key) => delete mockStorage[key]);
+      }),
+      get length() {
+        return Object.keys(mockStorage).length;
+      },
       key: vi.fn((index: number) => Object.keys(mockStorage)[index] ?? null),
     };
     Object.defineProperty(window, 'localStorage', {
@@ -404,8 +412,7 @@ describe('GarminService', () => {
           .connectionData.mockMode
       ).toBe(true);
       expect(
-        (newService as unknown as { connectionData: { lastSync?: string } }).connectionData
-          .lastSync
+        (newService as unknown as { connectionData: { lastSync?: string } }).connectionData.lastSync
       ).toBeUndefined();
     });
 

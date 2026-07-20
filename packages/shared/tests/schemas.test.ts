@@ -312,7 +312,7 @@ describe('MeasurementRecordMetadataSchema', () => {
           sources: ['ppg', 'fused'],
           detectionMethods: ['peak-detected'],
         },
-      }),
+      })
     ).toEqual({
       algorithmVersion: 2,
       sampleProvenance: {
