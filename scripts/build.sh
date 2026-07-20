@@ -22,8 +22,17 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Get version from package.json
-VERSION=$(node -p "require('$ROOT_DIR/package.json').version")
+# The packaged application owns the release version.
+VERSION=$(node -e '
+const fs = require("node:fs");
+const packagePath = process.argv[1];
+const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+if (typeof packageJson.version !== "string" || packageJson.version.length === 0) {
+  throw new Error("Missing version in " + packagePath);
+}
+process.stdout.write(packageJson.version);
+' "$WEB_DIR/package.json")
+RELEASE_VERSION_DIR="$RELEASE_DIR/$VERSION"
 
 print_header() {
     echo -e "\n${BLUE}========================================${NC}"
@@ -41,6 +50,48 @@ print_warning() {
 
 print_error() {
     echo -e "${RED}✗ $1${NC}"
+}
+
+clear_output_directory() {
+    local output_dir="$1"
+
+    mkdir -p "$output_dir"
+    find "$output_dir" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+}
+
+require_directory() {
+    local directory="$1"
+    local description="$2"
+
+    if [[ ! -d "$directory" ]]; then
+        print_error "$description was not produced: $directory"
+        return 1
+    fi
+}
+
+copy_required_artifacts() {
+    local source_dir="$1"
+    local filename_pattern="$2"
+    local destination_dir="$3"
+    local description="$4"
+    local -a artifacts=()
+
+    while IFS= read -r -d '' artifact; do
+        artifacts+=("$artifact")
+    done < <(find "$source_dir" -maxdepth 1 -type f -name "$filename_pattern" -print0)
+
+    if [[ ${#artifacts[@]} -eq 0 ]]; then
+        print_error "$description was not produced in $source_dir"
+        return 1
+    fi
+
+    cp -f -- "${artifacts[@]}" "$destination_dir/"
+}
+
+print_existing_artifacts() {
+    local output_dir="$1"
+
+    find "$output_dir" -type f -print | sort
 }
 
 # Ensure Java and Android SDK are available for Android builds
@@ -87,7 +138,7 @@ setup_dist() {
 # Clean dist directory (for full rebuilds)
 clean_dist() {
     print_header "Cleaning dist directory"
-    rm -rf "$DIST_DIR"
+    rm -rf -- "$DIST_DIR"
     setup_dist
 }
 
@@ -99,8 +150,9 @@ build_web() {
     pnpm build
     
     # Clean and copy web build to dist
-    rm -rf "$DIST_DIR/web/"*
-    cp -r "$WEB_DIR/dist/"* "$DIST_DIR/web/"
+    require_directory "$WEB_DIR/dist" "Web build directory"
+    clear_output_directory "$DIST_DIR/web"
+    cp -R -- "$WEB_DIR/dist/." "$DIST_DIR/web/"
     
     print_success "Web assets built and copied to dist/web/"
 }
@@ -112,16 +164,15 @@ build_mac() {
     cd "$WEB_DIR"
     
     # Clean electron-builder release folder to prevent old artifacts
-    rm -rf "$RELEASE_DIR/$VERSION"
+    rm -rf -- "${RELEASE_VERSION_DIR:?}"
     
     pnpm build:mac
     
     # Clean and copy macOS builds to dist
-    rm -rf "$DIST_DIR/mac/"*
-    if [[ -d "$RELEASE_DIR/$VERSION" ]]; then
-        cp -f "$RELEASE_DIR/$VERSION/$APP_NAME"*.dmg "$DIST_DIR/mac/" 2>/dev/null || true
-        cp -f "$RELEASE_DIR/$VERSION/$APP_NAME"*.zip "$DIST_DIR/mac/" 2>/dev/null || true
-    fi
+    clear_output_directory "$DIST_DIR/mac"
+    require_directory "$RELEASE_VERSION_DIR" "macOS release directory"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.dmg" "$DIST_DIR/mac" "macOS DMG"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.zip" "$DIST_DIR/mac" "macOS ZIP"
     
     print_success "macOS app built and copied to dist/mac/"
 }
@@ -133,15 +184,14 @@ build_win() {
     cd "$WEB_DIR"
     
     # Clean electron-builder release folder to prevent old artifacts
-    rm -rf "$RELEASE_DIR/$VERSION"
+    rm -rf -- "${RELEASE_VERSION_DIR:?}"
     
     pnpm build:win
     
     # Clean and copy Windows builds to dist
-    rm -rf "$DIST_DIR/win/"*
-    if [[ -d "$RELEASE_DIR/$VERSION" ]]; then
-        cp -f "$RELEASE_DIR/$VERSION/$APP_NAME"*.exe "$DIST_DIR/win/" 2>/dev/null || true
-    fi
+    clear_output_directory "$DIST_DIR/win"
+    require_directory "$RELEASE_VERSION_DIR" "Windows release directory"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.exe" "$DIST_DIR/win" "Windows executable"
     
     print_success "Windows app built and copied to dist/win/"
 }
@@ -153,17 +203,15 @@ build_linux() {
     cd "$WEB_DIR"
     
     # Clean electron-builder release folder to prevent old artifacts
-    rm -rf "$RELEASE_DIR/$VERSION"
+    rm -rf -- "${RELEASE_VERSION_DIR:?}"
     
     pnpm build:linux
     
     # Clean and copy Linux builds to dist
-    rm -rf "$DIST_DIR/linux/"*
-    if [[ -d "$RELEASE_DIR/$VERSION" ]]; then
-        cp -f "$RELEASE_DIR/$VERSION/"*.AppImage "$DIST_DIR/linux/" 2>/dev/null || true
-        cp -f "$RELEASE_DIR/$VERSION/"*.deb "$DIST_DIR/linux/" 2>/dev/null || true
-        cp -f "$RELEASE_DIR/$VERSION/"*.rpm "$DIST_DIR/linux/" 2>/dev/null || true
-    fi
+    clear_output_directory "$DIST_DIR/linux"
+    require_directory "$RELEASE_VERSION_DIR" "Linux release directory"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.AppImage" "$DIST_DIR/linux" "Linux AppImage"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.deb" "$DIST_DIR/linux" "Linux Debian package"
     
     print_success "Linux app built and copied to dist/linux/"
 }
@@ -187,8 +235,13 @@ build_android() {
     ./gradlew assembleDebug
     
     # Clean and copy APK to dist
-    rm -rf "$DIST_DIR/android/"*
-    cp -f "$WEB_DIR/android/app/build/outputs/apk/debug/app-debug.apk" \
+    clear_output_directory "$DIST_DIR/android"
+    local apk_path="$WEB_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+    if [[ ! -f "$apk_path" ]]; then
+        print_error "Android debug APK was not produced: $apk_path"
+        return 1
+    fi
+    cp -f -- "$apk_path" \
         "$DIST_DIR/android/$APP_NAME_SLUG-$VERSION.apk"
     
     print_success "Android APK built and copied to dist/android/"
@@ -208,7 +261,8 @@ build_ios() {
     pnpm exec cap sync ios
     
     # Copy iOS project reference to dist
-    rm -rf "$DIST_DIR/ios/"*
+    require_directory "$WEB_DIR/ios/App/App.xcodeproj" "iOS Xcode project"
+    clear_output_directory "$DIST_DIR/ios"
     
     # Create a README in the ios dist folder with instructions
     cat > "$DIST_DIR/ios/README.txt" << EOF
@@ -255,20 +309,20 @@ build_desktop() {
     cd "$WEB_DIR"
     
     # Clean electron-builder release folder to prevent old artifacts
-    rm -rf "$RELEASE_DIR/$VERSION"
+    rm -rf -- "${RELEASE_VERSION_DIR:?}"
     
     pnpm build:all
     
     # Clean and copy all desktop builds to dist
-    rm -rf "$DIST_DIR/mac/"* "$DIST_DIR/win/"* "$DIST_DIR/linux/"*
-    if [[ -d "$RELEASE_DIR/$VERSION" ]]; then
-        cp -f "$RELEASE_DIR/$VERSION/$APP_NAME"*.dmg "$DIST_DIR/mac/" 2>/dev/null || true
-        cp -f "$RELEASE_DIR/$VERSION/$APP_NAME"*.zip "$DIST_DIR/mac/" 2>/dev/null || true
-        cp -f "$RELEASE_DIR/$VERSION/$APP_NAME"*.exe "$DIST_DIR/win/" 2>/dev/null || true
-        cp -f "$RELEASE_DIR/$VERSION/"*.AppImage "$DIST_DIR/linux/" 2>/dev/null || true
-        cp -f "$RELEASE_DIR/$VERSION/"*.deb "$DIST_DIR/linux/" 2>/dev/null || true
-        cp -f "$RELEASE_DIR/$VERSION/"*.rpm "$DIST_DIR/linux/" 2>/dev/null || true
-    fi
+    clear_output_directory "$DIST_DIR/mac"
+    clear_output_directory "$DIST_DIR/win"
+    clear_output_directory "$DIST_DIR/linux"
+    require_directory "$RELEASE_VERSION_DIR" "Desktop release directory"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.dmg" "$DIST_DIR/mac" "macOS DMG"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.zip" "$DIST_DIR/mac" "macOS ZIP"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.exe" "$DIST_DIR/win" "Windows executable"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.AppImage" "$DIST_DIR/linux" "Linux AppImage"
+    copy_required_artifacts "$RELEASE_VERSION_DIR" "*${VERSION}*.deb" "$DIST_DIR/linux" "Linux Debian package"
     
     print_success "All desktop apps built and copied to dist/"
 }
@@ -284,7 +338,7 @@ build_all() {
     print_header "Build Complete!"
     echo "All builds are in: $DIST_DIR"
     echo ""
-    ls -la "$DIST_DIR"/*/ 2>/dev/null || true
+    print_existing_artifacts "$DIST_DIR"
 }
 
 # Show usage

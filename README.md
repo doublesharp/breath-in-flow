@@ -32,11 +32,13 @@ The preset library also includes box breathing, 4-7-8 breathing, coherent breath
 ### Pulse Variability Lab
 
 - Camera sensing is the recommended phone-only mode.
-- Chest-motion and combined sensing are clearly marked **Beta**.
+- Chest-motion and combined sensing are supported options with positioning and stillness guidance.
 - Only intervals produced by detected beats are eligible for variability analysis. Pulse-rate estimates are displayed separately and are never converted into synthetic beat intervals.
 - Recordings must pass duration, beat-count, signal-quality, artifact, timestamp, and provenance checks before metrics are reported.
-- Frequency-domain metrics require an eligible recording of at least five minutes. Shorter protocols report supported time-domain measures and explain why frequency results are unavailable.
+- Protocol duration means clean analyzed time. Capture includes an additional five-second settling window and three-second ending window so trimming does not shorten the requested analysis.
+- Basic time-domain, Poincaré, frequency-domain, and resonance-training groups appear only when their duration and quality requirements are met. Unavailable groups show a reason instead of a numeric zero.
 - Failed or empty measurements offer clear retry, sensor-change, and cancel actions.
+- Backgrounding or hiding the app stops an active measurement, releases its sensors, and requires a clean restart; an incomplete capture is not saved as a successful result.
 
 Phone-camera pulse variability is related to, but not interchangeable with, ECG-derived HRV. Use repeatable resting conditions and look for personal trends rather than comparing a single value with another device or person.
 
@@ -45,6 +47,7 @@ Phone-camera pulse variability is related to, but not interchangeable with, ECG-
 - Completed sessions and saved routines remain on the device.
 - Session history and charts summarize practice consistency and recorded holds.
 - Measurement records include signal eligibility and algorithm provenance.
+- Pulse Variability measurements and resonance assessments use IndexedDB. Valid legacy assessments migrate from localStorage once; invalid records are skipped individually.
 - No account is required.
 
 ## Getting started
@@ -54,7 +57,7 @@ Phone-camera pulse variability is related to, but not interchangeable with, ECG-
 3. Tap **Start Practice** and follow the visual guide.
 4. Pause or stop whenever needed. The app preserves a completed session summary instead of dropping back to configuration immediately.
 
-For pulse variability, open **Lab**, select the recommended camera mode, read the preparation instructions, and remain still for the entire protocol.
+For pulse variability, open **Lab**, select camera, chest-motion, or combined sensing, read the preparation instructions, and remain still for the entire capture. Camera mode requires a rear camera and usually a flash; chest-motion mode requires motion-sensor access and secure placement on the sternum. Device capabilities and operating-system sampling behavior can affect availability and quality.
 
 ## Safety
 
@@ -77,7 +80,7 @@ corepack pnpm lint
 corepack pnpm build
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for additional setup guidance and [docs/HRV-FEATURE.md](docs/HRV-FEATURE.md) for the measurement contract and limitations.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for additional setup guidance, [docs/HRV-FEATURE.md](docs/HRV-FEATURE.md) for the measurement contract and limitations, and [docs/PULSE-VARIABILITY-DEVICE-VALIDATION.md](docs/PULSE-VARIABILITY-DEVICE-VALIDATION.md) for the physical-device release matrix.
 
 ## License
 

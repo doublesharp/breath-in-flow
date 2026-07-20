@@ -1,6 +1,6 @@
 {
   "name": "breath-in-flow",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "license": "UNLICENSED",
@@ -10,7 +10,8 @@
     "dev": "pnpm --filter @breath-in-flow/web dev",
     "build": "pnpm --filter @breath-in-flow/web build",
     "preview": "pnpm --filter @breath-in-flow/web preview",
-    "test": "pnpm --filter @breath-in-flow/shared test && pnpm --filter @breath-in-flow/database test && pnpm --filter @breath-in-flow/web test",
+    "test": "pnpm test:build-script && pnpm --filter @breath-in-flow/shared test && pnpm --filter @breath-in-flow/database test && pnpm --filter @breath-in-flow/web test",
+    "test:build-script": "bash scripts/tests/build-script.test.sh",
     "test:coverage": "pnpm -r test:coverage",
     "db:generate": "pnpm --filter @breath-in-flow/database generate",
     "db:push": "pnpm --filter @breath-in-flow/database push",
