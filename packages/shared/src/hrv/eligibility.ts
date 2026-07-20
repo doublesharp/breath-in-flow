@@ -32,7 +32,7 @@ function metricGroupsFor(
     case 'full-analysis':
       return ['average-pulse', 'rmssd', 'pnn50', 'sdnn', 'frequency-domain', 'poincare'];
     case 'resonance-trial':
-      return ['average-pulse', 'resonance-training'];
+      return ['average-pulse', 'rmssd', 'pnn50', 'sdnn-short-recording', 'resonance-training'];
     case 'freeform':
       return observedDurationSeconds >= 300
         ? ['average-pulse', 'rmssd', 'pnn50', 'sdnn', 'frequency-domain', 'poincare']
@@ -115,6 +115,7 @@ export function evaluateMeasurementEligibility(
     eligible &&
     (protocol === 'quick-check' ||
       protocol === 'morning-readiness' ||
+      protocol === 'resonance-trial' ||
       (protocol === 'freeform' && observedDurationSeconds < 300))
   ) {
     warnings.add('short-recording-sdnn');

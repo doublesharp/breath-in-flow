@@ -1,6 +1,6 @@
 import type { HRVAnalysis } from '@breath-in-flow/shared';
 
-export const sampleAnalysis: HRVAnalysis = {
+export const sampleAnalysis = {
   timeDomain: {
     meanRR: 1141,
     sdnn: 76.05,
@@ -13,31 +13,31 @@ export const sampleAnalysis: HRVAnalysis = {
   },
   frequencyDomain: {
     available: true,
-    vlfPower: 0,
-    lfPower: 304.92,
-    hfPower: 3677.86,
-    totalPower: 3982.77,
-    lfPowerNorm: 7.66,
-    hfPowerNorm: 92.34,
-    lfHfRatio: 0.083,
-    lfPeak: 0.148,
-    hfPeak: 0.332,
-    spectrum: [
-      { frequency: 0, power: 0 },
-      { frequency: 0.05, power: 50 },
-      { frequency: 0.1, power: 120 },
-      { frequency: 0.148, power: 305 },
-      { frequency: 0.2, power: 800 },
-      { frequency: 0.332, power: 3677 },
-      { frequency: 0.4, power: 200 },
-    ],
+    value: {
+      lfPowerNorm: 7.66,
+      hfPowerNorm: 92.34,
+      lfHfRatio: 0.083,
+      lfPeak: 0.148,
+      hfPeak: 0.332,
+      spectrum: [
+        { frequency: 0.05, power: 0.5 },
+        { frequency: 0.1, power: 3 },
+        { frequency: 0.148, power: 7.66 },
+        { frequency: 0.2, power: 20 },
+        { frequency: 0.332, power: 68.84 },
+      ],
+    },
   },
+  poincare: { available: true, value: { points: [] } },
   resonance: {
-    peakToTroughAmplitude: 19.2,
-    waveformSmoothness: 0.82,
-    phaseSynchrony: 0.75,
-    lfPeakCount: 1,
-    lfPeakAmplitude: 304.92,
+    available: true,
+    value: {
+      peakToTroughAmplitude: 19.2,
+      waveformSmoothness: 0.82,
+      phaseSynchrony: 0.75,
+      lfPeakCount: 1,
+      lfPeakAmplitude: 7.66,
+    },
   },
   quality: {
     totalSamples: 240,
@@ -50,4 +50,4 @@ export const sampleAnalysis: HRVAnalysis = {
     timestamps: [0, 850, 1720, 2550, 3410, 4290],
     instantaneousHR: [70.6, 69.0, 72.3, 69.8, 68.2, 73.2],
   },
-};
+} satisfies HRVAnalysis;

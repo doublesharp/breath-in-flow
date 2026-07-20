@@ -11,8 +11,11 @@ const sampleTrials = [
       ...sampleAnalysis,
       resonance: {
         ...sampleAnalysis.resonance,
-        peakToTroughAmplitude: 14.1,
-        waveformSmoothness: 0.71,
+        value: {
+          ...sampleAnalysis.resonance.value,
+          peakToTroughAmplitude: 14.1,
+          waveformSmoothness: 0.71,
+        },
       },
     },
   },
@@ -22,8 +25,11 @@ const sampleTrials = [
       ...sampleAnalysis,
       resonance: {
         ...sampleAnalysis.resonance,
-        peakToTroughAmplitude: 17.8,
-        waveformSmoothness: 0.79,
+        value: {
+          ...sampleAnalysis.resonance.value,
+          peakToTroughAmplitude: 17.8,
+          waveformSmoothness: 0.79,
+        },
       },
     },
   },
@@ -33,8 +39,11 @@ const sampleTrials = [
       ...sampleAnalysis,
       resonance: {
         ...sampleAnalysis.resonance,
-        peakToTroughAmplitude: 19.2,
-        waveformSmoothness: 0.82,
+        value: {
+          ...sampleAnalysis.resonance.value,
+          peakToTroughAmplitude: 19.2,
+          waveformSmoothness: 0.82,
+        },
       },
     },
   },
@@ -44,8 +53,11 @@ const sampleTrials = [
       ...sampleAnalysis,
       resonance: {
         ...sampleAnalysis.resonance,
-        peakToTroughAmplitude: 15.0,
-        waveformSmoothness: 0.69,
+        value: {
+          ...sampleAnalysis.resonance.value,
+          peakToTroughAmplitude: 15.0,
+          waveformSmoothness: 0.69,
+        },
       },
     },
   },
@@ -77,7 +89,7 @@ describe('TrialComparison', () => {
     const wrapper = mount(TrialComparison, {
       props: { trials: sampleTrials },
     });
-    expect(wrapper.text()).toContain('LF Power');
+    expect(wrapper.text()).toContain('LF Power %');
     expect(wrapper.text()).toContain('Amplitude');
     expect(wrapper.text()).toContain('Smoothness');
     expect(wrapper.text()).toContain('Phase Sync');

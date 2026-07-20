@@ -5,6 +5,7 @@ import {
   linearDetrend,
   hanningWindow,
 } from '../../src/hrv/frequencyDomain.js';
+import { analyzeHRV } from '../../src/hrv/index.js';
 import { FREQUENCY_BANDS } from '../../src/hrv/types.js';
 
 /**
@@ -30,6 +31,13 @@ function generateSinusoidalRR(
   }
 
   return { rrIntervals, timestamps };
+}
+
+function availableFrequency(rrIntervals: number[], timestamps: number[]) {
+  const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+  expect(result.available).toBe(true);
+  if (!result.available) throw new Error(`expected available metrics, received ${result.reason}`);
+  return result.value;
 }
 
 describe('lombScargle', () => {
@@ -178,14 +186,58 @@ describe('hanningWindow', () => {
 });
 
 describe('computeFrequencyDomainMetrics', () => {
+  it('returns only an unavailable reason when a spectrum cannot be computed', () => {
+    const result = computeFrequencyDomainMetrics([800, 810, 790], [0, 800, 1610]);
+
+    expect(result).toEqual({ available: false, reason: 'insufficient-data' });
+    expect(result).not.toHaveProperty('lfPower');
+    expect(result).not.toHaveProperty('hfPower');
+    expect(result).not.toHaveProperty('totalPower');
+  });
+
+  it('wraps eligible spectral summaries in an available value without absolute power fields', () => {
+    const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 300);
+    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+
+    expect(result.available).toBe(true);
+    expect(result).toHaveProperty('value');
+    expect(result).not.toHaveProperty('lfPower');
+    expect(result).not.toHaveProperty('hfPower');
+    expect(result).not.toHaveProperty('totalPower');
+
+    if (!result.available) throw new Error('expected available frequency metrics');
+    expect(result.value.lfPowerNorm + result.value.hfPowerNorm).toBeCloseTo(100, 1);
+    expect(result.value.spectrum.reduce((sum, point) => sum + point.power, 0)).toBeCloseTo(100, 5);
+  });
+
+  it('makes resonance unavailable when no breathing-rate context was supplied', () => {
+    const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);
+    const analysis = analyzeHRV(
+      rrIntervals.map((interval, index) => ({
+        interval,
+        timestamp: timestamps[index],
+        quality: 0.9,
+        provenance: { source: 'ppg', method: 'peak-detected' },
+      }))
+    );
+
+    expect(analysis.resonance).toEqual({
+      available: false,
+      reason: 'missing-breathing-rate',
+    });
+    expect(analysis.frequencyDomain).toEqual({
+      available: false,
+      reason: 'duration-too-short',
+    });
+  });
+
   it('detects dominant LF peak for 0.1 Hz oscillation (6 BPM breathing)', () => {
     // 0.1 Hz oscillation, 150 beats at base RR 1000ms
     const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);
-    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+    const result = availableFrequency(rrIntervals, timestamps);
 
     // LF should be dominant band
-    expect(result.lfPower).toBeGreaterThan(result.hfPower);
-    expect(result.lfPower).toBeGreaterThan(result.vlfPower);
+    expect(result.lfPowerNorm).toBeGreaterThan(result.hfPowerNorm);
 
     // LF peak should be near 0.1 Hz
     expect(result.lfPeak).toBeGreaterThan(FREQUENCY_BANDS.LF.low);
@@ -195,7 +247,7 @@ describe('computeFrequencyDomainMetrics', () => {
 
   it('returns spectrum with correct structure', () => {
     const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 30, 0.1, 100);
-    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+    const result = availableFrequency(rrIntervals, timestamps);
 
     expect(result.spectrum.length).toBeGreaterThan(0);
     // Frequencies should span from 0.003 to ~0.4 Hz
@@ -206,55 +258,47 @@ describe('computeFrequencyDomainMetrics', () => {
 
   it('computes normalized LF/HF powers that sum to 100', () => {
     const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);
-    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+    const result = availableFrequency(rrIntervals, timestamps);
 
     expect(result.lfPowerNorm + result.hfPowerNorm).toBeCloseTo(100, 1);
   });
 
-  it('lfHfRatio equals lfPower / hfPower', () => {
+  it('lfHfRatio matches the normalized LF/HF relationship', () => {
     const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);
-    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+    const result = availableFrequency(rrIntervals, timestamps);
 
-    if (result.hfPower > 0) {
-      expect(result.lfHfRatio).toBeCloseTo(result.lfPower / result.hfPower, 3);
+    if (result.hfPowerNorm > 0) {
+      expect(result.lfHfRatio).toBeCloseTo(result.lfPowerNorm / result.hfPowerNorm, 3);
     }
   });
 
-  it('band powers sum to total power', () => {
+  it('keeps normalized band percentages within their user-facing range', () => {
     const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);
-    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+    const result = availableFrequency(rrIntervals, timestamps);
 
-    expect(result.totalPower).toBeCloseTo(result.vlfPower + result.lfPower + result.hfPower, 3);
+    expect(result.lfPowerNorm).toBeGreaterThanOrEqual(0);
+    expect(result.lfPowerNorm).toBeLessThanOrEqual(100);
+    expect(result.hfPowerNorm).toBeGreaterThanOrEqual(0);
+    expect(result.hfPowerNorm).toBeLessThanOrEqual(100);
   });
 
-  it('returns sensible defaults for very short input', () => {
+  it('returns an unavailable reason for very short input', () => {
     const result = computeFrequencyDomainMetrics([800, 810, 790], [0, 800, 1610]);
-    expect(result.available).toBe(false);
-    expect(result.unavailableReason).toBe('insufficient-data');
-    expect(result.vlfPower).toBe(0);
-    expect(result.lfPower).toBe(0);
-    expect(result.hfPower).toBe(0);
-    expect(result.lfPeak).toBe(0);
-    expect(result.hfPeak).toBe(0);
+    expect(result).toEqual({ available: false, reason: 'insufficient-data' });
   });
 
-  it('returns defaults for mismatched timestamps', () => {
+  it('returns an unavailable reason for mismatched timestamps', () => {
     const result = computeFrequencyDomainMetrics([800, 810, 790, 805], [0, 800, 1610]);
 
-    expect(result.spectrum).toHaveLength(0);
-    expect(result.totalPower).toBe(0);
-    expect(result.available).toBe(false);
-    expect(result.unavailableReason).toBe('invalid-series');
+    expect(result).toEqual({ available: false, reason: 'invalid-series' });
   });
 
-  it('returns defaults for duplicate or unordered timestamps', () => {
+  it('returns unavailable reasons for duplicate or unordered timestamps', () => {
     const duplicate = computeFrequencyDomainMetrics([800, 810, 790, 805], [0, 800, 800, 2400]);
     const unordered = computeFrequencyDomainMetrics([800, 810, 790, 805], [0, 1610, 800, 2400]);
 
-    expect(duplicate.spectrum).toHaveLength(0);
-    expect(duplicate.totalPower).toBe(0);
-    expect(unordered.spectrum).toHaveLength(0);
-    expect(unordered.totalPower).toBe(0);
+    expect(duplicate).toEqual({ available: false, reason: 'invalid-series' });
+    expect(unordered).toEqual({ available: false, reason: 'invalid-series' });
   });
 
   it('marks a constant interval series unavailable instead of inventing peaks', () => {
@@ -263,21 +307,15 @@ describe('computeFrequencyDomainMetrics', () => {
 
     const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
 
-    expect(result.available).toBe(false);
-    expect(result.unavailableReason).toBe('no-variability');
-    expect(result.spectrum).toHaveLength(0);
-    expect(result.lfPeak).toBe(0);
-    expect(result.hfPeak).toBe(0);
+    expect(result).toEqual({ available: false, reason: 'no-variability' });
   });
 
   it('detects peak in HF band for 0.25 Hz oscillation', () => {
     const { rrIntervals, timestamps } = generateSinusoidalRR(800, 40, 0.25, 200);
-    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+    const result = availableFrequency(rrIntervals, timestamps);
 
     // HF should be dominant
-    expect(result.available).toBe(true);
-    expect(result.unavailableReason).toBeUndefined();
-    expect(result.hfPower).toBeGreaterThan(result.vlfPower);
+    expect(result.hfPowerNorm).toBeGreaterThan(result.lfPowerNorm);
     // HF peak should be in HF band
     expect(result.hfPeak).toBeGreaterThanOrEqual(FREQUENCY_BANDS.HF.low);
     expect(result.hfPeak).toBeLessThanOrEqual(FREQUENCY_BANDS.HF.high);
@@ -296,19 +334,19 @@ describe('computeFrequencyDomainMetrics', () => {
       t += rr;
     }
 
-    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+    const result = availableFrequency(rrIntervals, timestamps);
 
     // After detrending the 0.1 Hz signal should still be the dominant LF peak
-    expect(result.lfPower).toBeGreaterThan(result.vlfPower);
+    expect(result.lfPowerNorm).toBeGreaterThan(result.hfPowerNorm);
     expect(result.lfPeak).toBeCloseTo(0.1, 1);
   });
 
   it('0.1 Hz peak still detected after detrending and windowing', () => {
     const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);
-    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+    const result = availableFrequency(rrIntervals, timestamps);
 
     // Detrending + windowing must not destroy the primary oscillation
     expect(result.lfPeak).toBeCloseTo(0.1, 1);
-    expect(result.lfPower).toBeGreaterThan(0);
+    expect(result.lfPowerNorm).toBeGreaterThan(0);
   });
 });

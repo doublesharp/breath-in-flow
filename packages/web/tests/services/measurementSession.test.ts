@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { limitAnalysisToEligibility, MeasurementSession } from '@/services/measurementSession';
-import { analyzeHRV, evaluateMeasurementEligibility } from '@breath-in-flow/shared';
+import {
+  analyzeHRV,
+  evaluateMeasurementEligibility,
+  finalizeMeasurement,
+} from '@breath-in-flow/shared';
 import type { IBISample } from '@breath-in-flow/shared';
 
 function detectedSample(timestamp: number, source: 'ppg' | 'scg' = 'ppg'): IBISample {
@@ -103,6 +107,28 @@ describe('MeasurementSession', () => {
     expect(session.getResult().state).toBe('measuring');
   });
 
+  it('refreshes the no-data watchdog after every accepted detected beat', async () => {
+    const camera = sensor({ ok: true });
+    const session = new MeasurementSession({
+      protocol: 'quick-check',
+      noDataTimeoutMs: 5_000,
+      now: () => nowMs,
+    });
+    await session.start({ ppg: camera });
+
+    session.addDetectedSample(detectedSample(0));
+    vi.advanceTimersByTime(4_000);
+    session.addDetectedSample(detectedSample(4_000));
+    vi.advanceTimersByTime(4_999);
+
+    expect(session.getResult().state).toBe('measuring');
+
+    vi.advanceTimersByTime(1);
+
+    expect(session.getResult().state).toBe('no-data');
+    expect(camera.stop).toHaveBeenCalledOnce();
+  });
+
   it('stops cleanly once and calculates protocol-specific eligibility', async () => {
     const camera = sensor({ ok: true });
     const session = new MeasurementSession({
@@ -125,6 +151,27 @@ describe('MeasurementSession', () => {
     expect(first.eligibility?.eligible).toBe(true);
     expect(first.eligibility?.availableMetrics).toContain('rmssd');
     expect(first.eligibility?.availableMetrics).not.toContain('frequency-domain');
+    expect(first.activeSources).toEqual(['ppg']);
+  });
+
+  it('uses finalized stop samples as the exact returned and eligibility series', async () => {
+    const camera = sensor({ ok: true });
+    const session = new MeasurementSession({ protocol: 'full-analysis', now: () => nowMs });
+    await session.start({ ppg: camera });
+
+    const captured = Array.from({ length: 309 }, (_, index) => detectedSample(index * 1_000));
+    for (const sample of captured) session.addDetectedSample(sample);
+    const finalized = finalizeMeasurement(captured, 'full-analysis', {
+      settlingSeconds: 5,
+      endingSeconds: 3,
+    });
+
+    const result = session.stop(finalized.samples);
+
+    expect(result.samples).toEqual(finalized.samples);
+    expect(result.eligibility).toEqual(finalized.eligibility);
+    expect(result.eligibility?.observedDurationSeconds).toBe(300);
+    expect(result.activeSources).toEqual(['ppg']);
   });
 
   it('removes frequency outputs when the selected protocol does not allow them', () => {
@@ -134,10 +181,34 @@ describe('MeasurementSession', () => {
 
     const limited = limitAnalysisToEligibility(analysis, eligibility);
 
-    expect(limited.frequencyDomain.available).toBe(false);
-    expect(limited.frequencyDomain.unavailableReason).toBe('protocol-not-supported');
-    expect(limited.frequencyDomain.spectrum).toHaveLength(0);
-    expect(limited.frequencyDomain.lfPeak).toBe(0);
-    expect(limited.frequencyDomain.hfPeak).toBe(0);
+    expect(limited.frequencyDomain).toEqual({
+      available: false,
+      reason: 'protocol-not-supported',
+    });
+    expect(limited.poincare).toEqual({
+      available: false,
+      reason: 'protocol-not-supported',
+    });
+    expect(limited.resonance).toEqual({
+      available: false,
+      reason: 'protocol-not-supported',
+    });
+  });
+
+  it('keeps short-trial resonance available without exposing general frequency metrics', () => {
+    const samples = Array.from({ length: 121 }, (_, index) => ({
+      ...detectedSample(index * 1_000),
+      interval: 1_000 + Math.sin(index / 2) * 50,
+    }));
+    const analysis = analyzeHRV(samples, 6);
+    const eligibility = evaluateMeasurementEligibility(samples, 'resonance-trial', 120);
+
+    const limited = limitAnalysisToEligibility(analysis, eligibility);
+
+    expect(limited.frequencyDomain).toEqual({
+      available: false,
+      reason: 'protocol-not-supported',
+    });
+    expect(limited.resonance.available).toBe(true);
   });
 });

@@ -5,10 +5,10 @@ export interface FusedTrialResult {
   ppgAnalysis?: HRVAnalysis;
   scgAnalysis?: HRVAnalysis;
   fusedMetrics: {
-    lfPower: number;
-    peakToTroughAmplitude: number;
-    waveformSmoothness: number;
-    phaseSynchrony: number;
+    lfPowerNorm: number | null;
+    peakToTroughAmplitude: number | null;
+    waveformSmoothness: number | null;
+    phaseSynchrony: number | null;
     confidence: number;
   };
   source: 'ppg' | 'scg' | 'fused';
@@ -31,10 +31,10 @@ export function fuseTrialResults(
     return {
       rate,
       fusedMetrics: {
-        lfPower: 0,
-        peakToTroughAmplitude: 0,
-        waveformSmoothness: 0,
-        phaseSynchrony: 0,
+        lfPowerNorm: null,
+        peakToTroughAmplitude: null,
+        waveformSmoothness: null,
+        phaseSynchrony: null,
         confidence: 0,
       },
       source: 'ppg',
@@ -47,10 +47,10 @@ export function fuseTrialResults(
       rate,
       ppgAnalysis,
       fusedMetrics: {
-        lfPower: ppgAnalysis.frequencyDomain.lfPower,
-        peakToTroughAmplitude: ppgAnalysis.resonance.peakToTroughAmplitude,
-        waveformSmoothness: ppgAnalysis.resonance.waveformSmoothness,
-        phaseSynchrony: ppgAnalysis.resonance.phaseSynchrony,
+        lfPowerNorm: frequencyLfPowerNorm(ppgAnalysis),
+        peakToTroughAmplitude: resonanceMetric(ppgAnalysis, 'peakToTroughAmplitude'),
+        waveformSmoothness: resonanceMetric(ppgAnalysis, 'waveformSmoothness'),
+        phaseSynchrony: resonanceMetric(ppgAnalysis, 'phaseSynchrony'),
         confidence: ppgAnalysis.quality.meanSignalQuality,
       },
       source: 'ppg',
@@ -63,10 +63,10 @@ export function fuseTrialResults(
       rate,
       scgAnalysis,
       fusedMetrics: {
-        lfPower: scgAnalysis.frequencyDomain.lfPower,
-        peakToTroughAmplitude: scgAnalysis.resonance.peakToTroughAmplitude,
-        waveformSmoothness: scgAnalysis.resonance.waveformSmoothness,
-        phaseSynchrony: scgAnalysis.resonance.phaseSynchrony,
+        lfPowerNorm: frequencyLfPowerNorm(scgAnalysis),
+        peakToTroughAmplitude: resonanceMetric(scgAnalysis, 'peakToTroughAmplitude'),
+        waveformSmoothness: resonanceMetric(scgAnalysis, 'waveformSmoothness'),
+        phaseSynchrony: resonanceMetric(scgAnalysis, 'phaseSynchrony'),
         confidence: scgAnalysis.quality.meanSignalQuality,
       },
       source: 'scg',
@@ -88,10 +88,10 @@ export function fuseTrialResults(
       ppgAnalysis: ppg,
       scgAnalysis: scg,
       fusedMetrics: {
-        lfPower: 0,
-        peakToTroughAmplitude: 0,
-        waveformSmoothness: 0,
-        phaseSynchrony: 0,
+        lfPowerNorm: null,
+        peakToTroughAmplitude: null,
+        waveformSmoothness: null,
+        phaseSynchrony: null,
         confidence: 0,
       },
       source: 'fused',
@@ -99,14 +99,24 @@ export function fuseTrialResults(
   }
 
   const fuse = (ppgVal: number, scgVal: number): number => (ppgVal * wPpg + scgVal * wScg) / wTotal;
+  const fuseAvailable = (ppgVal: number | null, scgVal: number | null): number | null => {
+    if (ppgVal != null && scgVal != null) return fuse(ppgVal, scgVal);
+    return ppgVal ?? scgVal;
+  };
 
-  const fusedLfPower = fuse(ppg.frequencyDomain.lfPower, scg.frequencyDomain.lfPower);
-  const fusedAmplitude = fuse(
-    ppg.resonance.peakToTroughAmplitude,
-    scg.resonance.peakToTroughAmplitude
+  const fusedLfPowerNorm = fuseAvailable(frequencyLfPowerNorm(ppg), frequencyLfPowerNorm(scg));
+  const fusedAmplitude = fuseAvailable(
+    resonanceMetric(ppg, 'peakToTroughAmplitude'),
+    resonanceMetric(scg, 'peakToTroughAmplitude')
   );
-  const fusedSmoothness = fuse(ppg.resonance.waveformSmoothness, scg.resonance.waveformSmoothness);
-  const fusedSynchrony = fuse(ppg.resonance.phaseSynchrony, scg.resonance.phaseSynchrony);
+  const fusedSmoothness = fuseAvailable(
+    resonanceMetric(ppg, 'waveformSmoothness'),
+    resonanceMetric(scg, 'waveformSmoothness')
+  );
+  const fusedSynchrony = fuseAvailable(
+    resonanceMetric(ppg, 'phaseSynchrony'),
+    resonanceMetric(scg, 'phaseSynchrony')
+  );
 
   // Determine if metrics agree (within 25% relative difference)
   const metricsAgree = checkMetricsAgree(ppg, scg);
@@ -120,7 +130,7 @@ export function fuseTrialResults(
     ppgAnalysis: ppg,
     scgAnalysis: scg,
     fusedMetrics: {
-      lfPower: fusedLfPower,
+      lfPowerNorm: fusedLfPowerNorm,
       peakToTroughAmplitude: fusedAmplitude,
       waveformSmoothness: fusedSmoothness,
       phaseSynchrony: fusedSynchrony,
@@ -130,26 +140,40 @@ export function fuseTrialResults(
   };
 }
 
+function frequencyLfPowerNorm(analysis: HRVAnalysis): number | null {
+  return analysis.frequencyDomain.available ? analysis.frequencyDomain.value.lfPowerNorm : null;
+}
+
+function resonanceMetric(
+  analysis: HRVAnalysis,
+  metric: 'peakToTroughAmplitude' | 'waveformSmoothness' | 'phaseSynchrony'
+): number | null {
+  return analysis.resonance.available ? analysis.resonance.value[metric] : null;
+}
+
 /**
  * Check if the key resonance metrics from two analyses agree within 25%.
  * Uses relative difference: |a - b| / max(|a|, |b|) <= 0.25
  */
 function checkMetricsAgree(ppg: HRVAnalysis, scg: HRVAnalysis): boolean {
   const pairs = [
-    [ppg.frequencyDomain.lfPower, scg.frequencyDomain.lfPower],
-    [ppg.resonance.peakToTroughAmplitude, scg.resonance.peakToTroughAmplitude],
-    [ppg.resonance.waveformSmoothness, scg.resonance.waveformSmoothness],
-    [ppg.resonance.phaseSynchrony, scg.resonance.phaseSynchrony],
+    [frequencyLfPowerNorm(ppg), frequencyLfPowerNorm(scg)],
+    [resonanceMetric(ppg, 'peakToTroughAmplitude'), resonanceMetric(scg, 'peakToTroughAmplitude')],
+    [resonanceMetric(ppg, 'waveformSmoothness'), resonanceMetric(scg, 'waveformSmoothness')],
+    [resonanceMetric(ppg, 'phaseSynchrony'), resonanceMetric(scg, 'phaseSynchrony')],
   ];
 
+  let comparedMetrics = 0;
   for (const [a, b] of pairs) {
+    if (a == null || b == null) continue;
+    comparedMetrics++;
     const maxAbs = Math.max(Math.abs(a), Math.abs(b));
     if (maxAbs === 0) continue; // both zero — agree
     const relDiff = Math.abs(a - b) / maxAbs;
     if (relDiff > 0.25) return false;
   }
 
-  return true;
+  return comparedMetrics > 0;
 }
 
 /**

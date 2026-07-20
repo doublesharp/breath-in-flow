@@ -5,13 +5,45 @@ export * from './frequencyDomain.js';
 export * from './resonanceMetrics.js';
 export * from './resultsFusion.js';
 export * from './eligibility.js';
+export * from './finalizeMeasurement.js';
 
 import { mean } from '../dsp/statistics.js';
-import type { IBISample, HRVAnalysis, ResonanceMetrics } from './types.js';
+import type {
+  IBISample,
+  HRVAnalysis,
+  MetricAvailability,
+  PoincareMetrics,
+  PoincareUnavailableReason,
+  ResonanceMetrics,
+  ResonanceUnavailableReason,
+} from './types.js';
 import { preprocessIBI } from './preprocessing.js';
 import { computeTimeDomainMetrics } from './timeDomain.js';
 import { computeFrequencyDomainMetrics } from './frequencyDomain.js';
 import { computeResonanceMetrics } from './resonanceMetrics.js';
+
+function availableMetric<T, Reason extends string>(value: T): MetricAvailability<T, Reason> {
+  return { available: true, value };
+}
+
+function poincareMetrics(
+  intervals: number[],
+  unavailableForProtocol: boolean
+): MetricAvailability<PoincareMetrics, PoincareUnavailableReason> {
+  if (unavailableForProtocol) {
+    return { available: false, reason: 'protocol-not-supported' };
+  }
+  if (intervals.length < 3) {
+    return { available: false, reason: 'insufficient-data' };
+  }
+
+  return availableMetric({
+    points: intervals.slice(0, -1).map((previousInterval, index) => ({
+      previousInterval,
+      nextInterval: intervals[index + 1],
+    })),
+  });
+}
 
 function normalizeIBISamples(samples: IBISample[]): {
   samples: IBISample[];
@@ -69,25 +101,35 @@ export function analyzeHRV(samples: IBISample[], breathingRateBPM?: number): HRV
   const timeDomain = computeTimeDomainMetrics(cleanedIntervals);
 
   // 4. Frequency-domain metrics
-  const frequencyDomain = computeFrequencyDomainMetrics(cleanedIntervals, cleanedTimestamps);
+  const computedFrequencyDomain = computeFrequencyDomainMetrics(
+    cleanedIntervals,
+    cleanedTimestamps
+  );
+  const hasBreathingContext =
+    breathingRateBPM != null && Number.isFinite(breathingRateBPM) && breathingRateBPM > 0;
+  const analysisDurationSeconds =
+    cleanedTimestamps.length > 1 ? (cleanedTimestamps.at(-1)! - cleanedTimestamps[0]) / 1_000 : 0;
+  const frequencyDomain = hasBreathingContext
+    ? ({ available: false, reason: 'protocol-not-supported' } as const)
+    : analysisDurationSeconds < 300
+      ? ({ available: false, reason: 'duration-too-short' } as const)
+      : computedFrequencyDomain;
+
+  const poincare = poincareMetrics(cleanedIntervals, hasBreathingContext);
 
   // 5. Resonance metrics
-  let resonance: ResonanceMetrics;
-  if (breathingRateBPM != null && breathingRateBPM > 0) {
-    resonance = computeResonanceMetrics(
-      cleanedIntervals,
-      cleanedTimestamps,
-      breathingRateBPM,
-      frequencyDomain.spectrum
+  let resonance: MetricAvailability<ResonanceMetrics, ResonanceUnavailableReason>;
+  if (hasBreathingContext && cleanedIntervals.length >= 2) {
+    const spectrum = computedFrequencyDomain.available
+      ? computedFrequencyDomain.value.spectrum
+      : [];
+    resonance = availableMetric(
+      computeResonanceMetrics(cleanedIntervals, cleanedTimestamps, breathingRateBPM, spectrum)
     );
+  } else if (hasBreathingContext) {
+    resonance = { available: false, reason: 'insufficient-data' };
   } else {
-    resonance = {
-      peakToTroughAmplitude: 0,
-      waveformSmoothness: 0,
-      phaseSynchrony: 0,
-      lfPeakCount: 0,
-      lfPeakAmplitude: 0,
-    };
+    resonance = { available: false, reason: 'missing-breathing-rate' };
   }
 
   // 6. Quality metrics
@@ -105,6 +147,7 @@ export function analyzeHRV(samples: IBISample[], breathingRateBPM?: number): HRV
   return {
     timeDomain,
     frequencyDomain,
+    poincare,
     resonance,
     quality,
     raw: {

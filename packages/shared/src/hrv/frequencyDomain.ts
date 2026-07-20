@@ -1,6 +1,7 @@
 import { mean } from '../dsp/statistics.js';
 import { FREQUENCY_BANDS } from './types.js';
 import type {
+  FrequencyDomainAvailability,
   FrequencyDomainMetrics,
   FrequencyDomainUnavailableReason,
   SpectralPoint,
@@ -180,22 +181,13 @@ function getFrequencySeriesIssue(
 }
 
 function unavailableFrequencyDomain(
-  unavailableReason: FrequencyDomainUnavailableReason
-): FrequencyDomainMetrics {
-  return {
-    available: false,
-    unavailableReason,
-    vlfPower: 0,
-    lfPower: 0,
-    hfPower: 0,
-    totalPower: 0,
-    lfPowerNorm: 0,
-    hfPowerNorm: 0,
-    lfHfRatio: 0,
-    lfPeak: 0,
-    hfPeak: 0,
-    spectrum: [],
-  };
+  reason: FrequencyDomainUnavailableReason
+): FrequencyDomainAvailability {
+  return { available: false, reason };
+}
+
+function availableFrequencyDomain(value: FrequencyDomainMetrics): FrequencyDomainAvailability {
+  return { available: true, value };
 }
 
 /**
@@ -213,7 +205,7 @@ function unavailableFrequencyDomain(
 export function computeFrequencyDomainMetrics(
   rrIntervals: number[],
   timestamps: number[]
-): FrequencyDomainMetrics {
+): FrequencyDomainAvailability {
   const seriesIssue = getFrequencySeriesIssue(rrIntervals, timestamps);
   if (seriesIssue) return unavailableFrequencyDomain(seriesIssue);
 
@@ -250,20 +242,7 @@ export function computeFrequencyDomainMetrics(
   // Compute Lomb-Scargle PSD
   const psd = lombScargle(timestampsSec, processedRR, frequencies);
 
-  // Build spectrum
-  const spectrum: SpectralPoint[] = frequencies.map((f, i) => ({
-    frequency: f,
-    power: psd[i],
-  }));
-
   // Integrate band powers
-  const vlfPower = integrateBand(
-    frequencies,
-    psd,
-    FREQUENCY_BANDS.VLF.low,
-    FREQUENCY_BANDS.VLF.high,
-    FREQ_STEP
-  );
   const lfPower = integrateBand(
     frequencies,
     psd,
@@ -278,7 +257,15 @@ export function computeFrequencyDomainMetrics(
     FREQUENCY_BANDS.HF.high,
     FREQ_STEP
   );
-  const totalPower = vlfPower + lfPower + hfPower;
+  const spectrumPower = psd.reduce((sum, power) => sum + power, 0);
+  if (!Number.isFinite(spectrumPower) || spectrumPower <= 1e-12) {
+    return unavailableFrequencyDomain('no-variability');
+  }
+
+  const spectrum: SpectralPoint[] = frequencies.map((frequency, index) => ({
+    frequency,
+    power: (psd[index] / spectrumPower) * 100,
+  }));
 
   // Normalized powers
   const lfHfSum = lfPower + hfPower;
@@ -300,17 +287,12 @@ export function computeFrequencyDomainMetrics(
     FREQUENCY_BANDS.HF.high
   );
 
-  return {
-    available: true,
-    vlfPower,
-    lfPower,
-    hfPower,
-    totalPower,
+  return availableFrequencyDomain({
     lfPowerNorm,
     hfPowerNorm,
     lfHfRatio,
     lfPeak,
     hfPeak,
     spectrum,
-  };
+  });
 }

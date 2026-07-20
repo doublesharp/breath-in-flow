@@ -188,35 +188,38 @@
 
             <!-- HRV Chart (when sensor data available) -->
             <div v-if="trialAnalyses[index]" class="mb-4">
-              <div v-if="expandedTrialHrv[index]">
+              <div v-if="expandedTrialHrv[index] && resonanceValueAt(index)">
                 <HrOscillation
                   :hr-data="getHrDataForTrial(index)"
                   :breathing-rate-b-p-m="trial.rate"
                   :trial-duration-seconds="120"
-                  :peak-to-trough-amplitude="trialAnalyses[index]!.resonance.peakToTroughAmplitude"
-                  :waveform-smoothness="trialAnalyses[index]!.resonance.waveformSmoothness"
+                  :peak-to-trough-amplitude="resonanceValueAt(index)!.peakToTroughAmplitude"
+                  :waveform-smoothness="resonanceValueAt(index)!.waveformSmoothness"
                   :height="150"
                 />
                 <div class="mt-2 grid grid-cols-3 gap-2 text-center">
                   <div class="bg-white/5 rounded-lg p-2">
-                    <div class="text-xs text-white/50">LF Power</div>
+                    <div class="text-xs text-white/50">LF Peak Share</div>
                     <div class="text-sm font-semibold text-blue-400">
-                      {{ Math.round(trialAnalyses[index]!.frequencyDomain.lfPower) }} ms²
+                      {{ resonanceValueAt(index)!.lfPeakAmplitude.toFixed(1) }}%
                     </div>
                   </div>
                   <div class="bg-white/5 rounded-lg p-2">
                     <div class="text-xs text-white/50">Amplitude</div>
                     <div class="text-sm font-semibold text-amber-400">
-                      {{ trialAnalyses[index]!.resonance.peakToTroughAmplitude.toFixed(1) }} BPM
+                      {{ resonanceValueAt(index)!.peakToTroughAmplitude.toFixed(1) }} BPM
                     </div>
                   </div>
                   <div class="bg-white/5 rounded-lg p-2">
                     <div class="text-xs text-white/50">Smoothness</div>
                     <div class="text-sm font-semibold text-purple-400">
-                      {{ trialAnalyses[index]!.resonance.waveformSmoothness.toFixed(2) }}
+                      {{ resonanceValueAt(index)!.waveformSmoothness.toFixed(2) }}
                     </div>
                   </div>
                 </div>
+              </div>
+              <div v-else-if="expandedTrialHrv[index]" class="rounded-lg bg-amber-400/5 p-3 text-xs text-amber-200/70">
+                Automatic breathing-response metrics were unavailable for this trial.
               </div>
               <button
                 @click="expandedTrialHrv[index] = !expandedTrialHrv[index]"
@@ -345,12 +348,10 @@
 
             <template v-if="selectedTrialAnalysis">
               <FrequencySpectrum
-                v-if="selectedTrialAnalysis.frequencyDomain.available !== false"
-                :spectrum="selectedTrialAnalysis.frequencyDomain.spectrum"
-                :lf-peak="selectedTrialAnalysis.frequencyDomain.lfPeak"
-                :hf-peak="selectedTrialAnalysis.frequencyDomain.hfPeak"
-                :lf-power="selectedTrialAnalysis.frequencyDomain.lfPower"
-                :hf-power="selectedTrialAnalysis.frequencyDomain.hfPower"
+                v-if="selectedTrialAnalysis.frequencyDomain.available"
+                :spectrum="selectedTrialAnalysis.frequencyDomain.value.spectrum"
+                :lf-peak="selectedTrialAnalysis.frequencyDomain.value.lfPeak"
+                :hf-peak="selectedTrialAnalysis.frequencyDomain.value.hfPeak"
               />
             </template>
           </template>
@@ -450,6 +451,7 @@ import {
   type WaveformSmoothness,
   type IBISample,
   type HRVAnalysis,
+  type ResonanceMetrics,
   type HeartRateEstimate,
   type SoundTheme,
 } from '@breath-in-flow/shared';
@@ -649,14 +651,21 @@ function getHrDataForTrial(index: number) {
   }));
 }
 
+function resonanceValueAt(index: number): ResonanceMetrics | null {
+  const resonance = trialAnalyses.value[index]?.resonance;
+  return resonance?.available ? resonance.value : null;
+}
+
 function autoPopulateScoring() {
   for (let i = 0; i < trials.value.length; i++) {
     const analysis = trialAnalyses.value[i];
     if (!analysis) continue;
 
+    if (!analysis.resonance.available) continue;
+
     const trial = trials.value[i];
-    const amp = analysis.resonance.peakToTroughAmplitude;
-    const smooth = analysis.resonance.waveformSmoothness;
+    const amp = analysis.resonance.value.peakToTroughAmplitude;
+    const smooth = analysis.resonance.value.waveformSmoothness;
 
     // Map amplitude to category
     if (amp >= 15) trial.hrAmplitude = 'large';

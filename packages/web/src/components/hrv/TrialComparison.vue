@@ -54,7 +54,7 @@ const props = withDefaults(
 );
 
 const metrics: { key: MetricKey; label: string }[] = [
-  { key: 'lfPower', label: 'LF Power' },
+  { key: 'lfPower', label: 'LF Power %' },
   { key: 'amplitude', label: 'Amplitude' },
   { key: 'smoothness', label: 'Smoothness' },
   { key: 'phaseSynchrony', label: 'Phase Sync' },
@@ -63,23 +63,23 @@ const metrics: { key: MetricKey; label: string }[] = [
 const activeMetric = ref<MetricKey>(props.metric);
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 
-function getMetricValue(trial: Trial, key: MetricKey): number {
+function getMetricValue(trial: Trial, key: MetricKey): number | null {
   switch (key) {
     case 'lfPower':
-      return trial.analysis.frequencyDomain.lfPower;
+      return trial.analysis.frequencyDomain.available ? trial.analysis.frequencyDomain.value.lfPowerNorm : null;
     case 'amplitude':
-      return trial.analysis.resonance.peakToTroughAmplitude;
+      return trial.analysis.resonance.available ? trial.analysis.resonance.value.peakToTroughAmplitude : null;
     case 'smoothness':
-      return trial.analysis.resonance.waveformSmoothness;
+      return trial.analysis.resonance.available ? trial.analysis.resonance.value.waveformSmoothness : null;
     case 'phaseSynchrony':
-      return trial.analysis.resonance.phaseSynchrony;
+      return trial.analysis.resonance.available ? trial.analysis.resonance.value.phaseSynchrony : null;
   }
 }
 
 function getMetricLabel(key: MetricKey): string {
   switch (key) {
     case 'lfPower':
-      return 'ms²';
+      return '%';
     case 'amplitude':
       return 'BPM';
     case 'smoothness':
@@ -90,7 +90,7 @@ function getMetricLabel(key: MetricKey): string {
 
 function formatValue(v: number, key: MetricKey): string {
   if (key === 'lfPower') {
-    return v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0);
+    return v.toFixed(1);
   }
   if (key === 'amplitude') return v.toFixed(1);
   return v.toFixed(2);
@@ -129,10 +129,21 @@ function drawChart() {
   }
 
   const key = activeMetric.value;
-  const values = props.trials.map((t) => getMetricValue(t, key));
+  const plottedTrials = props.trials.flatMap((trial) => {
+    const value = getMetricValue(trial, key);
+    return value == null ? [] : [{ trial, value }];
+  });
+  if (plottedTrials.length === 0) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Metric unavailable for these trials', W / 2, H / 2);
+    return;
+  }
+  const values = plottedTrials.map(({ value }) => value);
   const maxVal = Math.max(...values) * 1.15 || 1;
 
-  const n = props.trials.length;
+  const n = plottedTrials.length;
   const barGap = plotW * 0.05;
   const totalGap = barGap * (n + 1);
   const barW = (plotW - totalGap) / n;
@@ -151,7 +162,7 @@ function drawChart() {
 
   // Bars
   for (let i = 0; i < n; i++) {
-    const trial = props.trials[i];
+    const trial = plottedTrials[i].trial;
     const val = values[i];
     const isSelected = trial.rate === props.selectedRate;
     const x = padL + barGap + i * (barW + barGap);
@@ -211,12 +222,7 @@ function drawChart() {
   for (let i = 0; i <= gridCount; i++) {
     const val = maxVal * (1 - i / gridCount);
     const y = padT + (i / gridCount) * plotH;
-    const label =
-      key === 'lfPower' && val >= 1000
-        ? `${(val / 1000).toFixed(0)}k`
-        : val >= 10
-          ? Math.round(val).toString()
-          : val.toFixed(2);
+    const label = val >= 10 ? Math.round(val).toString() : val.toFixed(2);
     ctx.fillText(label, padL - 4, y + 4);
   }
 

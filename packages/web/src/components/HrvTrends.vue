@@ -37,10 +37,10 @@
         </div>
       </div>
 
-      <!-- LF Power Trend -->
+      <!-- Normalized LF Power Trend -->
       <div class="glass rounded-xl p-4" data-testid="lf-power-chart-container">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">LF Power Trend</h3>
+          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Normalized LF Trend</h3>
           <span class="text-xs text-slate-500">Resonance training effect</span>
         </div>
         <div class="relative" style="height: 160px">
@@ -441,7 +441,7 @@ function drawAllCharts() {
     }
   }
 
-  // LF Power chart
+  // Normalized LF power chart
   if (lfPowerCanvas.value) {
     const ctx = lfPowerCanvas.value.getContext('2d');
     if (ctx) {
@@ -449,10 +449,16 @@ function drawAllCharts() {
       const { width, height } = getCanvasSize(lfPowerCanvas.value);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const lfData = measurements.map((m) => ({
-        date: new Date(m.completedAt),
-        value: m.analysis.frequencyDomain.lfPower,
-      }));
+      const lfData = measurements.flatMap((measurement) =>
+        measurement.analysis.frequencyDomain.available
+          ? [
+              {
+                date: new Date(measurement.completedAt),
+                value: measurement.analysis.frequencyDomain.value.lfPowerNorm,
+              },
+            ]
+          : []
+      );
 
       drawTrendChart(ctx, {
         data: lfData,
@@ -462,11 +468,8 @@ function drawAllCharts() {
         fillColor: 'rgba(96, 165, 250, 0.15)',
         showMovingAvg: true,
         movingAvgWindow: 7,
-        yLabel: 'ms²',
-        formatValue: (v) => {
-          if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
-          return String(Math.round(v));
-        },
+        yLabel: '%',
+        formatValue: (v) => v.toFixed(1),
       });
     }
   }

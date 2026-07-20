@@ -123,10 +123,16 @@ describe('evaluateMeasurementEligibility', () => {
   it('unlocks complete analysis and resonance groups only for their protocols', () => {
     expect(evaluate(300, 'full-analysis').availableMetrics).toContain('frequency-domain');
     expect(evaluate(300, 'full-analysis').availableMetrics).toContain('poincare');
-    expect(evaluate(120, 'resonance-trial').availableMetrics).toEqual([
+    const resonanceTrial = evaluate(120, 'resonance-trial');
+    expect(resonanceTrial.availableMetrics).toEqual([
       'average-pulse',
+      'rmssd',
+      'pnn50',
+      'sdnn-short-recording',
       'resonance-training',
     ]);
+    expect(resonanceTrial.availableMetrics).not.toContain('frequency-domain');
+    expect(resonanceTrial.warnings).toContain('short-recording-sdnn');
   });
 
   it('rejects a recording with an unresolved sensor error', () => {

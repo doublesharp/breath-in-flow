@@ -67,44 +67,37 @@
       <!-- Frequency-Domain Section -->
       <section>
         <h4 class="section-header">Frequency-Domain</h4>
-        <div v-if="analysis.frequencyDomain.available !== false" :class="gridClass">
+        <div v-if="analysis.frequencyDomain.available" :class="gridClass">
           <MetricCard
-            :value="fmtPower(analysis.frequencyDomain.totalPower)"
-            unit="ms²"
-            label="TOTAL PWR"
-            color="amber"
+            :value="fmtPct(analysis.frequencyDomain.value.lfPowerNorm)"
+            unit="%"
+            label="LF NORM"
+            color="blue"
             :compact="compact"
           />
           <MetricCard
-            :value="fmtRatio(analysis.frequencyDomain.lfHfRatio)"
+            :value="fmtPct(analysis.frequencyDomain.value.hfPowerNorm)"
+            unit="%"
+            label="HF NORM"
+            color="green"
+            :compact="compact"
+          />
+          <MetricCard
+            :value="fmtRatio(analysis.frequencyDomain.value.lfHfRatio)"
             unit=""
             label="LF/HF"
             color="orange"
             :compact="compact"
           />
           <MetricCard
-            :value="fmtPower(analysis.frequencyDomain.lfPower)"
-            unit="ms²"
-            label="LF POWER"
-            color="blue"
-            :compact="compact"
-          />
-          <MetricCard
-            :value="fmtPower(analysis.frequencyDomain.hfPower)"
-            unit="ms²"
-            label="HF POWER"
-            color="green"
-            :compact="compact"
-          />
-          <MetricCard
-            :value="fmtHz(analysis.frequencyDomain.lfPeak)"
+            :value="fmtHz(analysis.frequencyDomain.value.lfPeak)"
             unit="Hz"
             label="LF PEAK"
             color="blue"
             :compact="compact"
           />
           <MetricCard
-            :value="fmtHz(analysis.frequencyDomain.hfPeak)"
+            :value="fmtHz(analysis.frequencyDomain.value.hfPeak)"
             unit="Hz"
             label="HF PEAK"
             color="green"
@@ -117,35 +110,47 @@
           role="status"
         >
           <div class="font-medium text-amber-300">Frequency metrics unavailable</div>
-          <div class="mt-1 text-xs">{{ frequencyUnavailableMessage(analysis.frequencyDomain.unavailableReason) }}</div>
+          <div class="mt-1 text-xs">
+            {{ frequencyUnavailableMessage(analysis.frequencyDomain.reason) }}
+          </div>
         </div>
       </section>
 
       <!-- Resonance Section -->
       <section>
         <h4 class="section-header">Resonance</h4>
-        <div :class="gridClass">
+        <div v-if="analysis.resonance.available" :class="gridClass">
           <MetricCard
-            :value="fmtBPM(analysis.resonance.peakToTroughAmplitude)"
+            :value="fmtBPM(analysis.resonance.value.peakToTroughAmplitude)"
             unit="BPM"
             label="AMPLITUDE"
             color="amber"
             :compact="compact"
           />
           <MetricCard
-            :value="fmtDecimal(analysis.resonance.waveformSmoothness)"
+            :value="fmtDecimal(analysis.resonance.value.waveformSmoothness)"
             unit=""
             label="SMOOTHNESS"
             color="green"
             :compact="compact"
           />
           <MetricCard
-            :value="fmtDecimal(analysis.resonance.phaseSynchrony)"
+            :value="fmtDecimal(analysis.resonance.value.phaseSynchrony)"
             unit=""
             label="PHASE SYNC"
             color="purple"
             :compact="compact"
           />
+        </div>
+        <div
+          v-else
+          class="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-white/60"
+          role="status"
+        >
+          <div class="font-medium text-amber-300">Resonance metrics unavailable</div>
+          <div class="mt-1 text-xs">
+            {{ resonanceUnavailableMessage(analysis.resonance.reason) }}
+          </div>
         </div>
       </section>
     </template>
@@ -167,7 +172,7 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h } from 'vue';
-import type { FrequencyDomainUnavailableReason, HRVAnalysis } from '@breath-in-flow/shared';
+import type { FrequencyDomainUnavailableReason, HRVAnalysis, ResonanceUnavailableReason } from '@breath-in-flow/shared';
 
 const props = withDefaults(
   defineProps<{
@@ -190,10 +195,6 @@ function fmtMs(v: number) {
 function fmtPct(v: number) {
   return v.toFixed(1);
 }
-function fmtPower(v: number) {
-  if (v >= 1000) return (v / 1000).toFixed(2) + 'k';
-  return v.toFixed(2);
-}
 function fmtRatio(v: number) {
   return v.toFixed(2);
 }
@@ -204,7 +205,7 @@ function fmtDecimal(v: number) {
   return v.toFixed(2);
 }
 
-function frequencyUnavailableMessage(reason?: FrequencyDomainUnavailableReason): string {
+function frequencyUnavailableMessage(reason: FrequencyDomainUnavailableReason): string {
   if (reason === 'protocol-not-supported') {
     return 'This protocol is designed for short-recording metrics. Use Full Analysis for frequency-domain results.';
   }
@@ -214,7 +215,26 @@ function frequencyUnavailableMessage(reason?: FrequencyDomainUnavailableReason):
   if (reason === 'invalid-series') {
     return 'The detected beats did not form a valid continuous series. Try another reading while staying still.';
   }
+  if (reason === 'insufficient-beats') {
+    return 'More clean detected beats are needed before these metrics can be calculated.';
+  }
+  if (reason === 'low-signal-quality' || reason === 'too-many-artifacts') {
+    return 'Signal quality was not stable enough for frequency metrics. Stay still and try another reading.';
+  }
   return 'A longer clean recording is needed before these metrics can be calculated.';
+}
+
+function resonanceUnavailableMessage(reason: ResonanceUnavailableReason): string {
+  if (reason === 'missing-breathing-rate') {
+    return 'A paced breathing rate is required to calculate breathing-response metrics.';
+  }
+  if (reason === 'low-signal-quality' || reason === 'too-many-artifacts') {
+    return 'Signal quality was not stable enough for breathing-response metrics.';
+  }
+  if (reason === 'protocol-not-supported') {
+    return 'This protocol does not include paced breathing-response metrics.';
+  }
+  return 'More clean detected beats are needed before these metrics can be calculated.';
 }
 
 type MetricColor = 'blue' | 'red' | 'green' | 'purple' | 'indigo' | 'cyan' | 'teal' | 'amber' | 'orange';

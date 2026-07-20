@@ -314,10 +314,10 @@
           <h2 class="text-lg font-bold text-white">Results</h2>
           <HrvMetricsDashboard :analysis="currentAnalysis" />
           <FrequencySpectrum
-            v-if="currentAnalysis.frequencyDomain.available !== false"
-            :spectrum="currentAnalysis.frequencyDomain.spectrum"
-            :lf-peak="currentAnalysis.frequencyDomain.lfPeak"
-            :hf-peak="currentAnalysis.frequencyDomain.hfPeak"
+            v-if="currentAnalysis.frequencyDomain.available"
+            :spectrum="currentAnalysis.frequencyDomain.value.spectrum"
+            :lf-peak="currentAnalysis.frequencyDomain.value.lfPeak"
+            :hf-peak="currentAnalysis.frequencyDomain.value.hfPeak"
           />
           <PoincarePlot :rr-intervals="currentAnalysis.raw.rrIntervals" />
 
@@ -427,7 +427,7 @@ import {
   type MeasurementStartOutcome,
 } from '../services/measurementSession';
 import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
-import { analyzeHRV } from '@breath-in-flow/shared';
+import { analyzeHRV, finalizeMeasurement } from '@breath-in-flow/shared';
 import { useHrvStorage } from '../composables/useHrvStorage';
 import type {
   AssessmentResult,
@@ -986,7 +986,13 @@ async function startFreeform() {
 function stopMeasurement() {
   void disableKeepAwake();
   if (selectedSensor.value === 'dual') sensorFusionService.reset();
-  const sessionResult = measurementSession?.stop();
+  const capturedSamples = measurementSession?.getResult().samples ?? [];
+  const protocol = (selectedProtocol.value?.id as MeasurementProtocol | undefined) ?? 'freeform';
+  const finalized = finalizeMeasurement(capturedSamples, protocol, {
+    settlingSeconds: 5,
+    endingSeconds: 3,
+  });
+  const sessionResult = measurementSession?.stop(finalized.samples);
   measurementSession = null;
   collectedIBIs.value = sessionResult?.samples ?? [];
   currentEligibility.value = sessionResult?.eligibility ?? null;
@@ -994,21 +1000,8 @@ function stopMeasurement() {
     sessionResult?.samples.flatMap((sample) => (sample.provenance ? [sample.provenance] : [])) ?? [];
   isMeasuring.value = false;
 
-  // Trim first 5 seconds and last 3 seconds of IBI data.
-  // Start: sensor settling, finger placement, phone positioning causes noise.
-  // End: user movement to press the Stop button introduces artifacts.
-  // Works for both camera PPG and accelerometer SCG.
-  let ibis = collectedIBIs.value;
-  if (ibis.length > 0) {
-    const startTime = ibis[0].timestamp;
-    const endTime = ibis[ibis.length - 1].timestamp;
-    const trimStartMs = 5000; // discard first 5 seconds
-    const trimEndMs = 3000; // discard last 3 seconds
-    ibis = ibis.filter((s) => s.timestamp >= startTime + trimStartMs && s.timestamp <= endTime - trimEndMs);
-    addDebugLine(
-      `Trimmed IBIs: ${collectedIBIs.value.length} → ${ibis.length} (removed ${trimStartMs / 1000}s start, ${trimEndMs / 1000}s end)`
-    );
-  }
+  const ibis = collectedIBIs.value;
+  addDebugLine(`Finalized IBIs: ${capturedSamples.length} → ${ibis.length} (removed 5s start, 3s end)`);
 
   if (sessionResult?.eligibility && !sessionResult.eligibility.eligible) {
     permissionError.value = measurementEligibilityMessage(sessionResult.eligibility.reasons);
@@ -1138,9 +1131,9 @@ function formatType(type: string): string {
 }
 
 // Lifecycle
-onMounted(() => {
-  loadRecentResults();
-  loadLatestAssessment();
+onMounted(async () => {
+  await hrvStorage.initialize();
+  await Promise.all([loadRecentResults(), loadLatestAssessment()]);
 });
 
 onUnmounted(() => {

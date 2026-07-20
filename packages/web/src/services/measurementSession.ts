@@ -38,24 +38,21 @@ export function limitAnalysisToEligibility(
   analysis: HRVAnalysis,
   eligibility: MeasurementEligibility
 ): HRVAnalysis {
-  if (eligibility.availableMetrics.includes('frequency-domain')) return analysis;
+  const unavailableReason = eligibility.eligible
+    ? ('protocol-not-supported' as const)
+    : (eligibility.reasons[0] ?? ('insufficient-data' as const));
 
   return {
     ...analysis,
-    frequencyDomain: {
-      available: false,
-      unavailableReason: 'protocol-not-supported',
-      vlfPower: 0,
-      lfPower: 0,
-      hfPower: 0,
-      totalPower: 0,
-      lfPowerNorm: 0,
-      hfPowerNorm: 0,
-      lfHfRatio: 0,
-      lfPeak: 0,
-      hfPeak: 0,
-      spectrum: [],
-    },
+    frequencyDomain: eligibility.availableMetrics.includes('frequency-domain')
+      ? analysis.frequencyDomain
+      : { available: false, reason: unavailableReason },
+    poincare: eligibility.availableMetrics.includes('poincare')
+      ? analysis.poincare
+      : { available: false, reason: unavailableReason },
+    resonance: eligibility.availableMetrics.includes('resonance-training')
+      ? analysis.resonance
+      : { available: false, reason: unavailableReason },
   };
 }
 
@@ -78,6 +75,7 @@ export class MeasurementSession {
   private samples: IBISample[] = [];
   private estimates: HeartRateEstimate[] = [];
   private activeSensors = new Map<MeasurementSensorSource, MeasurementSensorAdapter>();
+  private acquisitionSources: MeasurementSensorSource[] = [];
   private eligibility?: MeasurementEligibility;
   private errorMessage?: string;
   private startedAtMs = 0;
@@ -130,7 +128,7 @@ export class MeasurementSession {
 
     this.startedAtMs = this.now();
     this.setState('acquiring');
-    this.noDataTimeoutId = setTimeout(() => this.handleNoData(), this.noDataTimeoutMs);
+    this.refreshNoDataTimeout();
     this.elapsedIntervalId = setInterval(() => {
       this.onElapsed?.(Math.max(0, Math.floor((this.now() - this.startedAtMs) / 1_000)));
     }, 1_000);
@@ -151,9 +149,9 @@ export class MeasurementSession {
 
     this.samples.push(sample);
     if (this.state === 'acquiring') {
-      this.clearNoDataTimeout();
       this.setState('measuring');
     }
+    this.refreshNoDataTimeout();
   }
 
   addHeartRateEstimate(estimate: HeartRateEstimate): void {
@@ -161,15 +159,19 @@ export class MeasurementSession {
     this.estimates.push(estimate);
   }
 
-  stop(): MeasurementSessionResult {
+  stop(finalSamples?: IBISample[]): MeasurementSessionResult {
     if (this.state === 'complete' || this.state === 'failed' || this.state === 'no-data') {
       return this.getResult();
     }
 
     this.clearTimers();
+    this.snapshotActiveSources();
     this.stopActiveSensors();
 
-    const elapsedSeconds = Math.max(0, (this.now() - this.startedAtMs) / 1_000);
+    if (finalSamples) {
+      this.samples = [...finalSamples];
+    }
+
     const sampleSpanSeconds =
       this.samples.length > 1
         ? Math.max(0, (this.samples.at(-1)!.timestamp - this.samples[0].timestamp) / 1_000)
@@ -177,7 +179,7 @@ export class MeasurementSession {
     this.eligibility = evaluateMeasurementEligibility(
       this.samples,
       this.protocol,
-      Math.max(elapsedSeconds, sampleSpanSeconds)
+      sampleSpanSeconds
     );
     this.setState('complete');
     return this.getResult();
@@ -188,15 +190,19 @@ export class MeasurementSession {
       state: this.state,
       samples: [...this.samples],
       estimates: [...this.estimates],
-      activeSources: [...this.activeSensors.keys()],
+      activeSources:
+        this.acquisitionSources.length > 0
+          ? [...this.acquisitionSources]
+          : [...this.activeSensors.keys()],
       eligibility: this.eligibility,
       errorMessage: this.errorMessage,
     };
   }
 
   private handleNoData(): void {
-    if (this.state !== 'acquiring') return;
+    if (this.state !== 'acquiring' && this.state !== 'measuring') return;
     this.clearTimers();
+    this.snapshotActiveSources();
     this.stopActiveSensors();
     this.errorMessage =
       'No detected heart beats were received. Reposition the sensor and try again.';
@@ -208,6 +214,15 @@ export class MeasurementSession {
       sensor.stop();
     }
     this.activeSensors.clear();
+  }
+
+  private snapshotActiveSources(): void {
+    this.acquisitionSources = [...this.activeSensors.keys()];
+  }
+
+  private refreshNoDataTimeout(): void {
+    this.clearNoDataTimeout();
+    this.noDataTimeoutId = setTimeout(() => this.handleNoData(), this.noDataTimeoutMs);
   }
 
   private clearNoDataTimeout(): void {

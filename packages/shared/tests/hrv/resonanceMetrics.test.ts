@@ -5,6 +5,12 @@ import { computeFrequencyDomainMetrics } from '../../src/hrv/frequencyDomain.js'
 const BREATHING_RATE_BPM = 5.5; // resonance frequency
 const BREATHING_FREQ_HZ = BREATHING_RATE_BPM / 60; // ~0.0917 Hz
 
+function availableSpectrum(result: ReturnType<typeof computeFrequencyDomainMetrics>) {
+  expect(result.available).toBe(true);
+  if (!result.available) throw new Error(`expected available spectrum, received ${result.reason}`);
+  return result.value.spectrum;
+}
+
 /**
  * Generate clean sinusoidal RR data at a specific breathing frequency.
  */
@@ -62,7 +68,7 @@ describe('computeResonanceMetrics', () => {
       rrIntervals,
       timestamps,
       BREATHING_RATE_BPM,
-      freq.spectrum
+      availableSpectrum(freq)
     );
 
     expect(result.waveformSmoothness).toBeGreaterThan(0.5);
@@ -75,7 +81,7 @@ describe('computeResonanceMetrics', () => {
       rrIntervals,
       timestamps,
       BREATHING_RATE_BPM,
-      freq.spectrum
+      availableSpectrum(freq)
     );
 
     expect(result.phaseSynchrony).toBeGreaterThan(0.5);
@@ -88,7 +94,7 @@ describe('computeResonanceMetrics', () => {
       rrIntervals,
       timestamps,
       BREATHING_RATE_BPM,
-      freq.spectrum
+      availableSpectrum(freq)
     );
 
     expect(result.waveformSmoothness).toBeGreaterThanOrEqual(0);
@@ -102,7 +108,7 @@ describe('computeResonanceMetrics', () => {
       rrIntervals,
       timestamps,
       BREATHING_RATE_BPM,
-      freq.spectrum
+      availableSpectrum(freq)
     );
 
     expect(result.phaseSynchrony).toBeGreaterThanOrEqual(0);
@@ -116,7 +122,7 @@ describe('computeResonanceMetrics', () => {
       rrIntervals,
       timestamps,
       BREATHING_RATE_BPM,
-      freq.spectrum
+      availableSpectrum(freq)
     );
 
     expect(result.peakToTroughAmplitude).toBeGreaterThanOrEqual(0);
@@ -134,7 +140,7 @@ describe('computeResonanceMetrics', () => {
       cleanRR,
       cleanTS,
       BREATHING_RATE_BPM,
-      freqClean.spectrum
+      availableSpectrum(freqClean)
     );
 
     // Generate noisy (random) RR data
@@ -152,7 +158,7 @@ describe('computeResonanceMetrics', () => {
       noisyRR,
       noisyTS,
       BREATHING_RATE_BPM,
-      freqNoisy.spectrum
+      availableSpectrum(freqNoisy)
     );
 
     // Clean data should generally have higher smoothness
@@ -169,7 +175,7 @@ describe('computeResonanceMetrics', () => {
       rrIntervals,
       timestamps,
       BREATHING_RATE_BPM,
-      freq.spectrum
+      availableSpectrum(freq)
     );
 
     expect(result.lfPeakCount).toBeGreaterThanOrEqual(0);
@@ -183,7 +189,7 @@ describe('computeResonanceMetrics', () => {
       rrIntervals,
       timestamps,
       BREATHING_RATE_BPM,
-      freq.spectrum
+      availableSpectrum(freq)
     );
 
     expect(result.lfPeakAmplitude).toBeGreaterThanOrEqual(0);
@@ -196,7 +202,7 @@ describe('computeResonanceMetrics', () => {
       rrIntervals,
       timestamps,
       BREATHING_RATE_BPM,
-      freq.spectrum
+      availableSpectrum(freq)
     );
 
     // Clean single-frequency oscillation should ideally have a single dominant LF peak

@@ -70,36 +70,64 @@ export interface TimeDomainMetrics {
   hrRange: number; // maxHR - minHR (peak-to-trough)
 }
 
+export type MetricAvailability<T, Reason extends string> =
+  { available: true; value: T } | { available: false; reason: Reason };
+
 export type FrequencyDomainUnavailableReason =
-  'insufficient-data' | 'invalid-series' | 'no-variability' | 'protocol-not-supported';
+  | EligibilityReason
+  | 'insufficient-data'
+  | 'invalid-series'
+  | 'no-variability'
+  | 'protocol-not-supported';
 
 export interface FrequencyDomainMetrics {
-  available: boolean;
-  unavailableReason?: FrequencyDomainUnavailableReason;
-  vlfPower: number; // VLF power (ms²), 0.003-0.04 Hz
-  lfPower: number; // LF power (ms²), 0.04-0.15 Hz
-  hfPower: number; // HF power (ms²), 0.15-0.4 Hz
-  totalPower: number; // Total power (ms²)
   lfPowerNorm: number; // LF/(LF+HF)*100
   hfPowerNorm: number; // HF/(LF+HF)*100
   lfHfRatio: number; // LF/HF
   lfPeak: number; // Peak frequency in LF band (Hz)
   hfPeak: number; // Peak frequency in HF band (Hz)
-  spectrum: SpectralPoint[]; // Full spectrum for visualization
+  spectrum: SpectralPoint[]; // Relative spectrum, normalized to sum to 100
 }
+
+export type FrequencyDomainAvailability = MetricAvailability<
+  FrequencyDomainMetrics,
+  FrequencyDomainUnavailableReason
+>;
 
 export interface SpectralPoint {
   frequency: number; // Hz
-  power: number; // ms²/Hz
+  power: number; // relative spectral contribution, normalized to sum to 100
 }
+
+export interface PoincarePoint {
+  previousInterval: number;
+  nextInterval: number;
+}
+
+export interface PoincareMetrics {
+  points: PoincarePoint[];
+}
+
+export type PoincareUnavailableReason =
+  EligibilityReason | 'insufficient-data' | 'protocol-not-supported';
+
+export type PoincareAvailability = MetricAvailability<PoincareMetrics, PoincareUnavailableReason>;
 
 export interface ResonanceMetrics {
   peakToTroughAmplitude: number; // Average HR max-min per breathing cycle (BPM)
   waveformSmoothness: number; // 0-1, spectral concentration at breathing freq
   phaseSynchrony: number; // 0-1, correlation of breathing phase with HR
   lfPeakCount: number; // Number of distinct peaks in LF band
-  lfPeakAmplitude: number; // Dominant LF peak amplitude (ms²/Hz)
+  lfPeakAmplitude: number; // Dominant LF peak contribution in the normalized spectrum
 }
+
+export type ResonanceUnavailableReason =
+  EligibilityReason | 'insufficient-data' | 'missing-breathing-rate' | 'protocol-not-supported';
+
+export type ResonanceAvailability = MetricAvailability<
+  ResonanceMetrics,
+  ResonanceUnavailableReason
+>;
 
 export interface HRVQuality {
   totalSamples: number;
@@ -110,8 +138,9 @@ export interface HRVQuality {
 
 export interface HRVAnalysis {
   timeDomain: TimeDomainMetrics;
-  frequencyDomain: FrequencyDomainMetrics;
-  resonance: ResonanceMetrics;
+  frequencyDomain: FrequencyDomainAvailability;
+  poincare: PoincareAvailability;
+  resonance: ResonanceAvailability;
   quality: HRVQuality;
   raw: {
     rrIntervals: number[];

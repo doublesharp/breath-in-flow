@@ -4,18 +4,22 @@ import type { HRVAnalysis } from '../../src/hrv/types.js';
 
 /** Build a minimal HRVAnalysis for testing. */
 function makeAnalysis(overrides: {
-  lfPower?: number;
+  lfPowerNorm?: number;
   amplitude?: number;
   smoothness?: number;
   synchrony?: number;
   signalQuality?: number;
+  frequencyAvailable?: boolean;
+  resonanceAvailable?: boolean;
 }): HRVAnalysis {
   const {
-    lfPower = 100,
+    lfPowerNorm = 60,
     amplitude = 10,
     smoothness = 0.5,
     synchrony = 0.6,
     signalQuality = 0.8,
+    frequencyAvailable = true,
+    resonanceAvailable = true,
   } = overrides;
 
   return {
@@ -29,25 +33,32 @@ function makeAnalysis(overrides: {
       maxHR: 85,
       hrRange: 20,
     },
-    frequencyDomain: {
-      vlfPower: 50,
-      lfPower,
-      hfPower: 30,
-      totalPower: lfPower + 80,
-      lfPowerNorm: 60,
-      hfPowerNorm: 40,
-      lfHfRatio: 1.5,
-      lfPeak: 0.1,
-      hfPeak: 0.25,
-      spectrum: [],
-    },
-    resonance: {
-      peakToTroughAmplitude: amplitude,
-      waveformSmoothness: smoothness,
-      phaseSynchrony: synchrony,
-      lfPeakCount: 1,
-      lfPeakAmplitude: lfPower * 0.8,
-    },
+    frequencyDomain: frequencyAvailable
+      ? {
+          available: true,
+          value: {
+            lfPowerNorm,
+            hfPowerNorm: 100 - lfPowerNorm,
+            lfHfRatio: lfPowerNorm / (100 - lfPowerNorm),
+            lfPeak: 0.1,
+            hfPeak: 0.25,
+            spectrum: [],
+          },
+        }
+      : { available: false, reason: 'no-variability' },
+    poincare: { available: true, value: { points: [] } },
+    resonance: resonanceAvailable
+      ? {
+          available: true,
+          value: {
+            peakToTroughAmplitude: amplitude,
+            waveformSmoothness: smoothness,
+            phaseSynchrony: synchrony,
+            lfPeakCount: 1,
+            lfPeakAmplitude: lfPowerNorm * 0.8,
+          },
+        }
+      : { available: false, reason: 'missing-breathing-rate' },
     quality: {
       totalSamples: 100,
       artifactsDetected: 5,
@@ -65,7 +76,7 @@ function makeAnalysis(overrides: {
 describe('fuseTrialResults', () => {
   it('passes through PPG-only results with PPG confidence', () => {
     const ppg = makeAnalysis({
-      lfPower: 120,
+      lfPowerNorm: 65,
       amplitude: 12,
       smoothness: 0.7,
       synchrony: 0.8,
@@ -76,7 +87,7 @@ describe('fuseTrialResults', () => {
     expect(result.source).toBe('ppg');
     expect(result.ppgAnalysis).toBe(ppg);
     expect(result.scgAnalysis).toBeUndefined();
-    expect(result.fusedMetrics.lfPower).toBe(120);
+    expect(result.fusedMetrics.lfPowerNorm).toBe(65);
     expect(result.fusedMetrics.peakToTroughAmplitude).toBe(12);
     expect(result.fusedMetrics.waveformSmoothness).toBe(0.7);
     expect(result.fusedMetrics.phaseSynchrony).toBe(0.8);
@@ -85,27 +96,27 @@ describe('fuseTrialResults', () => {
   });
 
   it('passes through SCG-only results with SCG confidence', () => {
-    const scg = makeAnalysis({ lfPower: 90, signalQuality: 0.7 });
+    const scg = makeAnalysis({ lfPowerNorm: 55, signalQuality: 0.7 });
     const result = fuseTrialResults(undefined, scg, 6.0);
 
     expect(result.source).toBe('scg');
     expect(result.scgAnalysis).toBe(scg);
     expect(result.ppgAnalysis).toBeUndefined();
-    expect(result.fusedMetrics.lfPower).toBe(90);
+    expect(result.fusedMetrics.lfPowerNorm).toBe(55);
     expect(result.fusedMetrics.confidence).toBe(0.7);
     expect(result.rate).toBe(6.0);
   });
 
   it('fuses dual sources with equal quality as simple average', () => {
     const ppg = makeAnalysis({
-      lfPower: 100,
+      lfPowerNorm: 60,
       amplitude: 10,
       smoothness: 0.6,
       synchrony: 0.5,
       signalQuality: 0.8,
     });
     const scg = makeAnalysis({
-      lfPower: 100,
+      lfPowerNorm: 60,
       amplitude: 10,
       smoothness: 0.6,
       synchrony: 0.5,
@@ -114,34 +125,34 @@ describe('fuseTrialResults', () => {
     const result = fuseTrialResults(ppg, scg, 5.5);
 
     expect(result.source).toBe('fused');
-    expect(result.fusedMetrics.lfPower).toBeCloseTo(100);
+    expect(result.fusedMetrics.lfPowerNorm).toBeCloseTo(60);
     expect(result.fusedMetrics.peakToTroughAmplitude).toBeCloseTo(10);
     expect(result.fusedMetrics.waveformSmoothness).toBeCloseTo(0.6);
     expect(result.fusedMetrics.phaseSynchrony).toBeCloseTo(0.5);
   });
 
   it('weights by quality when unequal — higher quality dominates', () => {
-    const ppg = makeAnalysis({ lfPower: 100, signalQuality: 0.9 });
-    const scg = makeAnalysis({ lfPower: 200, signalQuality: 0.1 });
+    const ppg = makeAnalysis({ lfPowerNorm: 40, signalQuality: 0.9 });
+    const scg = makeAnalysis({ lfPowerNorm: 80, signalQuality: 0.1 });
 
     const result = fuseTrialResults(ppg, scg, 5.0);
 
-    // With weights 0.9 and 0.1: fused = (100*0.9 + 200*0.1) / 1.0 = 110
-    expect(result.fusedMetrics.lfPower).toBeCloseTo(110);
+    // With weights 0.9 and 0.1: fused = (40*0.9 + 80*0.1) / 1.0 = 44
+    expect(result.fusedMetrics.lfPowerNorm).toBeCloseTo(44);
     expect(result.source).toBe('fused');
   });
 
   it('boosts confidence when metrics agree within 25%', () => {
     // Same metrics, high quality
     const ppg = makeAnalysis({
-      lfPower: 100,
+      lfPowerNorm: 60,
       amplitude: 10,
       smoothness: 0.6,
       synchrony: 0.5,
       signalQuality: 0.8,
     });
     const scg = makeAnalysis({
-      lfPower: 110,
+      lfPowerNorm: 66,
       amplitude: 11,
       smoothness: 0.65,
       synchrony: 0.55,
@@ -157,14 +168,14 @@ describe('fuseTrialResults', () => {
   it('penalizes confidence when metrics disagree', () => {
     // Widely different metrics
     const ppg = makeAnalysis({
-      lfPower: 100,
+      lfPowerNorm: 30,
       amplitude: 5,
       smoothness: 0.3,
       synchrony: 0.2,
       signalQuality: 0.8,
     });
     const scg = makeAnalysis({
-      lfPower: 300,
+      lfPowerNorm: 90,
       amplitude: 20,
       smoothness: 0.9,
       synchrony: 0.9,
@@ -186,24 +197,49 @@ describe('fuseTrialResults', () => {
     expect(result.fusedMetrics.confidence).toBe(1);
   });
 
-  it('returns zero metrics when neither source is provided', () => {
+  it('returns unavailable metric values when neither source is provided', () => {
     const result = fuseTrialResults(undefined, undefined, 5.5);
 
-    expect(result.fusedMetrics.lfPower).toBe(0);
+    expect(result.fusedMetrics.lfPowerNorm).toBeNull();
+    expect(result.fusedMetrics.peakToTroughAmplitude).toBeNull();
     expect(result.fusedMetrics.confidence).toBe(0);
     expect(result.rate).toBe(5.5);
+  });
+
+  it('preserves available resonance values when frequency metrics are unavailable', () => {
+    const result = fuseTrialResults(
+      makeAnalysis({ frequencyAvailable: false, amplitude: 14 }),
+      undefined,
+      5.5
+    );
+
+    expect(result.fusedMetrics.lfPowerNorm).toBeNull();
+    expect(result.fusedMetrics.peakToTroughAmplitude).toBe(14);
+  });
+
+  it('preserves available frequency values when resonance metrics are unavailable', () => {
+    const result = fuseTrialResults(
+      makeAnalysis({ resonanceAvailable: false, lfPowerNorm: 64 }),
+      undefined,
+      5.5
+    );
+
+    expect(result.fusedMetrics.lfPowerNorm).toBe(64);
+    expect(result.fusedMetrics.peakToTroughAmplitude).toBeNull();
+    expect(result.fusedMetrics.waveformSmoothness).toBeNull();
+    expect(result.fusedMetrics.phaseSynchrony).toBeNull();
   });
 });
 
 describe('fuseAssessmentRuns', () => {
   it('matches trials by rate and returns fused results', () => {
     const ppgTrials = [
-      { rate: 6.5, analysis: makeAnalysis({ lfPower: 80 }) },
-      { rate: 5.5, analysis: makeAnalysis({ lfPower: 120 }) },
+      { rate: 6.5, analysis: makeAnalysis({ lfPowerNorm: 55 }) },
+      { rate: 5.5, analysis: makeAnalysis({ lfPowerNorm: 65 }) },
     ];
     const scgTrials = [
-      { rate: 6.5, analysis: makeAnalysis({ lfPower: 90 }) },
-      { rate: 5.0, analysis: makeAnalysis({ lfPower: 150 }) },
+      { rate: 6.5, analysis: makeAnalysis({ lfPowerNorm: 58 }) },
+      { rate: 5.0, analysis: makeAnalysis({ lfPowerNorm: 70 }) },
     ];
 
     const results = fuseAssessmentRuns(ppgTrials, scgTrials);
