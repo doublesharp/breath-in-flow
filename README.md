@@ -1,176 +1,83 @@
 # Breath in Flow
 
-A breathing practice app for guided breathwork sessions. Customize your breathing patterns with adjustable timing, holds, repetitions, and sets to support your wellness practice.
+Breath in Flow is a private, standalone wellness and training app for guided breathing practice. It runs on iOS, Android, desktop, and the web, with adjustable breath timing, repetitions, sets, recovery periods, and optional pulse-variability feedback.
 
-## Why Breath in Flow?
-
-Breathing exercises are a simple yet powerful tool for:
-
-- **Reducing stress and anxiety** - Activate your parasympathetic nervous system
-- **Improving focus** - Clear your mind and enhance concentration
-- **Better sleep** - Calm your body before bed
-- **Building breath tolerance** - Strengthen your respiratory system
-- **Supporting meditation** - Use as a foundation for mindfulness practice
+> Breath in Flow is not a medical device and does not diagnose, treat, or monitor a health condition. Its camera and motion measurements are intended for personal wellness trends, not clinical decisions.
 
 ## Features
 
-### Customizable Breathing Patterns
+### Guided breathing routines
 
-- Set your own timing for inhale, exhale, and optional holds
-- Configure repetitions per set and target number of sets
-- Save your favorite patterns for quick access
+- Configure inhale, inhale hold, exhale, and exhale hold timing.
+- Choose repetitions, sets, and timed rest between sets.
+- Add optional timed or tolerance-based extended holds.
+- Follow a large animated guide with pause, resume, skip-rest, and safe-stop controls.
+- Save custom routines locally for quick reuse.
 
-### Extended Breath Holds
+### Diaphragm resistance training
 
-- **Tolerance mode** - Timer counts up so you can record your personal best
-- **Timed mode** - Set a specific duration to work toward
-- Choose inhale or exhale holds
-- Optional second hold within each set
+The guided **Diaphragm Resistance Starter** preset uses a 3-second inhale, 1-second hold, 4-second exhale, 1-second hold, 10 repetitions, 2 sets, and 60 seconds of rest between sets. Its in-app guide explains:
 
-### Visual Guidance
+- how to position and use an inspiratory resistance trainer;
+- how endurance-oriented and strength-oriented sessions differ;
+- how to begin conservatively and progress gradually; and
+- when to stop and seek advice from a qualified clinician.
 
-- Animated breathing circle expands and contracts with your breath
-- Color-coded phases make it easy to follow along
-- Clear countdown timers for each phase
-- Progress tracking shows your repetitions and sets
+Resistance is set on the physical trainer rather than in the app. Beginners should use the lowest comfortable resistance, keep the neck and shoulders relaxed, and stop if breathing becomes strained or symptoms develop.
 
-### Track Your Progress
+### Preset techniques
 
-- Session history saves automatically
-- Analytics dashboard with visual charts
-- Track hold time improvements over time
-- Review session frequency and consistency
+The preset library also includes box breathing, 4-7-8 breathing, coherent breathing, cyclic breathing, and other configurable starting points. Presets are training guides, not prescriptions; shorten or stop a routine whenever it feels uncomfortable.
 
-### Preset Techniques
+### Pulse Variability Lab
 
-Built-in templates for popular breathing methods:
+- Camera sensing is the recommended phone-only mode.
+- Chest-motion and combined sensing are clearly marked **Beta**.
+- Only intervals produced by detected beats are eligible for variability analysis. Pulse-rate estimates are displayed separately and are never converted into synthetic beat intervals.
+- Recordings must pass duration, beat-count, signal-quality, artifact, timestamp, and provenance checks before metrics are reported.
+- Frequency-domain metrics require an eligible recording of at least five minutes. Shorter protocols report supported time-domain measures and explain why frequency results are unavailable.
+- Failed or empty measurements offer clear retry, sensor-change, and cancel actions.
 
-- Box Breathing (4-4-4-4)
-- 4-7-8 Relaxation
-- Cyclic Hyperventilation Method
-- Coherent Breathing
-- And more...
+Phone-camera pulse variability is related to, but not interchangeable with, ECG-derived HRV. Use repeatable resting conditions and look for personal trends rather than comparing a single value with another device or person.
 
-### Works Everywhere
+### Local progress tracking
 
-Available on:
+- Completed sessions and saved routines remain on the device.
+- Session history and charts summarize practice consistency and recorded holds.
+- Measurement records include signal eligibility and algorithm provenance.
+- No account is required.
 
-- **Desktop**: macOS, Windows, Linux
-- **Mobile**: iOS, Android
-- **Web**: Any modern browser
+## Getting started
 
-Your data stays on your device - no account required.
+1. Open **Practice** and choose a preset or configure a routine.
+2. Set the breath cadence, repetitions, sets, and optional rest time.
+3. Tap **Start Practice** and follow the visual guide.
+4. Pause or stop whenever needed. The app preserves a completed session summary instead of dropping back to configuration immediately.
 
-## Getting Started
-
-### Quick Start
-
-1. Open the app and go to the **Practice** tab
-2. The default pattern is ready - just tap **Start Practice**
-3. Follow the visual guide - breathe in as the circle expands, out as it contracts
-4. The app will guide you through each phase with colors and timers
-
-### Customize Your Pattern
-
-1. Adjust the breathing times:
-   - **Inhale Time**: How long to breathe in (1-60 seconds)
-   - **Inhale Hold**: Optional pause after inhaling
-   - **Exhale Time**: How long to breathe out
-   - **Exhale Hold**: Optional pause after exhaling
-
-2. Set how many breath cycles (repetitions) per set
-
-3. Optionally set a target number of sets
-
-### Using Extended Holds
-
-Extended holds help build breath tolerance and are performed at the end of each set:
-
-1. Enable the **Extended Hold** toggle
-2. Choose your hold type:
-   - **Inhale and Hold**: Fill your lungs, then hold
-   - **Exhale and Hold**: Empty your lungs, then hold
-3. Choose your mode:
-   - **Tolerance**: Timer counts up - release when you need to breathe
-   - **Timed**: Set a specific duration to work toward
-
-### Save Your Favorites
-
-1. Configure your preferred settings
-2. Enter a name for your pattern
-3. Tap **Save Configuration**
-4. Access saved patterns anytime from the **Presets** tab
-
-## Breathing Techniques
-
-Breath in Flow includes presets for these popular techniques:
-
-### Box Breathing (4-4-4-4)
-
-Used by Navy SEALs and first responders for staying calm under pressure.
-
-- Inhale: 4 seconds → Hold: 4 seconds → Exhale: 4 seconds → Hold: 4 seconds
-- **Best for**: Stress relief, focus, grounding
-
-### 4-7-8 Relaxation
-
-Developed by Dr. Andrew Weil as a natural tranquilizer for the nervous system.
-
-- Inhale: 4 seconds → Hold: 7 seconds → Exhale: 8 seconds
-- **Best for**: Sleep, anxiety relief, deep relaxation
-
-### Cyclic Hyperventilation Method
-
-Power breathing technique for energy and cold tolerance.
-
-- 30 quick breaths (2s in, 2s out)
-- Extended exhale hold (as long as comfortable)
-- Recovery breath with 15-second inhale hold
-- Repeat for 3 sets
-- **Best for**: Energy, alertness, breath tolerance training
-
-### Coherent Breathing
-
-Optimizes heart rate variability (HRV) at 6 breaths per minute.
-
-- Inhale: 5 seconds → Exhale: 5 seconds
-- **Best for**: Heart health, balance, daily maintenance
-
-## Tips for Practice
-
-- **Find a quiet space** - Minimize distractions for better focus
-- **Sit comfortably** - Good posture helps with deep breathing
-- **Breathe through your nose** - When possible, for better air filtration
-- **Use belly breathing** - Let your diaphragm do the work
-- **Start shorter** - Begin with 3-5 minutes and build up
-- **Be consistent** - Daily practice yields the best results
-- **Listen to your body** - If you feel dizzy, return to normal breathing
+For pulse variability, open **Lab**, select the recommended camera mode, read the preparation instructions, and remain still for the entire protocol.
 
 ## Safety
 
-Breathwork is generally safe, but consult a healthcare provider before starting if you:
+- Practice seated or lying down in a safe place, especially for unfamiliar routines.
+- Never perform breath holds or rapid/cyclic breathing in water, while driving, while standing where a fall could cause injury, or during another safety-critical activity.
+- Stop immediately and return to normal breathing if you feel dizzy, faint, confused, unusually short of breath, have chest pain, or otherwise feel unwell.
+- Do not force a hold or resistance level. Progress gradually and allow recovery between sets.
+- Ask a qualified healthcare professional before beginning if you are pregnant, have a cardiovascular or respiratory condition, have a history of fainting or seizures, are recovering from surgery or illness, or are uncertain whether breath or inspiratory-muscle training is appropriate for you.
 
-- Have respiratory conditions (asthma, COPD)
-- Have cardiovascular issues
-- Are pregnant
-- Have a history of panic attacks
-- Experience frequent dizziness
+## Development
 
-Stop immediately if you feel unwell during practice.
+The project is a pnpm workspace using Vue 3, TypeScript, Vite, Capacitor, Electron, Vitest, and Tailwind CSS.
 
-## About
+```bash
+corepack pnpm install
+corepack pnpm test
+corepack pnpm test:coverage
+corepack pnpm typecheck
+corepack pnpm lint
+corepack pnpm build
+```
 
-Breath in Flow was designed with guidance from physical therapy expertise to be:
-
-- **Simple to use** - Follow visual cues for guided breathing
-- **Fully customizable** - Adapt to your individual needs
-- **Progress-focused** - Track improvements over time
-- **Private** - All data stays on your device
-- **Evidence-based** - Techniques used by healthcare professionals
-
-## Contributing
-
-Interested in contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for additional setup guidance and [docs/HRV-FEATURE.md](docs/HRV-FEATURE.md) for the measurement contract and limitations.
 
 ## License
 

@@ -1,176 +1,104 @@
-# HRV Sensing System — How It Works
+# Pulse Variability and HRV-Style Analysis
 
-## Overview
+## Product boundary
 
-The app includes a built-in heart rate variability (HRV) measurement system that works using only your phone — no external devices needed. It captures inter-beat intervals (the time between heartbeats), computes HRV metrics, and uses them to objectively score resonance frequency assessment trials.
+Breath in Flow provides phone-based pulse timing for personal wellness and breathing-training feedback. The camera path measures photoplethysmography (PPG), so its beat-to-beat output is pulse-rate variability rather than clinical ECG-derived HRV. Chest-motion sensing is experimental. Neither path diagnoses a condition or replaces a validated medical device or professional assessment.
 
-## Measurement Methods
+The UI uses **Pulse Variability** for the feature and labels camera sensing **Recommended**. Chest and combined modes are labeled **Beta**.
 
-### Camera PPG (Photoplethysmography)
+## Measurement contract
 
-**What it is:** When you place your finger over the phone's rear camera with the flashlight on, light passes through your fingertip. With each heartbeat, blood volume in your capillaries changes, modulating how much light reaches the camera sensor.
+The analysis boundary deliberately distinguishes two types of output:
 
-**Signal pipeline:**
-1. Camera captures frames at 30 FPS, extracts average green channel intensity (green is absorbed most by hemoglobin)
-2. Adaptive bandpass filter adjusts its cutoff frequencies every 10 seconds based on your estimated heart rate (research shows this improves accuracy by up to 7% vs fixed filters)
-3. Peak detection with prominence validation identifies systolic peaks
-4. Peak-to-peak timing produces inter-beat intervals (IBI)
+1. A `HeartRateEstimate` is a smoothed pulse-rate estimate. It may come from autocorrelation when the waveform is periodic enough to estimate a rate, but individual beats cannot be located reliably.
+2. An `IBISample` is an interval between two detected beat events. It contains a timestamp, interval, quality score, source, and detection provenance.
 
-**Accuracy enhancements (research-backed):**
-- Green channel extraction (stronger PPG signal than red)
-- Adaptive bandpass filter inspired by the Aboy++ algorithm (F1 score: 85.5%)
-- Peak prominence filtering rejects noise while keeping real beats
-- Adaptive refractory period tracks running HR to avoid double-detection
+Only eligible `IBISample` values enter variability analysis. The app never converts an autocorrelation rate estimate into evenly spaced synthetic intervals. This prevents a smooth fallback estimate from appearing as artificially low or otherwise misleading variability.
 
-### Accelerometer SCG (Seismocardiography)
+Combined mode matches contemporaneous camera and chest detections and emits at most one fused interval for a heartbeat. If a sensor becomes unavailable, the session reports the degraded state rather than silently fabricating the missing stream.
 
-**What it is:** Each heartbeat creates mechanical vibrations in your chest wall. The aortic valve opening (AO) produces the strongest vibration, detectable by the phone's accelerometer when placed flat on your sternum.
+## Sensors
 
-**Signal pipeline:**
-1. Z-axis acceleration captured via DeviceMotion API
-2. Bandpass filter 5–25 Hz isolates cardiac-specific vibrations, removing respiratory artifacts
-3. Hilbert transform envelope extraction (more accurate than simple RMS)
-4. Template matching with normalized cross-correlation validates peaks against a learned heartbeat shape (research: 97% sensitivity, 96% PPV)
+### Camera PPG — Recommended
 
-**Accuracy enhancements (research-backed):**
-- 5–25 Hz bandpass (vs generic 1–25 Hz) per Zheng et al. 2024 research
-- 17-tap discrete Hilbert FIR transformer for envelope estimation
-- Template matching builds an average heartbeat shape after 5 detections, then validates subsequent peaks (NCC threshold ≥ 0.5)
-- Template refreshes every 20 beats to adapt to signal changes
+The user covers the rear camera and flash with a fingertip while keeping the phone still. The detector filters the optical waveform, locates candidate beats, rejects implausible timing, and attaches quality and provenance to accepted intervals.
 
-### Dual-Sensor Mode (Simultaneous)
+Camera measurements are sensitive to pressure, hand movement, cold fingers, ambient-light leakage, camera exposure behavior, and device-specific frame timing. A steady pulse-rate estimate can still be shown when individual beat timing is not trustworthy, but that estimate is excluded from variability metrics.
 
-**Setup:** Phone placed screen-down flat on your chest, finger covering the rear camera lens.
+### Chest motion — Beta
 
-**How it works:** Both PPG and SCG run simultaneously on the same heartbeats. A real-time sensor fusion service cross-validates each beat:
-- When both sensors detect a beat within ±100ms and intervals agree within 30ms: quality-weighted average (highest confidence)
-- When they disagree: uses the higher-quality source
-- After 5+ consecutive matched beats: confidence gets a 1.2× boost
-- Single-sensor detections are still used when only one fires (at reduced confidence)
+The phone's motion sensor attempts to detect heartbeat-related chest vibration while the device rests securely on the sternum. Placement, breathing movement, clothing, phone hardware, and operating-system sampling behavior materially affect the signal. Treat this mode as experimental and use the camera mode when a repeatable phone-only reading is the priority.
 
-This is the most accurate mode because two independent measurement methods validate each other.
+### Combined mode — Beta
 
-## HRV Analysis Engine
+Combined mode cross-checks detections from both sensors. It does not guarantee higher accuracy: a poor-quality second signal may add no useful information. The app tracks sensor-specific failures and only fuses detections that satisfy its time and interval agreement rules.
 
-### Preprocessing
-1. **Artifact detection:** Flags intervals outside 300–2000ms (30–200 BPM)
-2. **Ectopic beat detection:** Flags intervals differing >20% from local 5-beat median
-3. **Correction:** Replaces flagged intervals via linear interpolation
+## Eligibility gates
 
-### Time-Domain Metrics
-- **RMSSD** — Root mean square of successive differences (parasympathetic indicator)
-- **SDNN** — Standard deviation of all NN intervals (overall HRV)
-- **pNN50** — Percentage of successive differences > 50ms
-- **Mean RR / Mean HR** — Average interval and heart rate
-- **HR Range** — Max HR minus Min HR (peak-to-trough)
+A recording must pass every applicable gate before analysis:
 
-### Frequency-Domain Metrics (Lomb-Scargle Periodogram)
+- minimum protocol duration;
+- enough detected beats for the observed duration;
+- finite, monotonic timestamps and finite quality values;
+- physiologically plausible interval bounds;
+- known detected-beat provenance rather than estimated samples;
+- mean signal quality of at least 0.5;
+- no more than 10% detected artifacts; and
+- no unresolved sensor error.
 
-**Why Lomb-Scargle instead of FFT?** RR intervals are inherently unevenly spaced. FFT requires interpolation that introduces errors. The Lomb-Scargle periodogram handles irregular sampling natively and outperforms FFT for HRV analysis.
+Recordings with 5–10% artifacts receive a warning. Ineligible recordings save the reason for the UI and expose retry, change-sensor, and cancel actions instead of showing default metric values.
 
-**Preprocessing before spectral analysis:**
-- Linear detrending (removes slow HR drift)
-- Hanning window (reduces spectral leakage in short 2-minute recordings)
-- Variance correction (preserves power estimates after windowing)
+## Protocols and available metrics
 
-**Frequency bands (European Society of Cardiology standard):**
-- **VLF:** 0.003–0.04 Hz (thermoregulation, hormonal)
-- **LF:** 0.04–0.15 Hz — resonance breathing lives here
-- **HF:** 0.15–0.4 Hz (respiratory sinus arrhythmia)
+| Protocol          | Eligibility duration | Intended output                                                               |
+| ----------------- | -------------------: | ----------------------------------------------------------------------------- |
+| Quick Check       |           60 seconds | Average pulse and short-recording time-domain variability                     |
+| Morning Readiness |          120 seconds | Average pulse and short-recording time-domain variability                     |
+| Full Analysis     |          300 seconds | Time-domain, Poincare, and frequency-domain results                           |
+| Resonance Trial   |          120 seconds | Average pulse and breathing-training response measures                        |
+| Freeform          |   60 seconds minimum | Short-recording metrics below 300 seconds; full groups at 300 seconds or more |
 
-**Computed metrics:** LF Power, HF Power, Total Power, LF/HF Ratio, LF Peak frequency, HF Peak frequency, normalized powers, full spectrum
+The guided Lab durations may be longer than the minimum eligibility duration. Ending a guided protocol early does not make a too-short recording eligible.
 
-### Resonance-Specific Metrics
+### Time-domain output
 
-These are the metrics that identify your resonance frequency:
+Eligible recordings can report average pulse, RMSSD, pNN50, and SDNN appropriate to their duration. Short recordings label SDNN as a short-recording value. These values are best interpreted as within-person wellness trends collected under similar conditions.
 
-- **Peak-to-trough HR amplitude:** For each breathing cycle, how much does HR rise on inhale and fall on exhale? Bigger = better resonance.
-- **Waveform smoothness:** What fraction of LF power is concentrated at the breathing frequency? A perfect sinusoidal oscillation = 1.0. Jagged/noisy = low.
-- **Phase synchrony:** How well does HR track with the breathing rhythm? Uses phase-independent correlation to handle arbitrary phase offsets.
-- **LF peak count:** How many distinct peaks exist in the LF band? Fewer = cleaner resonance (ideally just 1).
+### Frequency-domain output
 
-## Visualizations
+The app uses a Lomb–Scargle periodogram for irregularly timed intervals. Frequency-domain output is available only for an eligible recording of at least 300 seconds. When the requirement is not met, the result is `unavailable` with a reason; LF, HF, total power, peaks, and ratios are not filled with zeros or plausible-looking defaults.
 
-The app includes 7 visualization components:
+Frequency bands are reported as signal components. The app does not infer a diagnosis or assign a single autonomic meaning to LF, HF, or LF/HF values.
 
-1. **HR Tachogram** — Real-time scrolling heart rate line chart with quality color-coding and breathing phase overlay
-2. **Frequency Spectrum** — Power spectral density plot with LF/HF bands highlighted and peak markers
-3. **Poincaré Plot** — Classic RR[n] vs RR[n+1] scatter plot showing beat-to-beat variability patterns
-4. **HR Oscillation Waveform** — Full-trial HR waveform with breathing cycle overlay and amplitude annotations
-5. **Signal Quality Indicator** — Real-time circular gauge showing sensor signal quality
-6. **HRV Metrics Dashboard** — Card grid of all metrics (similar to Elite HRV's Data Details screen)
-7. **Trial Comparison** — Bar chart comparing all 5 assessment trials across LF Power, Amplitude, Smoothness, and Phase Synchrony
+## Lifecycle and failure behavior
 
-## Integration with Resonance Assessment
+- Sensor permissions are requested in context when a measurement begins.
+- A session cannot report success until its requested sensors actually start.
+- A session that receives no usable beat intervals fails explicitly.
+- `stop()` is idempotent, which prevents duplicate completion and persistence.
+- If both sensors fail in combined mode, the measurement stops rather than remaining in a misleading active state.
+- Measurement metadata records algorithm version `2`, eligibility, provenance, and unavailable-metric reasons.
 
-During the assessment, users choose a sensor mode:
-- **Manual Scoring** — No sensor, score subjectively (existing behavior)
-- **Dual Sensor (Best Accuracy)** — Phone on chest, finger on camera
-- **Camera Only** — Finger on camera, any position
-- **Accelerometer Only** — Phone on chest
+## Reading a result responsibly
 
-When a sensor is active:
-- Audio-only breathing guidance (TTS announces "Breathe in" / "Breathe out")
-- Real-time signal quality display during trials
-- HRV metrics computed automatically after each 2-minute trial
-- Scoring fields auto-populated with objective data (HR amplitude, waveform smoothness)
-- Post-trial charts show oscillation waveform, frequency spectrum, and metrics dashboard
-- Trial comparison chart in the results screen highlights the winning rate
+- Measure at rest, at a similar time and posture, and under repeatable conditions.
+- Keep the device and sensing finger still.
+- Prefer a trend across multiple eligible recordings over a single value.
+- Do not compare phone PPG values directly with ECG-derived clinical norms.
+- Treat symptoms and clinical questions as reasons to consult a qualified professional, not as prompts to repeat a phone measurement.
 
-## Technology Stack
+## Privacy
 
-- **DSP:** Custom Butterworth IIR filters (second-order sections), adaptive peak detection, Hilbert transform envelope
-- **Spectral analysis:** Custom Lomb-Scargle periodogram implementation in TypeScript
-- **Camera:** getUserMedia API + Canvas pixel extraction
-- **Accelerometer:** DeviceMotion API with iOS permission handling
-- **Platform:** Works on web, iOS (Capacitor), and Android (Capacitor)
+Breathing sessions, presets, and measurement records are stored locally on the device. Camera frames are processed during sensing and are not archived as photos or video by the app.
 
-## Lab Tab
+## Verification
 
-The Lab tab is the home for all measurement and analysis features:
+The signal-processing and eligibility code has automated coverage for detection provenance, insufficient duration and beats, invalid timing, artifacts, pulse-estimate separation, fusion deduplication, sensor startup failures, no-data completion, and unavailable frequency metrics. Coverage thresholds are enforced per workspace, with additional floors on the eligibility and sensing lifecycle modules.
 
-### Standalone HRV Measurement
-- **Guided protocols:** Quick Check (2 min), Full Analysis (5 min), Morning Readiness (3 min)
-- **Freeform mode:** Start/stop manually for any duration
-- Sensor selection: camera, accelerometer, dual, or manual
-- Real-time HR tachogram and signal quality during measurement
-- Full HRV report after completion with save-to-archive option
+## References
 
-### Resonance Frequency Assessment
-- Moved from Practice tab to Lab for better organization
-- Same 5-trial Lehrer protocol with optional HRV sensing
-- Results feed back as preset recommendations
+These sources inform the feature boundary and conservative training guidance; they do not validate this app as a medical device:
 
-### Data Archival (IndexedDB)
-- All measurements persisted in IndexedDB (much larger than localStorage)
-- Queryable by date range, type, and assessment
-- Automatic migration from localStorage on first load
-
-### Historical Trends
-- RMSSD over time with 7-day moving average and quality zones
-- LF Power trend — tracks resonance training effectiveness
-- Resting heart rate trend
-- Morning readiness score (when daily morning checks are done)
-- Selectable time ranges: 7d / 30d / 90d / All
-
-### Data-Driven Insights
-- **RF Recommendation:** "Based on your assessment, 5.5 BPM is your resonance frequency. Apply?" (suggest-then-confirm)
-- **RMSSD Trend:** Compares recent vs prior week, reports improvement/decline
-- **Measurement Streak:** Tracks consecutive days of HRV measurement
-- **Best Time of Day:** Identifies when your HRV is naturally highest
-
-### Practice Tab Integration
-- Dismissible CTA card guides new users to the Lab
-- Hidden once user completes their first measurement
-
-## Research References
-
-- [PPG Validation for HRV-Biofeedback RF Assessment](https://pubmed.ncbi.nlm.nih.gov/37678565/) — Smartphone PPG validated for resonance frequency assessment
-- [Aboy++ PPG Peak Detection](https://pmc.ncbi.nlm.nih.gov/articles/PMC10370199/) — Robust peak detection, F1 85.5%
-- [Adaptive PPG Filtering](https://arxiv.org/html/2510.06158v1) — Per-person cutoff optimization improves IBI by 35ms
-- [SCG Template Matching](https://pmc.ncbi.nlm.nih.gov/articles/PMC10224046/) — 96% sensitivity, ±7.8ms IBI agreement
-- [SCG AO Detection](https://www.sciencedirect.com/science/article/abs/pii/S1746809423009175) — 97.3% sensitivity with 7-30 Hz bandpass
-- [Kubios Phone HRV](https://www.kubios.com/blog/measuring-hrv-with-your-smartphone/) — Phone accelerometer validated for resting HRV
-- [Lomb-Scargle for HRV](https://www.adinstruments.com/blog/using-lomb-scargle-periodogram-hrv-analysis) — Superior to FFT for unevenly-sampled RR data
-- [PPG + Accelerometer Fusion](https://arxiv.org/abs/2511.00949) — Multi-modal fusion improves accuracy
-- [Lehrer Resonance Frequency Protocol](https://pmc.ncbi.nlm.nih.gov/articles/PMC7578229/) — Clinical RF assessment methodology
+- [Photoplethysmography and HRV measurement considerations](https://pmc.ncbi.nlm.nih.gov/articles/PMC7744620/)
+- [Inspiratory muscle training trial methods and safety reporting](https://bmjopen.bmj.com/content/11/9/e049545)
+- [Review of inspiratory muscle training protocols](https://pmc.ncbi.nlm.nih.gov/articles/PMC10840713/)

@@ -28,6 +28,27 @@ export default defineConfig({
         'electron/',
         'build/',
       ],
+      thresholds: {
+        statements: 80,
+        lines: 80,
+        branches: 70,
+        functions: 75,
+        'src/services/{measurementSession,permissionService,ppgService,scgService,sensorFusion}.ts':
+          {
+            statements: 80,
+            lines: 80,
+            branches: 70,
+            functions: 85,
+            perFile: true,
+          },
+        'src/components/{LabTab,ResonanceAssessment}.vue': {
+          statements: 40,
+          lines: 45,
+          branches: 40,
+          functions: 35,
+          perFile: true,
+        },
+      },
     },
   },
 });

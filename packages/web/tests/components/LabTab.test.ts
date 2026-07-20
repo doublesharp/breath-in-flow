@@ -84,7 +84,9 @@ describe('LabTab.vue', () => {
     expect(wrapper.text()).toContain('Quick Check');
     expect(wrapper.text()).toContain('Full Analysis');
     expect(wrapper.text()).toContain('Morning Readiness');
-    expect(wrapper.find('[data-testid="protocol-description-quick-check"]').classes()).not.toContain('truncate');
+    expect(
+      wrapper.find('[data-testid="protocol-description-quick-check"]').classes()
+    ).not.toContain('truncate');
   });
 
   it('defaults to the recommended camera sensor with accessible selection state', () => {
@@ -103,7 +105,9 @@ describe('LabTab.vue', () => {
     await wrapper.find('[data-testid="protocol-quick-check"]').trigger('click');
     await flushPromises();
 
-    const range = document.body.querySelector('[data-testid="measurement-duration"]') as HTMLInputElement;
+    const range = document.body.querySelector(
+      '[data-testid="measurement-duration"]'
+    ) as HTMLInputElement;
     expect(range.getAttribute('aria-label')).toBe('Measurement duration');
     expect(range.min).toBe('120');
     expect(range.value).toBe('120');
@@ -135,6 +139,32 @@ describe('LabTab.vue', () => {
     expect(wrapper.text()).toContain('Retry');
     expect(wrapper.text()).toContain('Change sensor');
     expect(wrapper.text()).toContain('Cancel');
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Retry')!
+      .trigger('click');
+    await flushPromises();
+    expect(document.body.textContent).toContain('Freeform Measurement');
+
+    vm.showRecoveryActions = true;
+    vm.permissionError = 'Try another sensor.';
+    await wrapper.vm.$nextTick();
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Change sensor')!
+      .trigger('click');
+    expect((wrapper.vm as unknown as { mode: string }).mode).toBe('freeform');
+
+    vm.showRecoveryActions = true;
+    vm.permissionError = 'Dismiss this message.';
+    await wrapper.vm.$nextTick();
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Cancel')!
+      .trigger('click');
+    expect(vm.showRecoveryActions).toBe(false);
+    expect(vm.permissionError).toBeNull();
   });
 
   it('shows mode toggle (Guided / Freeform)', () => {
@@ -236,12 +266,18 @@ describe('LabTab.vue', () => {
       },
     });
 
-    await wrapper.findAll('button').find((button) => button.text() === 'Freeform')!.trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Freeform')!
+      .trigger('click');
     await wrapper.get('[data-testid="sensor-dual"]').trigger('click');
-    await wrapper.findAll('button').find((button) => button.text() === 'Start Measurement')!.trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
     await flushPromises();
     const startButton = Array.from(document.body.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Start',
+      (button) => button.textContent?.trim() === 'Start'
     );
     expect(startButton).toBeDefined();
     startButton!.click();
@@ -249,7 +285,9 @@ describe('LabTab.vue', () => {
 
     const ppgStart = vi.mocked(ppgService.start);
     const ppgCallbacks = ppgStart.mock.calls.at(-1)![0] as {
-      callbacks: { onIBI: (sample: { timestamp: number; interval: number; quality: number }) => void };
+      callbacks: {
+        onIBI: (sample: { timestamp: number; interval: number; quality: number }) => void;
+      };
     };
     const fusionCallbacks = vi.mocked(sensorFusionService.setCallbacks).mock.calls.at(-1)![0];
     const sample = {
@@ -297,12 +335,18 @@ describe('LabTab.vue', () => {
       },
     });
 
-    await wrapper.findAll('button').find((button) => button.text() === 'Freeform')!.trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Freeform')!
+      .trigger('click');
     await wrapper.get('[data-testid="sensor-camera"]').trigger('click');
-    await wrapper.findAll('button').find((button) => button.text() === 'Start Measurement')!.trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
     await flushPromises();
     const startButton = Array.from(document.body.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Start',
+      (button) => button.textContent?.trim() === 'Start'
     );
     startButton!.click();
     await flushPromises();

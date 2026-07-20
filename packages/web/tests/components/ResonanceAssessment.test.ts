@@ -27,7 +27,15 @@ vi.mock('../../src/services/scgService', () => ({
 }));
 
 vi.mock('../../src/services/sensorFusion', () => ({
-  sensorFusionService: { start: vi.fn(), stop: vi.fn(), reset: vi.fn(), setCallbacks: vi.fn(), addPPGSample: vi.fn(), addSCGSample: vi.fn(), getQuality: vi.fn(() => 0) },
+  sensorFusionService: {
+    start: vi.fn(),
+    stop: vi.fn(),
+    reset: vi.fn(),
+    setCallbacks: vi.fn(),
+    addPPGSample: vi.fn(),
+    addSCGSample: vi.fn(),
+    getQuality: vi.fn(() => 0),
+  },
 }));
 
 describe('ResonanceAssessment', () => {
@@ -68,6 +76,33 @@ describe('ResonanceAssessment', () => {
     await wrapper.find('[data-testid="start-btn"]').trigger('click');
     await wrapper.find('[data-testid="cancel-btn"]').trigger('click');
     expect(wrapper.text()).toContain('Cancel assessment');
+  });
+
+  it('pauses and resumes an active warmup', async () => {
+    const wrapper = mount(ResonanceAssessment);
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+
+    const pauseButton = wrapper.findAll('button').find((button) => button.text() === 'Pause');
+    await pauseButton!.trigger('click');
+    expect(wrapper.text()).toContain('Resume');
+
+    const resumeButton = wrapper.findAll('button').find((button) => button.text() === 'Resume');
+    await resumeButton!.trigger('click');
+    expect(wrapper.text()).toContain('Pause');
+  });
+
+  it('cleans up and emits cancel when active cancellation is confirmed', async () => {
+    const wrapper = mount(ResonanceAssessment);
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+    await wrapper.find('[data-testid="cancel-btn"]').trigger('click');
+
+    const confirmButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Confirm Cancel');
+    await confirmButton!.trigger('click');
+
+    expect(wrapper.emitted('cancel')).toBeTruthy();
+    expect(wrapper.text()).not.toContain('Cancel assessment?');
   });
 
   describe('Sensor mode selection', () => {
@@ -117,6 +152,26 @@ describe('ResonanceAssessment', () => {
       await wrapper.vm.setPhaseForTesting('SCORING');
       await wrapper.vm.$nextTick();
       expect(wrapper.findAll('[data-testid="comfort-rating"]')).toHaveLength(5);
+    });
+
+    it('toggles symptom, amplitude, and smoothness observations', async () => {
+      const wrapper = mount(ResonanceAssessment);
+      await wrapper.vm.setPhaseForTesting('SCORING');
+      await wrapper.vm.$nextTick();
+
+      const dizziness = wrapper.findAll('button').find((button) => button.text() === 'Dizziness');
+      await dizziness!.trigger('click');
+      expect(dizziness!.classes()).toContain('bg-red-500/20');
+      await dizziness!.trigger('click');
+      expect(dizziness!.classes()).not.toContain('bg-red-500/20');
+
+      const smallAmplitude = wrapper.findAll('button').find((button) => button.text() === 'Small');
+      await smallAmplitude!.trigger('click');
+      expect(smallAmplitude!.classes()).toContain('bg-blue-500/20');
+
+      const smooth = wrapper.findAll('button').find((button) => button.text() === 'Very Smooth');
+      await smooth!.trigger('click');
+      expect(smooth!.classes()).toContain('bg-purple-500/20');
     });
   });
 
