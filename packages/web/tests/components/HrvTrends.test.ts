@@ -53,6 +53,16 @@ function makeMeasurement(
     completedAt,
     durationSeconds: 300,
     sensorMode: 'none',
+    eligibility: {
+      eligible: true,
+      reasons: [],
+      warnings: [],
+      availableMetrics: ['average-pulse', 'rmssd', 'pnn50', 'sdnn-short-recording'],
+      artifactPercentage: 1,
+      meanQuality: 0.95,
+      detectedBeatCount: 200,
+      observedDurationSeconds: 300,
+    },
     analysis: {
       timeDomain: {
         meanRR: 900,
@@ -208,5 +218,34 @@ describe('HrvTrends', () => {
     expect(wrapper.text()).not.toContain('Target:');
     expect(wrapper.text()).not.toContain('Lower = better recovery');
     expect(wrapper.text()).not.toContain('training effect');
+  });
+
+  it('keeps independent LF and morning series when a newer quick check exists', () => {
+    const frequencyEligibility = {
+      ...makeMeasurement().eligibility!,
+      availableMetrics: [
+        'average-pulse',
+        'rmssd',
+        'pnn50',
+        'sdnn',
+        'frequency-domain',
+        'poincare',
+      ] as NonNullable<HrvMeasurement['eligibility']>['availableMetrics'],
+    };
+    const measurements = [
+      makeMeasurement({ type: 'full-analysis', daysAgo: 5, eligibility: frequencyEligibility }),
+      makeMeasurement({ type: 'full-analysis', daysAgo: 4, eligibility: frequencyEligibility }),
+      makeMeasurement({ type: 'morning-readiness', daysAgo: 3 }),
+      makeMeasurement({ type: 'morning-readiness', daysAgo: 2 }),
+      makeMeasurement({ type: 'quick-check', daysAgo: 0 }),
+    ];
+
+    const wrapper = mount(HrvTrends, { props: { measurements, days: 0 } });
+
+    expect(wrapper.get('[data-testid="lf-comparable-count"]').text()).toContain('2 comparable');
+    expect(wrapper.get('[data-testid="morning-comparable-count"]').text()).toContain(
+      '2 comparable'
+    );
+    expect(wrapper.find('[data-testid="readiness-chart-container"]').exists()).toBe(true);
   });
 });

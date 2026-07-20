@@ -34,17 +34,6 @@
             <div class="flex-1">
               <p class="text-sm font-medium text-slate-200">{{ insight.title }}</p>
               <p class="text-sm text-slate-400 mt-0.5">{{ insight.message }}</p>
-
-              <!-- Action button -->
-              <div v-if="insight.action" class="mt-3">
-                <button
-                  :data-testid="`action-btn-${insight.id}`"
-                  class="px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
-                  @click="handleAction(insight)"
-                >
-                  {{ insight.action.label }}
-                </button>
-              </div>
             </div>
           </div>
 
@@ -72,31 +61,20 @@ import { buildWithinPersonInsights, type WellnessInsight } from '../utils/measur
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface InsightAction {
-  label: string;
-  event: string;
-  payload?: unknown;
-}
-
 interface Insight {
   id: string;
   type: 'recommendation' | 'trend' | 'streak' | 'info';
   title: string;
   message: string;
-  action?: InsightAction;
   dismissible: boolean;
   direction?: WellnessInsight['direction'];
 }
 
-// ─── Props & Emits ────────────────────────────────────────────────────────────
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 const props = defineProps<{
   measurements: HrvMeasurement[];
   latestAssessment: AssessmentResult | null;
-}>();
-
-const emit = defineEmits<{
-  'apply-rf': [rate: number];
 }>();
 
 // ─── Dismissed state ─────────────────────────────────────────────────────────
@@ -120,12 +98,7 @@ const insights = computed<Insight[]>(() => {
       id: 'rf-recommendation',
       type: 'recommendation',
       title: 'Resonance Frequency Found',
-      message: `${rate.toFixed(1)} BPM was selected from your assessment. Apply it as your default paced-breathing rate?`,
-      action: {
-        label: 'Apply',
-        event: 'apply-rf',
-        payload: rate,
-      },
+      message: `${rate.toFixed(1)} BPM was selected from your assessment and saved with the assessment result.`,
       dismissible: true,
     });
   }
@@ -184,11 +157,7 @@ function borderColorClass(insight: Insight): string {
     case 'recommendation':
       return 'border-emerald-500';
     case 'trend':
-      return insight.direction === 'lower'
-        ? 'border-amber-500'
-        : insight.direction === 'higher'
-          ? 'border-emerald-500'
-          : 'border-slate-500';
+      return 'border-slate-500';
     case 'streak':
       return 'border-emerald-500';
     case 'info':
@@ -203,7 +172,7 @@ function iconColorClass(insight: Insight): string {
     case 'recommendation':
       return 'text-emerald-400';
     case 'trend':
-      return insight.direction === 'lower' ? 'text-amber-400' : 'text-emerald-400';
+      return 'text-slate-400';
     case 'streak':
       return 'text-emerald-400';
     case 'info':
@@ -226,13 +195,5 @@ function insightIcon(insight: Insight): string {
     default:
       return '•';
   }
-}
-
-function handleAction(insight: Insight) {
-  if (!insight.action) return;
-  if (insight.action.event === 'apply-rf') {
-    emit('apply-rf', insight.action.payload as number);
-  }
-  dismiss(insight.id);
 }
 </script>

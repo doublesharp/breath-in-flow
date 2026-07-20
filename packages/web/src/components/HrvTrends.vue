@@ -28,12 +28,12 @@
       <div class="glass rounded-xl p-4" data-testid="rmssd-chart-container">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">RMSSD Trend</h3>
-          <span class="text-xs text-slate-500">Within-person history</span>
+          <span class="text-xs text-slate-500">{{ rmssdMeasurements.length }} comparable readings</span>
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="rmssdCanvas" class="w-full h-full" data-testid="rmssd-canvas" />
           <div
-            v-if="filteredMeasurements.length === 0"
+            v-if="rmssdMeasurements.length === 0"
             class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
           >
             No data in selected range
@@ -45,12 +45,14 @@
       <div class="glass rounded-xl p-4" data-testid="lf-power-chart-container">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Normalized LF Trend</h3>
-          <span class="text-xs text-slate-500">Eligible five-minute recordings</span>
+          <span class="text-xs text-slate-500" data-testid="lf-comparable-count">
+            {{ lfPowerMeasurements.length }} comparable readings
+          </span>
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="lfPowerCanvas" class="w-full h-full" data-testid="lf-power-canvas" />
           <div
-            v-if="filteredMeasurements.length === 0"
+            v-if="lfPowerMeasurements.length === 0"
             class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
           >
             No data in selected range
@@ -62,12 +64,12 @@
       <div class="glass rounded-xl p-4" data-testid="hr-chart-container">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Resting Heart Rate</h3>
-          <span class="text-xs text-slate-500">Within-person history</span>
+          <span class="text-xs text-slate-500">{{ pulseMeasurements.length }} comparable readings</span>
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="hrCanvas" class="w-full h-full" data-testid="hr-canvas" />
           <div
-            v-if="filteredMeasurements.length === 0"
+            v-if="pulseMeasurements.length === 0"
             class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
           >
             No data in selected range
@@ -79,7 +81,9 @@
       <div v-if="morningReadinessData.length > 0" class="glass rounded-xl p-4" data-testid="readiness-chart-container">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Morning Protocol RMSSD</h3>
-          <span class="text-xs text-slate-500">Comparable readings</span>
+          <span class="text-xs text-slate-500" data-testid="morning-comparable-count">
+            {{ morningMeasurements.length }} comparable readings
+          </span>
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="readinessCanvas" class="w-full h-full" data-testid="readiness-canvas" />
@@ -92,7 +96,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import type { HrvMeasurement } from '../composables/useHrvStorage';
-import { getComparableMeasurements } from '../utils/measurementTrends';
+import { getLatestComparableMeasurements } from '../utils/measurementTrends';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -126,33 +130,30 @@ const readinessCanvas = ref<HTMLCanvasElement | null>(null);
 
 // ─── Filtered data ────────────────────────────────────────────────────────────
 
-const comparableMeasurements = computed(() => {
-  const anchor = [...props.measurements]
-    .filter(
-      (measurement) =>
-        Number.isFinite(measurement.analysis.timeDomain.rmssd) &&
-        (!measurement.eligibility ||
-          (measurement.eligibility.eligible && measurement.eligibility.availableMetrics.includes('rmssd')))
-    )
-    .sort((left, right) => right.completedAt.getTime() - left.completedAt.getTime())[0];
-  return anchor ? getComparableMeasurements(props.measurements, anchor) : [];
-});
-
-const filteredMeasurements = computed(() => {
-  const sorted = comparableMeasurements.value;
-  if (selectedDays.value === 0) return sorted;
+function filterSelectedRange(measurements: HrvMeasurement[]): HrvMeasurement[] {
+  if (selectedDays.value === 0) return measurements;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - selectedDays.value);
-  return sorted.filter((m) => new Date(m.completedAt) >= cutoff);
-});
+  return measurements.filter((measurement) => measurement.completedAt >= cutoff);
+}
+
+const rmssdMeasurements = computed(() =>
+  filterSelectedRange(getLatestComparableMeasurements(props.measurements, 'rmssd'))
+);
+const lfPowerMeasurements = computed(() =>
+  filterSelectedRange(getLatestComparableMeasurements(props.measurements, 'frequency-domain'))
+);
+const pulseMeasurements = computed(() =>
+  filterSelectedRange(getLatestComparableMeasurements(props.measurements, 'average-pulse'))
+);
+const morningMeasurements = computed(() =>
+  filterSelectedRange(getLatestComparableMeasurements(props.measurements, 'rmssd', 'morning-readiness'))
+);
 
 // ─── Morning readiness data ───────────────────────────────────────────────────
 
 const morningReadinessData = computed(() => {
-  const morningMeasurements = filteredMeasurements.value.filter((m) => m.type === 'morning-readiness');
-  if (morningMeasurements.length === 0) return [];
-
-  return morningMeasurements.map((m) => ({
+  return morningMeasurements.value.map((m) => ({
     date: new Date(m.completedAt),
     value: m.analysis.timeDomain.rmssd,
   }));
@@ -418,8 +419,6 @@ function getCanvasSize(canvas: HTMLCanvasElement): { width: number; height: numb
 }
 
 function drawAllCharts() {
-  const measurements = filteredMeasurements.value;
-
   // RMSSD chart
   if (rmssdCanvas.value) {
     const ctx = rmssdCanvas.value.getContext('2d');
@@ -428,7 +427,7 @@ function drawAllCharts() {
       const { width, height } = getCanvasSize(rmssdCanvas.value);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const rmssdData = measurements.map((m) => ({
+      const rmssdData = rmssdMeasurements.value.map((m) => ({
         date: new Date(m.completedAt),
         value: m.analysis.timeDomain.rmssd,
       }));
@@ -455,7 +454,7 @@ function drawAllCharts() {
       const { width, height } = getCanvasSize(lfPowerCanvas.value);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const lfData = measurements.flatMap((measurement) =>
+      const lfData = lfPowerMeasurements.value.flatMap((measurement) =>
         measurement.analysis.frequencyDomain.available
           ? [
               {
@@ -488,7 +487,7 @@ function drawAllCharts() {
       const { width, height } = getCanvasSize(hrCanvas.value);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const hrData = measurements.map((m) => ({
+      const hrData = pulseMeasurements.value.map((m) => ({
         date: new Date(m.completedAt),
         value: m.analysis.timeDomain.meanHR,
       }));
@@ -536,7 +535,7 @@ onMounted(async () => {
 });
 
 watch(
-  [filteredMeasurements, morningReadinessData],
+  [rmssdMeasurements, lfPowerMeasurements, pulseMeasurements, morningReadinessData],
   async () => {
     await nextTick();
     drawAllCharts();

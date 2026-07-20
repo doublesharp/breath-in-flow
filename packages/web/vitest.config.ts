@@ -48,6 +48,11 @@ export default defineConfig({
           functions: 35,
           perFile: true,
         },
+        'src/utils/measurementTrends.ts': {
+          lines: 100,
+          functions: 100,
+          perFile: true,
+        },
       },
     },
   },

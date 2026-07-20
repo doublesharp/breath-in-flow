@@ -123,4 +123,66 @@ describe('measurement trends', () => {
     expect(insights[0].message).toContain('higher than your recent comparable measurements');
     expect(insights[0].message).toContain('same protocol, duration, sensor, and conditions');
   });
+
+  it('excludes records without explicit eligibility from directional comparisons', () => {
+    const measurements = [
+      makeMeasurement('older', '2026-07-01T08:00:00Z'),
+      makeMeasurement('unknown-eligibility', '2026-07-02T08:00:00Z', {
+        eligibility: undefined,
+      }),
+      makeMeasurement('latest', '2026-07-03T08:00:00Z', {
+        analysis: {
+          ...makeMeasurement('base', '2026-07-01T08:00:00Z').analysis,
+          timeDomain: {
+            ...makeMeasurement('base', '2026-07-01T08:00:00Z').analysis.timeDomain,
+            rmssd: 60,
+          },
+        },
+      }),
+    ];
+
+    expect(getComparableMeasurements(measurements, measurements[2]).map(({ id }) => id)).toEqual([
+      'older',
+      'latest',
+    ]);
+    expect(buildWithinPersonInsights(measurements)).toEqual([]);
+  });
+
+  it('excludes non-finite RMSSD values even when eligibility lists the metric', () => {
+    const invalid = makeMeasurement('invalid', '2026-07-02T08:00:00Z', {
+      analysis: {
+        ...makeMeasurement('base', '2026-07-01T08:00:00Z').analysis,
+        timeDomain: {
+          ...makeMeasurement('base', '2026-07-01T08:00:00Z').analysis.timeDomain,
+          rmssd: Number.NaN,
+        },
+      },
+    });
+    const anchor = makeMeasurement('anchor', '2026-07-03T08:00:00Z');
+
+    expect(getComparableMeasurements([invalid, anchor], anchor)).toEqual([anchor]);
+    expect(buildWithinPersonInsights([invalid, anchor])).toEqual([]);
+  });
+
+  it('uses a neutral comparison when the prior RMSSD baseline is zero', () => {
+    const zeroAnalysis = {
+      ...makeMeasurement('base', '2026-07-01T08:00:00Z').analysis,
+      timeDomain: {
+        ...makeMeasurement('base', '2026-07-01T08:00:00Z').analysis.timeDomain,
+        rmssd: 0,
+      },
+    };
+    const measurements = [
+      makeMeasurement('older', '2026-07-01T08:00:00Z', { analysis: zeroAnalysis }),
+      makeMeasurement('middle', '2026-07-02T08:00:00Z', { analysis: zeroAnalysis }),
+      makeMeasurement('latest', '2026-07-03T08:00:00Z', {
+        analysis: {
+          ...zeroAnalysis,
+          timeDomain: { ...zeroAnalysis.timeDomain, rmssd: 50 },
+        },
+      }),
+    ];
+
+    expect(buildWithinPersonInsights(measurements)[0]).toMatchObject({ direction: 'similar' });
+  });
 });

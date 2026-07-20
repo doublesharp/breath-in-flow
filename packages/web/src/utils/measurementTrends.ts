@@ -7,11 +7,17 @@ export interface WellnessInsight {
   direction: 'higher' | 'lower' | 'similar';
 }
 
-function hasAvailableRmssd(measurement: HrvMeasurement): boolean {
-  if (!Number.isFinite(measurement.analysis.timeDomain.rmssd)) return false;
-  if (!measurement.eligibility) return true;
+export type ComparableMetric = 'rmssd' | 'average-pulse' | 'frequency-domain';
+
+function hasAvailableMetric(measurement: HrvMeasurement, metric: ComparableMetric): boolean {
+  const eligibility = measurement.eligibility;
+  if (!eligibility?.eligible || !eligibility.availableMetrics.includes(metric)) return false;
+
+  if (metric === 'rmssd') return Number.isFinite(measurement.analysis.timeDomain.rmssd);
+  if (metric === 'average-pulse') return Number.isFinite(measurement.analysis.timeDomain.meanHR);
   return (
-    measurement.eligibility.eligible && measurement.eligibility.availableMetrics.includes('rmssd')
+    measurement.analysis.frequencyDomain.available &&
+    Number.isFinite(measurement.analysis.frequencyDomain.value.lfPowerNorm)
   );
 }
 
@@ -29,7 +35,8 @@ function hasComparableContext(measurement: HrvMeasurement, anchor: HrvMeasuremen
 
 export function getComparableMeasurements(
   measurements: HrvMeasurement[],
-  anchor: HrvMeasurement
+  anchor: HrvMeasurement,
+  metric: ComparableMetric = 'rmssd'
 ): HrvMeasurement[] {
   return measurements
     .filter(
@@ -37,14 +44,28 @@ export function getComparableMeasurements(
         measurement.type === anchor.type &&
         hasComparableDuration(measurement, anchor) &&
         hasComparableContext(measurement, anchor) &&
-        hasAvailableRmssd(measurement)
+        hasAvailableMetric(measurement, metric)
     )
     .sort((left, right) => left.completedAt.getTime() - right.completedAt.getTime());
 }
 
+export function getLatestComparableMeasurements(
+  measurements: HrvMeasurement[],
+  metric: ComparableMetric,
+  type?: HrvMeasurement['type']
+): HrvMeasurement[] {
+  const anchor = measurements
+    .filter(
+      (measurement) =>
+        (!type || measurement.type === type) && hasAvailableMetric(measurement, metric)
+    )
+    .sort((left, right) => right.completedAt.getTime() - left.completedAt.getTime())[0];
+  return anchor ? getComparableMeasurements(measurements, anchor, metric) : [];
+}
+
 export function buildWithinPersonInsights(measurements: HrvMeasurement[]): WellnessInsight[] {
   const eligibleMeasurements = measurements
-    .filter(hasAvailableRmssd)
+    .filter((measurement) => hasAvailableMetric(measurement, 'rmssd'))
     .sort((left, right) => right.completedAt.getTime() - left.completedAt.getTime());
   const anchor = eligibleMeasurements.find(
     (candidate) => getComparableMeasurements(measurements, candidate).length >= 3

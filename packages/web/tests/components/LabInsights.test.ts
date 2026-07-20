@@ -18,6 +18,16 @@ function makeMeasurement(
     completedAt,
     durationSeconds: 300,
     sensorMode: 'none',
+    eligibility: {
+      eligible: true,
+      reasons: [],
+      warnings: [],
+      availableMetrics: ['average-pulse', 'rmssd', 'pnn50', 'sdnn-short-recording'],
+      artifactPercentage: 1,
+      meanQuality: 0.95,
+      detectedBeatCount: 200,
+      observedDurationSeconds: 300,
+    },
     analysis: {
       timeDomain: {
         meanRR: 900,
@@ -120,10 +130,10 @@ describe('LabInsights', () => {
 
     expect(wrapper.find('[data-testid="insight-card-rf-recommendation"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('5.5 BPM');
-    expect(wrapper.text()).toContain('Apply');
+    expect(wrapper.text()).not.toContain('Apply');
   });
 
-  it('emits apply-rf event when Apply button is clicked', async () => {
+  it('does not expose a dead Apply action for an assessment recommendation', () => {
     const measurements = Array.from({ length: 5 }, (_, i) => makeMeasurement({ daysAgo: i + 1 }));
     const assessment = makeAssessment(5.0);
 
@@ -132,11 +142,8 @@ describe('LabInsights', () => {
     });
 
     const applyBtn = wrapper.find('[data-testid="action-btn-rf-recommendation"]');
-    expect(applyBtn.exists()).toBe(true);
-    await applyBtn.trigger('click');
-
-    expect(wrapper.emitted('apply-rf')).toBeTruthy();
-    expect(wrapper.emitted('apply-rf')![0]).toEqual([5.0]);
+    expect(applyBtn.exists()).toBe(false);
+    expect(wrapper.emitted('apply-rf')).toBeUndefined();
   });
 
   it('dismiss button hides the RF recommendation card', async () => {
@@ -308,5 +315,28 @@ describe('LabInsights', () => {
     expect(wrapper.text()).not.toContain('recovery');
     expect(wrapper.text()).not.toContain('paying off');
     expect(wrapper.text()).not.toContain('Best Time');
+  });
+
+  it.each([
+    { latest: 50, prior: 30, direction: 'higher' },
+    { latest: 20, prior: 50, direction: 'lower' },
+    { latest: 35, prior: 34, direction: 'close to' },
+  ])('uses neutral styling when the latest value is $direction', ({ latest, prior }) => {
+    const wrapper = mount(LabInsights, {
+      props: {
+        measurements: [
+          makeMeasurement({ daysAgo: 3, rmssd: prior }),
+          makeMeasurement({ daysAgo: 2, rmssd: prior }),
+          makeMeasurement({ daysAgo: 1, rmssd: latest }),
+        ],
+        latestAssessment: null,
+      },
+    });
+
+    const card = wrapper.get('[data-testid="insight-card-rmssd-comparison"]');
+    expect(card.classes()).toContain('border-slate-500');
+    expect(card.html()).toContain('text-slate-400');
+    expect(card.html()).not.toContain('border-emerald-500');
+    expect(card.html()).not.toContain('border-amber-500');
   });
 });
