@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  BreathingConfigSchema,
   CreateBreathingConfigSchema,
   DEFAULT_BREATHING_CONFIG,
+  getPhaseInfo,
   TimerStateSchema,
   INITIAL_TIMER_STATE,
   MeasurementRecordMetadataSchema,
@@ -21,6 +23,44 @@ function randomInt(rng: () => number, min: number, max: number): number {
 }
 
 describe('BreathingConfigSchema', () => {
+  it('validates persisted metadata and applies both timed-hold refinements', () => {
+    const persistedConfig = {
+      ...DEFAULT_BREATHING_CONFIG,
+      id: crypto.randomUUID(),
+      createdAt: new Date('2026-07-20T00:00:00.000Z'),
+      updatedAt: new Date('2026-07-20T01:00:00.000Z'),
+      extendedHoldEnabled: true,
+      extendedHoldMode: 'TIMED' as const,
+      extendedHoldDuration: 30,
+      secondExtendedHoldEnabled: true,
+      secondExtendedHoldMode: 'TIMED' as const,
+      secondExtendedHoldDuration: 15,
+    };
+
+    expect(BreathingConfigSchema.parse(persistedConfig)).toEqual(persistedConfig);
+    expect(
+      BreathingConfigSchema.safeParse({ ...persistedConfig, extendedHoldDuration: 0 }).success
+    ).toBe(false);
+    expect(
+      BreathingConfigSchema.safeParse({ ...persistedConfig, secondExtendedHoldDuration: 0 }).success
+    ).toBe(false);
+  });
+
+  it('allows tolerance holds with no target duration in persisted configs', () => {
+    const result = BreathingConfigSchema.parse({
+      ...DEFAULT_BREATHING_CONFIG,
+      extendedHoldEnabled: true,
+      extendedHoldMode: 'TOLERANCE',
+      extendedHoldDuration: 0,
+      secondExtendedHoldEnabled: true,
+      secondExtendedHoldMode: 'TOLERANCE',
+      secondExtendedHoldDuration: 0,
+    });
+
+    expect(result.extendedHoldDuration).toBe(0);
+    expect(result.secondExtendedHoldDuration).toBe(0);
+  });
+
   it('should validate a valid config', () => {
     const config = {
       name: 'Test Config',
@@ -295,6 +335,36 @@ describe('TimerStateSchema', () => {
     const result = TimerStateSchema.parse(state);
     expect(result.phase).toBe('EXTENDED_EXHALE_HOLD');
     expect(result.extendedHoldElapsed).toBe(15.3);
+  });
+});
+
+describe('getPhaseInfo', () => {
+  it.each([
+    [2, 'Breathe in quickly'],
+    [4, 'Breathe in steadily'],
+    [6, 'Breathe in slowly'],
+    [7, 'Breathe in very slowly'],
+  ])('describes a %d-second inhale with the matching pace', (inhaleTime, instruction) => {
+    const config = BreathingConfigSchema.parse({
+      ...DEFAULT_BREATHING_CONFIG,
+      inhaleTime,
+    });
+
+    expect(getPhaseInfo('INHALE', config)).toMatchObject({
+      label: 'Inhale',
+      instruction,
+      color: 'green',
+    });
+  });
+
+  it('uses exhale wording and a safe generic instruction without a config', () => {
+    const config = BreathingConfigSchema.parse({
+      ...DEFAULT_BREATHING_CONFIG,
+      exhaleTime: 7,
+    });
+
+    expect(getPhaseInfo('EXHALE', config).instruction).toBe('Breathe out very slowly');
+    expect(getPhaseInfo('EXHALE').instruction).toBe('Breathe');
   });
 });
 

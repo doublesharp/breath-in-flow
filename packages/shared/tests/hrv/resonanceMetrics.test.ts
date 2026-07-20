@@ -5,6 +5,14 @@ import { computeFrequencyDomainMetrics } from '../../src/hrv/frequencyDomain.js'
 const BREATHING_RATE_BPM = 5.5; // resonance frequency
 const BREATHING_FREQ_HZ = BREATHING_RATE_BPM / 60; // ~0.0917 Hz
 
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
 function availableSpectrum(result: ReturnType<typeof computeFrequencyDomainMetrics>) {
   expect(result.available).toBe(true);
   if (!result.available) throw new Error(`expected available spectrum, received ${result.reason}`);
@@ -36,6 +44,14 @@ function generateCleanSinusoidalRR(
 }
 
 describe('computeResonanceMetrics', () => {
+  const emptyMetrics = {
+    peakToTroughAmplitude: 0,
+    waveformSmoothness: 0,
+    phaseSynchrony: 0,
+    lfPeakCount: 0,
+    lfPeakAmplitude: 0,
+  };
+
   it('returns defaults for mismatched or non-increasing timestamps', () => {
     const mismatched = computeResonanceMetrics([800, 810, 790], [0, 800], BREATHING_RATE_BPM, []);
     const duplicate = computeResonanceMetrics(
@@ -45,20 +61,81 @@ describe('computeResonanceMetrics', () => {
       []
     );
 
-    expect(mismatched).toEqual({
-      peakToTroughAmplitude: 0,
-      waveformSmoothness: 0,
-      phaseSynchrony: 0,
-      lfPeakCount: 0,
-      lfPeakAmplitude: 0,
+    expect(mismatched).toEqual(emptyMetrics);
+    expect(duplicate).toEqual(emptyMetrics);
+  });
+
+  it.each([
+    ['too few intervals', [800], [0], BREATHING_RATE_BPM],
+    ['non-finite rate', [800, 810], [0, 800], Number.NaN],
+    ['zero rate', [800, 810], [0, 800], 0],
+    ['non-finite interval', [800, Number.NaN], [0, 800], BREATHING_RATE_BPM],
+    ['non-positive interval', [800, 0], [0, 800], BREATHING_RATE_BPM],
+    ['non-finite timestamp', [800, 810], [0, Infinity], BREATHING_RATE_BPM],
+  ])('returns defaults for %s', (_label, intervals, timestamps, rate) => {
+    expect(computeResonanceMetrics(intervals, timestamps, rate, [])).toEqual(emptyMetrics);
+  });
+
+  it('uses the overall heart-rate range when capture is shorter than one breathing cycle', () => {
+    const result = computeResonanceMetrics(
+      [1000, 800],
+      [0, 1000],
+      6,
+      []
+    );
+
+    expect(result.peakToTroughAmplitude).toBe(15);
+  });
+
+  it('returns zero phase synchrony for a flat heart-rate signal', () => {
+    const result = computeResonanceMetrics(
+      [1000, 1000, 1000],
+      [0, 1000, 2000],
+      6,
+      []
+    );
+
+    expect(result.phaseSynchrony).toBe(0);
+  });
+
+  it('handles spectra with no LF power and one LF point', () => {
+    const noLfPower = computeResonanceMetrics(
+      [1000, 900],
+      [0, 1000],
+      6,
+      [{ frequency: 0.2, power: 10 }]
+    );
+    const oneLfPoint = computeResonanceMetrics(
+      [1000, 900],
+      [0, 1000],
+      6,
+      [{ frequency: 0.1, power: 7 }]
+    );
+
+    expect(noLfPower).toMatchObject({ waveformSmoothness: 0, lfPeakCount: 0 });
+    expect(oneLfPoint).toMatchObject({
+      waveformSmoothness: 1,
+      lfPeakCount: 1,
+      lfPeakAmplitude: 7,
     });
-    expect(duplicate).toEqual({
-      peakToTroughAmplitude: 0,
-      waveformSmoothness: 0,
-      phaseSynchrony: 0,
-      lfPeakCount: 0,
-      lfPeakAmplitude: 0,
-    });
+  });
+
+  it('counts dominant peaks at both LF spectrum boundaries', () => {
+    const result = computeResonanceMetrics(
+      [1000, 900],
+      [0, 1000],
+      6,
+      [
+        { frequency: 0.04, power: 8 },
+        { frequency: 0.08, power: 1 },
+        { frequency: 0.1, power: 2 },
+        { frequency: 0.12, power: 1 },
+        { frequency: 0.15, power: 9 },
+      ]
+    );
+
+    expect(result.lfPeakCount).toBe(3);
+    expect(result.lfPeakAmplitude).toBe(9);
   });
 
   it('returns high waveform smoothness for clean sinusoidal oscillation at breathing freq', () => {
@@ -143,13 +220,14 @@ describe('computeResonanceMetrics', () => {
       availableSpectrum(freqClean)
     );
 
-    // Generate noisy (random) RR data
+    // Generate deterministic noisy RR data so the regression result is reproducible.
+    const rng = createRng(0x5eed2026);
     const noisyRR: number[] = [];
     const noisyTS: number[] = [];
     let t = 0;
     for (let i = 0; i < 150; i++) {
       noisyTS.push(t);
-      const rr = 800 + (Math.random() - 0.5) * 400;
+      const rr = 800 + (rng() - 0.5) * 400;
       noisyRR.push(rr);
       t += rr;
     }
@@ -161,8 +239,7 @@ describe('computeResonanceMetrics', () => {
       availableSpectrum(freqNoisy)
     );
 
-    // Clean data should generally have higher smoothness
-    // (This is a probabilistic test, may not always hold for random noise)
+    // Clean data should have higher smoothness than this fixed noisy fixture.
     expect(cleanResult.waveformSmoothness).toBeGreaterThanOrEqual(
       noisyResult.waveformSmoothness * 0.5
     );
