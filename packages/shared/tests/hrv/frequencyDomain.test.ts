@@ -232,9 +232,54 @@ describe('computeFrequencyDomainMetrics', () => {
 
   it('returns sensible defaults for very short input', () => {
     const result = computeFrequencyDomainMetrics([800, 810, 790], [0, 800, 1610]);
+    expect(result.available).toBe(false);
+    expect(result.unavailableReason).toBe('insufficient-data');
     expect(result.vlfPower).toBe(0);
     expect(result.lfPower).toBe(0);
     expect(result.hfPower).toBe(0);
+    expect(result.lfPeak).toBe(0);
+    expect(result.hfPeak).toBe(0);
+  });
+
+  it('returns defaults for mismatched timestamps', () => {
+    const result = computeFrequencyDomainMetrics(
+      [800, 810, 790, 805],
+      [0, 800, 1610],
+    );
+
+    expect(result.spectrum).toHaveLength(0);
+    expect(result.totalPower).toBe(0);
+    expect(result.available).toBe(false);
+    expect(result.unavailableReason).toBe('invalid-series');
+  });
+
+  it('returns defaults for duplicate or unordered timestamps', () => {
+    const duplicate = computeFrequencyDomainMetrics(
+      [800, 810, 790, 805],
+      [0, 800, 800, 2400],
+    );
+    const unordered = computeFrequencyDomainMetrics(
+      [800, 810, 790, 805],
+      [0, 1610, 800, 2400],
+    );
+
+    expect(duplicate.spectrum).toHaveLength(0);
+    expect(duplicate.totalPower).toBe(0);
+    expect(unordered.spectrum).toHaveLength(0);
+    expect(unordered.totalPower).toBe(0);
+  });
+
+  it('marks a constant interval series unavailable instead of inventing peaks', () => {
+    const rrIntervals = Array.from({ length: 120 }, () => 1_000);
+    const timestamps = rrIntervals.map((_, index) => index * 1_000);
+
+    const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
+
+    expect(result.available).toBe(false);
+    expect(result.unavailableReason).toBe('no-variability');
+    expect(result.spectrum).toHaveLength(0);
+    expect(result.lfPeak).toBe(0);
+    expect(result.hfPeak).toBe(0);
   });
 
   it('detects peak in HF band for 0.25 Hz oscillation', () => {
@@ -242,6 +287,8 @@ describe('computeFrequencyDomainMetrics', () => {
     const result = computeFrequencyDomainMetrics(rrIntervals, timestamps);
 
     // HF should be dominant
+    expect(result.available).toBe(true);
+    expect(result.unavailableReason).toBeUndefined();
     expect(result.hfPower).toBeGreaterThan(result.vlfPower);
     // HF peak should be in HF band
     expect(result.hfPeak).toBeGreaterThanOrEqual(FREQUENCY_BANDS.HF.low);

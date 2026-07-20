@@ -30,6 +30,36 @@ function generateCleanSinusoidalRR(
 }
 
 describe('computeResonanceMetrics', () => {
+  it('returns defaults for mismatched or non-increasing timestamps', () => {
+    const mismatched = computeResonanceMetrics(
+      [800, 810, 790],
+      [0, 800],
+      BREATHING_RATE_BPM,
+      [],
+    );
+    const duplicate = computeResonanceMetrics(
+      [800, 810, 790],
+      [0, 800, 800],
+      BREATHING_RATE_BPM,
+      [],
+    );
+
+    expect(mismatched).toEqual({
+      peakToTroughAmplitude: 0,
+      waveformSmoothness: 0,
+      phaseSynchrony: 0,
+      lfPeakCount: 0,
+      lfPeakAmplitude: 0,
+    });
+    expect(duplicate).toEqual({
+      peakToTroughAmplitude: 0,
+      waveformSmoothness: 0,
+      phaseSynchrony: 0,
+      lfPeakCount: 0,
+      lfPeakAmplitude: 0,
+    });
+  });
+
   it('returns high waveform smoothness for clean sinusoidal oscillation at breathing freq', () => {
     const { rrIntervals, timestamps } = generateCleanSinusoidalRR(
       1000, 80, BREATHING_FREQ_HZ, 120

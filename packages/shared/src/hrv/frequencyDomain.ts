@@ -1,6 +1,10 @@
 import { mean } from '../dsp/statistics.js';
 import { FREQUENCY_BANDS } from './types.js';
-import type { FrequencyDomainMetrics, SpectralPoint } from './types.js';
+import type {
+  FrequencyDomainMetrics,
+  FrequencyDomainUnavailableReason,
+  SpectralPoint,
+} from './types.js';
 
 /**
  * Lomb-Scargle periodogram for unevenly-sampled data.
@@ -162,6 +166,41 @@ function findPeakFrequency(
   return peakFreq;
 }
 
+function getFrequencySeriesIssue(
+  rrIntervals: number[],
+  timestamps: number[],
+): FrequencyDomainUnavailableReason | null {
+  if (rrIntervals.length !== timestamps.length) return 'invalid-series';
+  if (!rrIntervals.every((rr) => Number.isFinite(rr) && rr > 0)) return 'invalid-series';
+  if (!timestamps.every((timestamp) => Number.isFinite(timestamp))) return 'invalid-series';
+  if (rrIntervals.length < 4) return 'insufficient-data';
+
+  for (let i = 1; i < timestamps.length; i++) {
+    if (timestamps[i] <= timestamps[i - 1]) return 'invalid-series';
+  }
+
+  return null;
+}
+
+function unavailableFrequencyDomain(
+  unavailableReason: FrequencyDomainUnavailableReason,
+): FrequencyDomainMetrics {
+  return {
+    available: false,
+    unavailableReason,
+    vlfPower: 0,
+    lfPower: 0,
+    hfPower: 0,
+    totalPower: 0,
+    lfPowerNorm: 0,
+    hfPowerNorm: 0,
+    lfHfRatio: 0,
+    lfPeak: 0,
+    hfPeak: 0,
+    spectrum: [],
+  };
+}
+
 /**
  * Computes frequency-domain HRV metrics using the Lomb-Scargle periodogram.
  *
@@ -178,21 +217,8 @@ export function computeFrequencyDomainMetrics(
   rrIntervals: number[],
   timestamps: number[]
 ): FrequencyDomainMetrics {
-  const emptySpectrum: SpectralPoint[] = [];
-  const emptyResult: FrequencyDomainMetrics = {
-    vlfPower: 0,
-    lfPower: 0,
-    hfPower: 0,
-    totalPower: 0,
-    lfPowerNorm: 0,
-    hfPowerNorm: 0,
-    lfHfRatio: 0,
-    lfPeak: 0.1,
-    hfPeak: 0.25,
-    spectrum: emptySpectrum,
-  };
-
-  if (rrIntervals.length < 4) return emptyResult;
+  const seriesIssue = getFrequencySeriesIssue(rrIntervals, timestamps);
+  if (seriesIssue) return unavailableFrequencyDomain(seriesIssue);
 
   // Convert timestamps to seconds
   const timestampsSec = timestamps.map((t) => t / 1000);
@@ -211,6 +237,9 @@ export function computeFrequencyDomainMetrics(
   // Preserve power estimate: scale windowed signal so its variance matches
   // the detrended signal's variance before windowing.
   const detrendedVar = detrendedRR.reduce((s, v) => s + v * v, 0) / detrendedRR.length;
+  if (!Number.isFinite(detrendedVar) || detrendedVar <= 1e-12) {
+    return unavailableFrequencyDomain('no-variability');
+  }
   const windowedVar = windowedRR.reduce((s, v) => s + v * v, 0) / windowedRR.length;
   const correctionFactor = windowedVar > 1e-12 ? Math.sqrt(detrendedVar / windowedVar) : 1;
   const processedRR = windowedRR.map((v) => v * correctionFactor);
@@ -247,6 +276,7 @@ export function computeFrequencyDomainMetrics(
   const hfPeak = findPeakFrequency(frequencies, psd, FREQUENCY_BANDS.HF.low, FREQUENCY_BANDS.HF.high);
 
   return {
+    available: true,
     vlfPower,
     lfPower,
     hfPower,

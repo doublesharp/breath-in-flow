@@ -42,6 +42,28 @@ export function computeResonanceMetrics(
   breathingRateBPM: number,
   spectrum: SpectralPoint[]
 ): ResonanceMetrics {
+  const emptyResult: ResonanceMetrics = {
+    peakToTroughAmplitude: 0,
+    waveformSmoothness: 0,
+    phaseSynchrony: 0,
+    lfPeakCount: 0,
+    lfPeakAmplitude: 0,
+  };
+
+  if (
+    rrIntervals.length < 2 ||
+    rrIntervals.length !== timestamps.length ||
+    !Number.isFinite(breathingRateBPM) ||
+    breathingRateBPM <= 0 ||
+    !rrIntervals.every((rr) => Number.isFinite(rr) && rr > 0) ||
+    !timestamps.every((timestamp) => Number.isFinite(timestamp))
+  ) {
+    return emptyResult;
+  }
+  for (let i = 1; i < timestamps.length; i++) {
+    if (timestamps[i] <= timestamps[i - 1]) return emptyResult;
+  }
+
   const breathingFreqHz = breathingRateBPM / 60;
   const cycleDurationSec = 60 / breathingRateBPM;
 

@@ -23,6 +23,7 @@ function makeMeasurement(overrides: Partial<HrvMeasurement> = {}): HrvMeasuremen
         hrRange: 20,
       },
       frequencyDomain: {
+        available: true,
         vlfPower: 100,
         lfPower: 300,
         hfPower: 200,

@@ -334,6 +334,7 @@
 
             <template v-if="selectedTrialAnalysis">
               <FrequencySpectrum
+                v-if="selectedTrialAnalysis.frequencyDomain.available !== false"
                 :spectrum="selectedTrialAnalysis.frequencyDomain.spectrum"
                 :lf-peak="selectedTrialAnalysis.frequencyDomain.lfPeak"
                 :hf-peak="selectedTrialAnalysis.frequencyDomain.hfPeak"
@@ -431,6 +432,7 @@ import {
   type WaveformSmoothness,
   type IBISample,
   type HRVAnalysis,
+  type SoundTheme,
 } from '@breath-in-flow/shared';
 import { ppgService } from '../services/ppgService';
 import { scgService } from '../services/scgService';
@@ -444,7 +446,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const props = defineProps<{
   soundEnabled?: boolean;
-  soundTheme?: string;
+  soundTheme?: SoundTheme;
   ttsEnabled?: boolean;
   ttsVoice?: string;
 }>();
@@ -524,7 +526,7 @@ const timerConfig = reactive<BreathingConfig>({
   secondExtendedHoldEnabled: false,
   targetSets: 1,
   soundEnabled: props.soundEnabled ?? true,
-  soundTheme: (props.soundTheme as any) ?? 'wood',
+  soundTheme: props.soundTheme ?? 'wood',
   ttsEnabled: props.ttsEnabled ?? false,
   ttsVoice: props.ttsVoice,
 });
@@ -865,7 +867,7 @@ function saveResult() {
     extendedHoldEnabled: false,
     secondExtendedHoldEnabled: false,
     soundEnabled: props.soundEnabled ?? true,
-    soundTheme: (props.soundTheme as any) ?? 'wood',
+    soundTheme: props.soundTheme ?? 'wood',
     ttsEnabled: props.ttsEnabled ?? false,
     ttsVoice: props.ttsVoice,
   };

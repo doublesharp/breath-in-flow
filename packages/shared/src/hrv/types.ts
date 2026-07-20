@@ -70,7 +70,14 @@ export interface TimeDomainMetrics {
   hrRange: number; // maxHR - minHR (peak-to-trough)
 }
 
+export type FrequencyDomainUnavailableReason =
+  | 'insufficient-data'
+  | 'invalid-series'
+  | 'no-variability';
+
 export interface FrequencyDomainMetrics {
+  available: boolean;
+  unavailableReason?: FrequencyDomainUnavailableReason;
   vlfPower: number; // VLF power (ms²), 0.003-0.04 Hz
   lfPower: number; // LF power (ms²), 0.04-0.15 Hz
   hfPower: number; // HF power (ms²), 0.15-0.4 Hz

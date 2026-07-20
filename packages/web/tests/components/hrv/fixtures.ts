@@ -12,6 +12,7 @@ export const sampleAnalysis: HRVAnalysis = {
     hrRange: 19,
   },
   frequencyDomain: {
+    available: true,
     vlfPower: 0,
     lfPower: 304.92,
     hfPower: 3677.86,

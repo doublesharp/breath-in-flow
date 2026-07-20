@@ -67,7 +67,7 @@
       <!-- Frequency-Domain Section -->
       <section>
         <h4 class="section-header">Frequency-Domain</h4>
-        <div :class="gridClass">
+        <div v-if="analysis.frequencyDomain.available !== false" :class="gridClass">
           <MetricCard
             :value="fmtPower(analysis.frequencyDomain.totalPower)"
             unit="ms²"
@@ -111,6 +111,14 @@
             :compact="compact"
           />
         </div>
+        <div
+          v-else
+          class="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-white/60"
+          role="status"
+        >
+          <div class="font-medium text-amber-300">Frequency metrics unavailable</div>
+          <div class="mt-1 text-xs">{{ frequencyUnavailableMessage(analysis.frequencyDomain.unavailableReason) }}</div>
+        </div>
       </section>
 
       <!-- Resonance Section -->
@@ -144,9 +152,18 @@
 
     <!-- Empty state -->
     <div v-else class="flex flex-col items-center justify-center py-10 text-white/40">
-      <svg class="w-10 h-10 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      <svg
+        class="w-10 h-10 mb-3 opacity-50"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+        />
       </svg>
       <p class="text-sm">No HRV analysis data</p>
     </div>
@@ -155,7 +172,10 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h } from 'vue';
-import type { HRVAnalysis } from '@breath-in-flow/shared';
+import type {
+  FrequencyDomainUnavailableReason,
+  HRVAnalysis,
+} from '@breath-in-flow/shared';
 
 const props = withDefaults(
   defineProps<{
@@ -177,7 +197,7 @@ function fmtBPM(v: number) {
   return v.toFixed(1);
 }
 function fmtMs(v: number) {
-  return v.toFixed(2) + 'ms';
+  return v.toFixed(2);
 }
 function fmtPct(v: number) {
   return v.toFixed(1);
@@ -194,6 +214,16 @@ function fmtHz(v: number) {
 }
 function fmtDecimal(v: number) {
   return v.toFixed(2);
+}
+
+function frequencyUnavailableMessage(reason?: FrequencyDomainUnavailableReason): string {
+  if (reason === 'no-variability') {
+    return 'This recording did not contain enough beat-to-beat variation for a reliable spectrum.';
+  }
+  if (reason === 'invalid-series') {
+    return 'The detected beats did not form a valid continuous series. Try another reading while staying still.';
+  }
+  return 'A longer clean recording is needed before these metrics can be calculated.';
 }
 
 type MetricColor = 'blue' | 'red' | 'green' | 'purple' | 'indigo' | 'cyan' | 'teal' | 'amber' | 'orange';
@@ -241,19 +271,28 @@ const MetricCard = defineComponent({
                 color: colors.text,
                 fontSize: cardProps.compact ? '15px' : '18px',
               },
+              'data-part': 'value',
             },
             cardProps.value
           ),
           cardProps.unit
             ? h(
                 'div',
-                { class: 'text-white/40 uppercase tracking-wider', style: { fontSize: '9px', marginTop: '1px' } },
+                {
+                  class: 'text-white/40 uppercase tracking-wider',
+                  style: { fontSize: '9px', marginTop: '1px' },
+                  'data-part': 'unit',
+                },
                 cardProps.unit
               )
             : null,
           h(
             'div',
-            { class: 'text-white/50 uppercase tracking-wider font-medium', style: { fontSize: '9px', marginTop: '4px' } },
+            {
+              class: 'text-white/50 uppercase tracking-wider font-medium',
+              style: { fontSize: '9px', marginTop: '4px' },
+              'data-part': 'label',
+            },
             cardProps.label
           ),
         ]

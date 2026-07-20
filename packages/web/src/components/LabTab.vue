@@ -229,6 +229,7 @@
           <h2 class="text-lg font-bold text-white">Results</h2>
           <HrvMetricsDashboard :analysis="currentAnalysis" />
           <FrequencySpectrum
+            v-if="currentAnalysis.frequencyDomain.available !== false"
             :spectrum="currentAnalysis.frequencyDomain.spectrum"
             :lf-peak="currentAnalysis.frequencyDomain.lfPeak"
             :hf-peak="currentAnalysis.frequencyDomain.hfPeak"

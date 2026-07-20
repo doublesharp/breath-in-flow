@@ -30,6 +30,7 @@ function makeMeasurement(
         hrRange: 25,
       },
       frequencyDomain: {
+        available: true,
         vlfPower: 200,
         lfPower: 1200,
         hfPower: 800,

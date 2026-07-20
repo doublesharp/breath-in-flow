@@ -117,6 +117,8 @@ describe('analyzeHRV input normalization', () => {
     expect(result.quality.artifactsDetected).toBe(2);
     expect(result.quality.artifactPercentage).toBeCloseTo((2 / 6) * 100);
     expect(result.quality.meanSignalQuality).toBeCloseTo((0.9 + 0.7 + 0.8 + 1) / 4);
-    expect(result.frequencyDomain.spectrum.length).toBeGreaterThan(0);
+    expect(result.frequencyDomain.available).toBe(false);
+    expect(result.frequencyDomain.unavailableReason).toBe('no-variability');
+    expect(result.frequencyDomain.spectrum).toHaveLength(0);
   });
 });

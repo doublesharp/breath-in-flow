@@ -176,7 +176,9 @@ describe('HrvMetricsDashboard', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: sampleAnalysis },
     });
-    expect(wrapper.text()).toContain('127.38ms');
+    const rmssdCard = wrapper.find('[data-label="RMSSD"]');
+    expect(rmssdCard.find('[data-part="value"]').text()).toBe('127.38');
+    expect(rmssdCard.find('[data-part="unit"]').text()).toBe('ms');
   });
 
   it('accepts compact prop without crashing', () => {
@@ -192,5 +194,29 @@ describe('HrvMetricsDashboard', () => {
     });
     expect(wrapper.text()).toContain('Heart Rate');
     expect(wrapper.text()).toContain('Resonance');
+  });
+
+  it('explains when frequency metrics are unavailable instead of showing zero cards', () => {
+    const analysis = {
+      ...sampleAnalysis,
+      frequencyDomain: {
+        ...sampleAnalysis.frequencyDomain,
+        available: false,
+        unavailableReason: 'no-variability' as const,
+        lfPower: 0,
+        hfPower: 0,
+        totalPower: 0,
+        lfPeak: 0,
+        hfPeak: 0,
+        spectrum: [],
+      },
+    };
+
+    const wrapper = mount(HrvMetricsDashboard, { props: { analysis } });
+
+    expect(wrapper.text()).toContain('Frequency metrics unavailable');
+    expect(wrapper.text()).toContain('enough beat-to-beat variation');
+    expect(wrapper.text()).not.toContain('LF POWER');
+    expect(wrapper.text()).not.toContain('LF PEAK');
   });
 });
