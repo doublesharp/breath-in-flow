@@ -1,10 +1,15 @@
 <template>
-  <div>
+  <div :inert="isSessionVisible || undefined" :aria-hidden="isSessionVisible ? 'true' : undefined">
     <!-- Fullscreen Session Modal -->
     <Teleport to="body">
       <!-- Stop Session Confirmation Modal -->
       <div
         v-show="showStopConfirmation"
+        data-testid="stop-confirmation"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="stop-session-title"
+        aria-describedby="stop-session-description"
         class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         @click.self="showStopConfirmation = false"
       >
@@ -27,13 +32,20 @@
               </svg>
             </div>
             <div class="flex-1">
-              <h3 class="text-xl font-bold text-white mb-2">Stop Session?</h3>
-              <p class="text-slate-300 mb-6">
+              <h3 id="stop-session-title" class="text-xl font-bold text-white mb-2">Stop Session?</h3>
+              <p id="stop-session-description" class="text-slate-300 mb-6">
                 Choose what to do with this in-progress session. You can keep going, save the incomplete progress, or
                 exit without saving.
               </p>
               <div class="flex flex-col sm:flex-row gap-3 justify-end">
-                <button @click="showStopConfirmation = false" class="btn-secondary">Cancel</button>
+                <button
+                  ref="cancelStopButtonRef"
+                  data-testid="cancel-stop"
+                  @click="showStopConfirmation = false"
+                  class="btn-secondary"
+                >
+                  Cancel
+                </button>
                 <button @click="saveIncompleteSession" class="btn-primary">Save Session</button>
                 <button @click="exitWithoutSavingSession" class="btn-danger">Exit</button>
               </div>
@@ -45,6 +57,8 @@
       <!-- Success Notification Modal -->
       <div
         v-show="showSuccessNotification"
+        role="status"
+        aria-live="polite"
         class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         @click.self="showSuccessNotification = false"
       >
@@ -79,6 +93,9 @@
       <!-- Overwrite Confirmation Modal -->
       <div
         v-show="showOverwriteConfirmation"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="overwrite-preset-title"
         class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         @click.self="showOverwriteConfirmation = false"
       >
@@ -101,7 +118,7 @@
               </svg>
             </div>
             <div class="flex-1">
-              <h3 class="text-xl font-bold text-white mb-2">Overwrite Preset?</h3>
+              <h3 id="overwrite-preset-title" class="text-xl font-bold text-white mb-2">Overwrite Preset?</h3>
               <p class="text-slate-300 mb-6">
                 A preset named "{{ configName }}" already exists. Do you want to overwrite it?
               </p>
@@ -115,7 +132,13 @@
       </div>
 
       <div
-        v-if="isRunning"
+        v-if="isSessionVisible"
+        ref="sessionDialogRef"
+        data-testid="session-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="session-dialog-title"
+        tabindex="-1"
         class="fixed inset-0 z-50 overflow-y-auto"
         style="background: linear-gradient(135deg, #1f1a15 0%, #2a241d 40%, #1f1a15 100%)"
       >
@@ -124,6 +147,7 @@
           <div class="absolute top-4 right-4 z-10">
             <button
               @click="confirmExit"
+              aria-label="Exit breathing session"
               class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white transition-colors backdrop-blur-sm"
               title="Exit session"
             >
@@ -142,6 +166,7 @@
           <!-- Session Content -->
           <div class="max-w-4xl mx-auto">
             <div class="card-solid !p-4 sm:!p-6">
+              <h1 id="session-dialog-title" class="sr-only">Guided breathing session</h1>
               <BreathingVisualizer
                 :phase="timer.phase.value"
                 :current-time="timer.currentTime.value"
@@ -458,6 +483,9 @@
       <!-- Configuration Modal -->
       <div
         v-if="showConfigModal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="configure-practice-title"
         class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
         @click.self="showConfigModal = false"
       >
@@ -494,12 +522,13 @@
                 </svg>
               </div>
               <div>
-                <h2 class="text-xl font-bold text-white">Configure Practice</h2>
+                <h2 id="configure-practice-title" class="text-xl font-bold text-white">Configure Practice</h2>
                 <p class="text-sm text-slate-400">Customize your breathing pattern</p>
               </div>
             </div>
             <button
               @click="showConfigModal = false"
+              aria-label="Close practice settings"
               class="p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
             >
               <svg
@@ -1000,7 +1029,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, inject, onMounted, onUnmounted, computed } from 'vue';
+import { ref, reactive, watch, inject, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
@@ -1034,6 +1063,8 @@ const showSuccessNotification = ref(false);
 const successMessage = ref('');
 const showOverwriteConfirmation = ref(false);
 const loadingVoices = ref(false);
+const sessionDialogRef = ref<HTMLElement | null>(null);
+const cancelStopButtonRef = ref<HTMLButtonElement | null>(null);
 // Lab CTA state
 const showLabCta = ref(false);
 const labCtaDismissed = ref(localStorage.getItem('lab-cta-dismissed') === 'true');
@@ -1124,6 +1155,7 @@ const sessionNotes = ref('');
 
 // Load last used config on mount
 onMounted(async () => {
+  window.addEventListener('keydown', handleEscape);
   const savedConfig = localStorage.getItem(LAST_CONFIG_KEY);
   if (savedConfig) {
     try {
@@ -1301,6 +1333,8 @@ watch(
 
 // Cleanup watchers and services on unmount
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleEscape);
+  document.body.style.overflow = bodyOverflowBeforeSession;
   void allowSleep();
   // Stop all TTS watchers
   ttsWatchStopHandles.forEach((stop) => stop());
@@ -1339,6 +1373,59 @@ watch(
   },
   { immediate: true }
 );
+
+const isSessionVisible = computed(
+  () => isRunning.value || timer.phase.value === 'SESSION_COMPLETE'
+);
+let focusBeforeSession: HTMLElement | null = null;
+let bodyOverflowBeforeSession = '';
+
+watch(
+  isSessionVisible,
+  async (visible) => {
+    if (visible) {
+      focusBeforeSession = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      bodyOverflowBeforeSession = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      await nextTick();
+      sessionDialogRef.value?.focus();
+      return;
+    }
+
+    const focusTarget = focusBeforeSession;
+    focusBeforeSession = null;
+    document.body.style.overflow = bodyOverflowBeforeSession;
+    await nextTick();
+    if (focusTarget?.isConnected) focusTarget.focus();
+  },
+  { immediate: true }
+);
+
+watch(showStopConfirmation, async (visible) => {
+  if (visible) {
+    await nextTick();
+    cancelStopButtonRef.value?.focus();
+  } else if (isSessionVisible.value) {
+    await nextTick();
+    sessionDialogRef.value?.focus();
+  }
+});
+
+function handleEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return;
+
+  if (showStopConfirmation.value) {
+    showStopConfirmation.value = false;
+  } else if (showOverwriteConfirmation.value) {
+    showOverwriteConfirmation.value = false;
+  } else if (showSuccessNotification.value) {
+    showSuccessNotification.value = false;
+  } else if (showConfigModal.value) {
+    showConfigModal.value = false;
+  } else if (isSessionVisible.value && timer.phase.value !== 'SESSION_COMPLETE') {
+    confirmExit();
+  }
+}
 
 function startExercise() {
   const validatedConfig = getValidatedConfig();

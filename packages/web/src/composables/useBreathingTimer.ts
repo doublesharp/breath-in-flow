@@ -248,7 +248,11 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     const currentPhase = state.value.phase;
 
     state.value = { ...state.value, extendedHoldElapsed: 0 };
-    options.onExtendedHoldStart?.(holdType, state.value);
+
+    const enterExtendedHold = (phase: 'EXTENDED_INHALE_HOLD' | 'EXTENDED_EXHALE_HOLD') => {
+      setPhase(phase, holdMode === 'TIMED' ? holdDuration : 0);
+      options.onExtendedHoldStart?.(holdType, state.value);
+    };
 
     if (holdType === 'INHALE') {
       if (currentPhase !== 'INHALE') {
@@ -256,17 +260,9 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
         setPhase('INHALE', config.inhaleTime);
         return;
       }
-      if (holdMode === 'TIMED') {
-        setPhase('EXTENDED_INHALE_HOLD', holdDuration);
-      } else {
-        setPhase('EXTENDED_INHALE_HOLD', 0);
-      }
+      enterExtendedHold('EXTENDED_INHALE_HOLD');
     } else {
-      if (holdMode === 'TIMED') {
-        setPhase('EXTENDED_EXHALE_HOLD', holdDuration);
-      } else {
-        setPhase('EXTENDED_EXHALE_HOLD', 0);
-      }
+      enterExtendedHold('EXTENDED_EXHALE_HOLD');
     }
   }
 

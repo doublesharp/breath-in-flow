@@ -344,6 +344,7 @@ describe('useBreathingTimer', () => {
     });
 
     it('starts recovery inhale before first EXTENDED_INHALE_HOLD', () => {
+      const onExtendedHoldStart = vi.fn();
       config.extendedHoldEnabled = true;
       config.extendedHoldType = 'INHALE';
       config.extendedHoldMode = 'TIMED';
@@ -354,7 +355,7 @@ describe('useBreathingTimer', () => {
       config.inhaleTime = 2;
       config.exhaleTime = 2;
 
-      const timer = useBreathingTimer(config);
+      const timer = useBreathingTimer(config, { onExtendedHoldStart });
       timer.start();
 
       // Complete inhale + exhale to trigger first extended hold
@@ -363,11 +364,16 @@ describe('useBreathingTimer', () => {
       // Should insert recovery inhale before extended inhale hold
       expect(timer.phase.value).toBe('INHALE');
       expect(timer.isRecoveryBreath.value).toBe(true);
+      expect(onExtendedHoldStart).not.toHaveBeenCalled();
 
       // After recovery inhale, should enter EXTENDED_INHALE_HOLD
       vi.advanceTimersByTime(2100);
       expect(timer.phase.value).toBe('EXTENDED_INHALE_HOLD');
       expect(timer.isRecoveryBreath.value).toBe(false);
+      expect(onExtendedHoldStart).toHaveBeenCalledTimes(1);
+      expect(onExtendedHoldStart).toHaveBeenCalledWith('INHALE', expect.objectContaining({
+        phase: 'EXTENDED_INHALE_HOLD',
+      }));
     });
 
     it('handles second extended hold of type INHALE (recovery breath) after EXHALE hold', () => {

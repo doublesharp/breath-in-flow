@@ -1,7 +1,9 @@
-import { mount, shallowMount } from '@vue/test-utils';
+import { enableAutoUnmount, mount, shallowMount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { nextTick, ref } from 'vue';
 import BreathingPractice from '@/components/BreathingPractice.vue';
+
+enableAutoUnmount(afterEach);
 
 const startMock = vi.fn();
 const pauseMock = vi.fn();
@@ -108,6 +110,7 @@ vi.mock('@/services/ttsService', () => ({
 describe('BreathingPractice.vue', () => {
   beforeEach(() => {
     window.alert = vi.fn();
+    document.body.style.overflow = '';
     localStorage.clear();
     vi.clearAllMocks();
     speakMock = vi.fn();
@@ -123,6 +126,7 @@ describe('BreathingPractice.vue', () => {
   });
 
   afterEach(() => {
+    document.body.style.overflow = '';
     vi.resetAllMocks();
   });
 
@@ -199,6 +203,127 @@ describe('BreathingPractice.vue', () => {
       await nextTick();
     }
     expect(pauseMock).toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it('presents a focused modal session and hides background controls while running', async () => {
+    const trigger = document.createElement('button');
+    trigger.textContent = 'Start trigger';
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    isRunning.value = false;
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref({}),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+      attachTo: document.body,
+    });
+
+    isRunning.value = true;
+    await nextTick();
+    await nextTick();
+
+    const sessionDialog = document.activeElement as HTMLElement;
+    expect(sessionDialog).toBeTruthy();
+    expect(sessionDialog.dataset.testid).toBe('session-dialog');
+    expect(sessionDialog.getAttribute('role')).toBe('dialog');
+    expect(sessionDialog.getAttribute('aria-modal')).toBe('true');
+    expect(wrapper.attributes('inert')).toBe('');
+    expect(wrapper.attributes('aria-hidden')).toBe('true');
+    expect(document.activeElement).toBe(sessionDialog);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    isRunning.value = false;
+    await nextTick();
+    await nextTick();
+
+    expect(wrapper.attributes('inert')).toBeUndefined();
+    expect(wrapper.attributes('aria-hidden')).toBeUndefined();
+    expect(document.body.style.overflow).toBe('');
+    expect(document.activeElement).toBe(trigger);
+
+    wrapper.unmount();
+    trigger.remove();
+  });
+
+  it('labels the stop confirmation as an alert dialog and focuses the safe action', async () => {
+    isRunning.value = true;
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref({}),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+      attachTo: document.body,
+    });
+    await nextTick();
+
+    (wrapper.vm as unknown as { confirmExit: () => void }).confirmExit();
+    await nextTick();
+    await nextTick();
+
+    const cancel = document.activeElement as HTMLButtonElement;
+    const confirmation = cancel.closest('[data-testid="stop-confirmation"]') as HTMLElement;
+    expect(cancel.dataset.testid).toBe('cancel-stop');
+    expect(confirmation.getAttribute('role')).toBe('alertdialog');
+    expect(confirmation.getAttribute('aria-modal')).toBe('true');
+    expect(confirmation.getAttribute('aria-labelledby')).toBe('stop-session-title');
+    expect(cancel).toBeTruthy();
+
+    wrapper.unmount();
+  });
+
+  it('keeps the completion view visible after the timer stops running', async () => {
+    isRunning.value = false;
+    timerPhase.value = 'SESSION_COMPLETE';
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref({}),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+      attachTo: document.body,
+    });
+    await nextTick();
+
+    const sessionDialog = document.body.querySelector('[data-testid="session-dialog"]');
+    expect(sessionDialog).toBeTruthy();
+    expect(sessionDialog?.textContent).toContain('Session Complete!');
+
+    wrapper.unmount();
+  });
+
+  it('opens the safe stop confirmation when Escape is pressed during a session', async () => {
+    isRunning.value = true;
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref({}),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+      attachTo: document.body,
+    });
+    await nextTick();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+    await nextTick();
+
+    const confirmation = document.body.querySelector('[data-testid="stop-confirmation"]') as HTMLElement;
+    expect(confirmation.style.display).not.toBe('none');
+    expect((document.activeElement as HTMLElement).dataset.testid).toBe('cancel-stop');
 
     wrapper.unmount();
   });
