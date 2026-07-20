@@ -31,7 +31,7 @@
 
       <!-- Time-Domain Section -->
       <section>
-        <h4 class="section-header">Time-Domain HRV</h4>
+        <h4 class="section-header">Pulse Variability Metrics</h4>
         <div :class="gridClass">
           <MetricCard
             :value="fmtMs(analysis.timeDomain.rmssd)"
@@ -165,7 +165,7 @@
           d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
         />
       </svg>
-      <p class="text-sm">No HRV analysis data</p>
+      <p class="text-sm">No pulse variability analysis data</p>
     </div>
   </div>
 </template>
@@ -227,6 +227,9 @@ function frequencyUnavailableMessage(reason: FrequencyDomainUnavailableReason): 
 function resonanceUnavailableMessage(reason: ResonanceUnavailableReason): string {
   if (reason === 'missing-breathing-rate') {
     return 'A paced breathing rate is required to calculate breathing-response metrics.';
+  }
+  if (reason === 'no-variability') {
+    return 'This trial did not contain enough pulse-to-pulse variation for reliable breathing-response metrics.';
   }
   if (reason === 'low-signal-quality' || reason === 'too-many-artifacts') {
     return 'Signal quality was not stable enough for breathing-response metrics.';

@@ -122,7 +122,7 @@ export interface ResonanceMetrics {
 }
 
 export type ResonanceUnavailableReason =
-  EligibilityReason | 'insufficient-data' | 'missing-breathing-rate' | 'protocol-not-supported';
+  FrequencyDomainUnavailableReason | 'missing-breathing-rate';
 
 export type ResonanceAvailability = MetricAvailability<
   ResonanceMetrics,

@@ -27,6 +27,10 @@ export default defineConfig({
           lines: 100,
           functions: 100,
         },
+        'src/hrv/index.ts': {
+          lines: 100,
+          functions: 100,
+        },
       },
     },
   },

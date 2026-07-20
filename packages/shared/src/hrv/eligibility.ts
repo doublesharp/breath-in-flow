@@ -17,6 +17,8 @@ const MINIMUM_DURATION_SECONDS: Record<MeasurementProtocol, number> = {
   freeform: 60,
 };
 
+export const MAX_PLAUSIBLE_IBI_MS = 2_000;
+
 export interface EligibilityOptions {
   hasUnresolvedSensorError?: boolean;
 }
@@ -77,7 +79,7 @@ export function evaluateMeasurementEligibility(
     }
   }
 
-  if (samples.some((sample) => sample.interval < 300 || sample.interval > 2000)) {
+  if (samples.some((sample) => sample.interval < 300 || sample.interval > MAX_PLAUSIBLE_IBI_MS)) {
     reasons.add('implausible-interval');
   }
 

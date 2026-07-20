@@ -3,8 +3,10 @@ import { enableAutoUnmount, flushPromises, mount, shallowMount } from '@vue/test
 import LabTab from '@/components/LabTab.vue';
 import { ppgService } from '@/services/ppgService';
 import { sensorFusionService } from '@/services/sensorFusion';
+import type { HRVAnalysis, IBISample, PoincareUnavailableReason } from '@breath-in-flow/shared';
 
 enableAutoUnmount(afterEach);
+afterEach(() => vi.useRealTimers());
 
 const hrvStorageMock = vi.hoisted(() => ({
   initialize: vi.fn(),
@@ -64,6 +66,35 @@ vi.mock('@/services/sensorFusion', () => ({
 vi.mock('@/composables/useHrvStorage', () => ({
   useHrvStorage: () => hrvStorageMock,
 }));
+
+function analysisWithPoincareUnavailable(reason: PoincareUnavailableReason): HRVAnalysis {
+  return {
+    timeDomain: {
+      meanRR: 1_000,
+      sdnn: 20,
+      rmssd: 18,
+      pnn50: 10,
+      meanHR: 60,
+      minHR: 58,
+      maxHR: 62,
+      hrRange: 4,
+    },
+    frequencyDomain: { available: false, reason: 'protocol-not-supported' },
+    poincare: { available: false, reason },
+    resonance: { available: false, reason: 'protocol-not-supported' },
+    quality: {
+      totalSamples: 60,
+      artifactsDetected: 0,
+      artifactPercentage: 0,
+      meanSignalQuality: 0.9,
+    },
+    raw: {
+      rrIntervals: [1_000, 1_010, 990],
+      timestamps: [0, 1_000, 2_010],
+      instantaneousHR: [60, 59.4, 60.6],
+    },
+  };
+}
 
 describe('LabTab.vue', () => {
   beforeEach(() => {
@@ -146,13 +177,191 @@ describe('LabTab.vue', () => {
     const range = document.body.querySelector(
       '[data-testid="measurement-duration"]'
     ) as HTMLInputElement;
-    expect(range.getAttribute('aria-label')).toBe('Measurement duration');
+    expect(range.getAttribute('aria-label')).toBe('Analyzed duration');
     expect(range.min).toBe('120');
     expect(range.value).toBe('120');
     expect(range.getAttribute('aria-valuetext')).toBe('2 minutes');
 
     wrapper.unmount();
   });
+
+  it('advertises five analyzed minutes while timing Full Analysis for 5:08 of capture', async () => {
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    await wrapper.find('[data-testid="protocol-full-analysis"]').trigger('click');
+    await flushPromises();
+
+    const range = document.body.querySelector(
+      '[data-testid="measurement-duration"]'
+    ) as HTMLInputElement;
+    expect(range.value).toBe('300');
+    expect(document.body.textContent).toContain('Analyzes 5:00 after 5:08–5:12 of sensor capture');
+
+    const startButton = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Start'
+    );
+    startButton!.click();
+    await flushPromises();
+
+    expect(document.body.textContent).toContain('/ 5:08');
+    const vm = wrapper.vm as unknown as { elapsedSeconds: number };
+    vm.elapsedSeconds = 154;
+    await wrapper.vm.$nextTick();
+    expect(
+      (document.body.querySelector('[data-testid="measurement-progress"]') as HTMLElement).style
+        .width
+    ).toBe('50%');
+
+    wrapper.unmount();
+  });
+
+  it('waits for a 300-second finalized beat window before auto-stopping Full Analysis', async () => {
+    vi.useFakeTimers();
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    await wrapper.find('[data-testid="protocol-full-analysis"]').trigger('click');
+    await flushPromises();
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Start')!
+      .click();
+    await flushPromises();
+
+    const ppgStart = vi.mocked(ppgService.start);
+    const ppgCallbacks = ppgStart.mock.calls.at(-1)![0] as {
+      callbacks: { onIBI: (sample: IBISample) => void };
+    };
+    vi.advanceTimersByTime(1_999);
+    ppgCallbacks.callbacks.onIBI({
+      timestamp: 1_999,
+      interval: 1_000,
+      quality: 0.9,
+      provenance: { source: 'ppg', method: 'peak-detected' },
+    });
+    vi.advanceTimersByTime(1);
+    for (let second = 3; second <= 308; second += 1) {
+      vi.advanceTimersByTime(999);
+      ppgCallbacks.callbacks.onIBI({
+        timestamp: second * 1_000 - 1,
+        interval: 1_000 + Math.sin(second / 3) * 20,
+        quality: 0.9,
+        provenance: { source: 'ppg', method: 'peak-detected' },
+      });
+      vi.advanceTimersByTime(1);
+    }
+    await wrapper.vm.$nextTick();
+
+    const measuringVm = wrapper.vm as unknown as { isMeasuring: boolean };
+    expect(measuringVm.isMeasuring).toBe(true);
+
+    for (let second = 309; second <= 310; second += 1) {
+      vi.advanceTimersByTime(999);
+      ppgCallbacks.callbacks.onIBI({
+        timestamp: second * 1_000 - 1,
+        interval: 1_000,
+        quality: 0.9,
+        provenance: { source: 'ppg', method: 'peak-detected' },
+      });
+      vi.advanceTimersByTime(1);
+    }
+    await wrapper.vm.$nextTick();
+
+    const vm = wrapper.vm as unknown as {
+      isMeasuring: boolean;
+      currentEligibility: { eligible: boolean; observedDurationSeconds: number };
+    };
+    expect(vm.isMeasuring).toBe(false);
+    expect(vm.currentEligibility.eligible).toBe(true);
+    expect(vm.currentEligibility.observedDurationSeconds).toBe(300);
+
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Save')!
+      .click();
+    await flushPromises();
+    expect(hrvStorageMock.saveMeasurement).toHaveBeenCalledWith(
+      expect.objectContaining({ durationSeconds: 300 })
+    );
+
+    wrapper.unmount();
+  });
+
+  it('caps Full Analysis overrun when a final beat stalls before the eligible window', async () => {
+    vi.useFakeTimers();
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    await wrapper.find('[data-testid="protocol-full-analysis"]').trigger('click');
+    await flushPromises();
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Start')!
+      .click();
+    await flushPromises();
+
+    const ppgStart = vi.mocked(ppgService.start);
+    const ppgCallbacks = ppgStart.mock.calls.at(-1)![0] as {
+      callbacks: { onIBI: (sample: IBISample) => void };
+    };
+    vi.advanceTimersByTime(1_999);
+    ppgCallbacks.callbacks.onIBI({
+      timestamp: 1_999,
+      interval: 1_000,
+      quality: 0.9,
+      provenance: { source: 'ppg', method: 'peak-detected' },
+    });
+    vi.advanceTimersByTime(1);
+    for (let second = 3; second <= 309; second += 1) {
+      vi.advanceTimersByTime(999);
+      ppgCallbacks.callbacks.onIBI({
+        timestamp: second * 1_000 - 1,
+        interval: 1_000,
+        quality: 0.9,
+        provenance: { source: 'ppg', method: 'peak-detected' },
+      });
+      vi.advanceTimersByTime(1);
+    }
+
+    vi.advanceTimersByTime(3_000);
+    await wrapper.vm.$nextTick();
+
+    const vm = wrapper.vm as unknown as {
+      isMeasuring: boolean;
+      elapsedSeconds: number;
+      showRecoveryActions: boolean;
+      permissionError: string;
+      currentEligibility: { eligible: boolean; observedDurationSeconds: number };
+    };
+    expect(vm.isMeasuring).toBe(false);
+    expect(vm.elapsedSeconds).toBe(312);
+    expect(vm.currentEligibility.eligible).toBe(false);
+    expect(vm.currentEligibility.observedDurationSeconds).toBe(299);
+    expect(vm.showRecoveryActions).toBe(true);
+    expect(vm.permissionError).toContain('too short');
+
+    wrapper.unmount();
+  });
+
+  it.each([
+    ['Quick Check', 'protocol-not-supported' as const, 'does not include a Poincaré plot'],
+    ['resonance trial', 'protocol-not-supported' as const, 'does not include a Poincaré plot'],
+    ['short recording', 'insufficient-data' as const, 'More clean pulse intervals are needed'],
+  ])(
+    'renders a reason-specific unavailable Poincaré state for %s',
+    async (_case, reason, message) => {
+      const wrapper = mount(LabTab, {
+        attachTo: document.body,
+        global: { stubs: { PoincarePlot: true } },
+      });
+      const vm = wrapper.vm as unknown as {
+        showResults: boolean;
+        currentAnalysis: HRVAnalysis;
+      };
+      vm.currentAnalysis = analysisWithPoincareUnavailable(reason);
+      vm.showResults = true;
+      await wrapper.vm.$nextTick();
+
+      expect(document.body.querySelector('poincare-plot-stub')).toBeNull();
+      expect(
+        document.body.querySelector('[data-testid="poincare-unavailable"]')?.textContent
+      ).toContain(message);
+
+      wrapper.unmount();
+    }
+  );
 
   it('keeps development diagnostics out of normal test and production UI', async () => {
     const wrapper = mount(LabTab, { attachTo: document.body });

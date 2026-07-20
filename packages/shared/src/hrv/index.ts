@@ -52,7 +52,10 @@ function normalizeIBISamples(samples: IBISample[]): {
   const finiteSamples = samples
     .filter(
       (sample) =>
-        Number.isFinite(sample.timestamp) && Number.isFinite(sample.interval) && sample.interval > 0
+        sample.provenance?.method === 'peak-detected' &&
+        Number.isFinite(sample.timestamp) &&
+        Number.isFinite(sample.interval) &&
+        sample.interval > 0
     )
     .map((sample) => ({
       ...sample,
@@ -119,15 +122,19 @@ export function analyzeHRV(samples: IBISample[], breathingRateBPM?: number): HRV
 
   // 5. Resonance metrics
   let resonance: MetricAvailability<ResonanceMetrics, ResonanceUnavailableReason>;
-  if (hasBreathingContext && cleanedIntervals.length >= 2) {
-    const spectrum = computedFrequencyDomain.available
-      ? computedFrequencyDomain.value.spectrum
-      : [];
-    resonance = availableMetric(
-      computeResonanceMetrics(cleanedIntervals, cleanedTimestamps, breathingRateBPM, spectrum)
-    );
-  } else if (hasBreathingContext) {
+  if (hasBreathingContext && cleanedIntervals.length < 2) {
     resonance = { available: false, reason: 'insufficient-data' };
+  } else if (hasBreathingContext && !computedFrequencyDomain.available) {
+    resonance = { available: false, reason: computedFrequencyDomain.reason };
+  } else if (hasBreathingContext && computedFrequencyDomain.available) {
+    resonance = availableMetric(
+      computeResonanceMetrics(
+        cleanedIntervals,
+        cleanedTimestamps,
+        breathingRateBPM,
+        computedFrequencyDomain.value.spectrum
+      )
+    );
   } else {
     resonance = { available: false, reason: 'missing-breathing-rate' };
   }

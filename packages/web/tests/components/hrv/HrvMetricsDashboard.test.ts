@@ -65,7 +65,8 @@ describe('HrvMetricsDashboard', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: null },
     });
-    expect(wrapper.text()).toContain('No HRV analysis data');
+    expect(wrapper.text()).toContain('No pulse variability analysis data');
+    expect(wrapper.text()).not.toContain('HRV');
   });
 
   it('renders with analysis data', () => {
@@ -82,11 +83,12 @@ describe('HrvMetricsDashboard', () => {
     expect(wrapper.text()).toContain('Heart Rate');
   });
 
-  it('displays Time-Domain HRV section header', () => {
+  it('uses pulse-variability-accurate copy for time-domain metrics', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: sampleAnalysis },
     });
-    expect(wrapper.text()).toContain('Time-Domain');
+    expect(wrapper.text()).toContain('Pulse Variability Metrics');
+    expect(wrapper.text()).not.toContain('Time-Domain HRV');
   });
 
   it('displays Frequency-Domain section header', () => {
@@ -279,5 +281,21 @@ describe('HrvMetricsDashboard', () => {
     expect(wrapper.text()).toContain('Resonance metrics unavailable');
     expect(wrapper.text()).toContain('paced breathing rate');
     expect(wrapper.text()).not.toContain('AMPLITUDE');
+  });
+
+  it('explains when resonance metrics lack spectral variability', () => {
+    const analysis: HRVAnalysis = {
+      ...sampleAnalysis,
+      resonance: {
+        available: false,
+        reason: 'no-variability' as const,
+      },
+    };
+
+    const wrapper = mount(HrvMetricsDashboard, { props: { analysis } });
+
+    expect(wrapper.text()).toContain('Resonance metrics unavailable');
+    expect(wrapper.text()).toContain('enough pulse-to-pulse variation');
+    expect(wrapper.text()).not.toContain('SMOOTHNESS');
   });
 });

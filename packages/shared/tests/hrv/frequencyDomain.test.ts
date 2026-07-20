@@ -231,6 +231,62 @@ describe('computeFrequencyDomainMetrics', () => {
     });
   });
 
+  it('keeps resonance unavailable when a constant trial cannot produce a spectrum', () => {
+    const analysis = analyzeHRV(
+      Array.from({ length: 121 }, (_, index) => ({
+        interval: 1_000,
+        timestamp: index * 1_000,
+        quality: 0.9,
+        provenance: { source: 'ppg' as const, method: 'peak-detected' as const },
+      })),
+      6
+    );
+
+    expect(analysis.frequencyDomain).toEqual({
+      available: false,
+      reason: 'protocol-not-supported',
+    });
+    expect(analysis.resonance).toEqual({
+      available: false,
+      reason: 'no-variability',
+    });
+    expect(analysis.resonance).not.toHaveProperty('value');
+  });
+
+  it('keeps resonance unavailable when a detected trial has fewer than two intervals', () => {
+    const analysis = analyzeHRV(
+      [
+        {
+          interval: 1_000,
+          timestamp: 0,
+          quality: 0.9,
+          provenance: { source: 'ppg', method: 'peak-detected' },
+        },
+      ],
+      6
+    );
+
+    expect(analysis.resonance).toEqual({ available: false, reason: 'insufficient-data' });
+  });
+
+  it('makes resonance available when a detected trial produces a valid spectrum', () => {
+    const { rrIntervals, timestamps } = generateSinusoidalRR(1_000, 50, 0.1, 121);
+    const analysis = analyzeHRV(
+      rrIntervals.map((interval, index) => ({
+        interval,
+        timestamp: timestamps[index],
+        quality: 0.9,
+        provenance: { source: 'ppg' as const, method: 'peak-detected' as const },
+      })),
+      6
+    );
+
+    expect(analysis.resonance.available).toBe(true);
+    if (!analysis.resonance.available) throw new Error('expected available resonance metrics');
+    expect(analysis.resonance.value.waveformSmoothness).toBeGreaterThan(0);
+    expect(analysis.resonance.value.lfPeakCount).toBeGreaterThan(0);
+  });
+
   it('detects dominant LF peak for 0.1 Hz oscillation (6 BPM breathing)', () => {
     // 0.1 Hz oscillation, 150 beats at base RR 1000ms
     const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);

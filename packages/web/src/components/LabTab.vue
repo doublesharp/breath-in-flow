@@ -109,7 +109,7 @@
           <!-- Duration slider -->
           <div v-if="prepProtocol" class="w-full max-w-xs mb-6">
             <label for="measurement-duration" class="mb-2 block text-xs font-medium text-white/60">
-              Measurement duration
+              Analyzed duration
             </label>
             <div class="flex justify-between items-baseline mb-1">
               <span class="text-lg font-bold text-white">{{ formatDuration(customDuration) }}</span>
@@ -123,7 +123,7 @@
               :min="minimumProtocolDuration"
               :max="prepProtocol.id === 'full-analysis' ? 600 : 300"
               step="30"
-              aria-label="Measurement duration"
+              aria-label="Analyzed duration"
               :aria-valuetext="formatDuration(customDuration)"
               class="w-full h-1.5 rounded-full appearance-none bg-white/10 accent-emerald-500"
             />
@@ -131,6 +131,12 @@
               <span>{{ formatDuration(minimumProtocolDuration) }}</span>
               <span>{{ formatDuration(prepProtocol.id === 'full-analysis' ? 600 : 300) }}</span>
             </div>
+            <p class="mt-2 text-[11px] text-white/45">
+              Analyzes {{ formatTimer(customDuration) }} after {{ formatTimer(captureDurationSeconds) }}–{{
+                formatTimer(maxCaptureDurationSeconds)
+              }}
+              of sensor capture.
+            </p>
           </div>
           <p v-else class="text-sm text-white/50 mb-6">Manual stop</p>
 
@@ -234,7 +240,9 @@
               <div class="text-xs text-white/50">{{ selectedProtocol ? selectedProtocol.name : 'Freeform' }}</div>
               <div class="text-2xl font-bold text-white font-mono">
                 {{ formatTimer(elapsedSeconds) }}
-                <span v-if="selectedProtocol" class="text-white/30 text-base">/ {{ formatTimer(customDuration) }}</span>
+                <span v-if="selectedProtocol" class="text-white/30 text-base"
+                  >/ {{ formatTimer(captureDurationSeconds) }}</span
+                >
               </div>
             </div>
             <SignalQualityIndicator
@@ -247,8 +255,9 @@
           <!-- Progress bar -->
           <div v-if="selectedProtocol" class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-3">
             <div
+              data-testid="measurement-progress"
               class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-1000"
-              :style="{ width: `${Math.min(100, (elapsedSeconds / customDuration) * 100)}%` }"
+              :style="{ width: `${Math.min(100, (elapsedSeconds / captureDurationSeconds) * 100)}%` }"
             />
           </div>
 
@@ -319,7 +328,18 @@
             :lf-peak="currentAnalysis.frequencyDomain.value.lfPeak"
             :hf-peak="currentAnalysis.frequencyDomain.value.hfPeak"
           />
-          <PoincarePlot :rr-intervals="currentAnalysis.raw.rrIntervals" />
+          <PoincarePlot v-if="currentAnalysis.poincare.available" :rr-intervals="currentAnalysis.raw.rrIntervals" />
+          <div
+            v-else
+            data-testid="poincare-unavailable"
+            class="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-white/60"
+            role="status"
+          >
+            <div class="font-medium text-amber-300">Poincaré plot unavailable</div>
+            <div class="mt-1 text-xs">
+              {{ poincareUnavailableMessage(currentAnalysis.poincare.reason) }}
+            </div>
+          </div>
 
           <div class="card-solid !p-4">
             <label class="text-sm font-medium text-white/80 block mb-2">Notes</label>
@@ -427,7 +447,7 @@ import {
   type MeasurementStartOutcome,
 } from '../services/measurementSession';
 import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
-import { analyzeHRV, finalizeMeasurement } from '@breath-in-flow/shared';
+import { analyzeHRV, finalizeMeasurement, MAX_PLAUSIBLE_IBI_MS } from '@breath-in-flow/shared';
 import { useHrvStorage } from '../composables/useHrvStorage';
 import type {
   AssessmentResult,
@@ -436,6 +456,7 @@ import type {
   IBISample,
   MeasurementProtocol,
   MeasurementEligibility,
+  PoincareUnavailableReason,
   SampleProvenance,
 } from '@breath-in-flow/shared';
 
@@ -515,7 +536,16 @@ const debugLog = ref<string[]>([]);
 const showDebug = ref(false);
 const debugControlsEnabled = import.meta.env.DEV && import.meta.env.MODE !== 'test';
 const showRecoveryActions = ref(false);
+const SETTLING_SECONDS = 5;
+const ENDING_SECONDS = 3;
+const CAPTURE_PADDING_SECONDS = SETTLING_SECONDS + ENDING_SECONDS;
 const minimumProtocolDuration = computed(() => prepProtocol.value?.duration ?? 30);
+const captureDurationSeconds = computed(() =>
+  prepProtocol.value !== null || (isMeasuring.value && selectedProtocol.value !== null)
+    ? customDuration.value + CAPTURE_PADDING_SECONDS
+    : customDuration.value
+);
+const maxCaptureDurationSeconds = computed(() => captureDurationSeconds.value + (2 * MAX_PLAUSIBLE_IBI_MS) / 1_000);
 const signalGuidance = computed(() => {
   if (hrDataPoints.value.length === 0 && sensorQuality.value <= 0) return 'Waiting for a pulse';
   if (sensorQuality.value < 0.35) {
@@ -548,8 +578,19 @@ async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementSt
     protocol,
     onElapsed: (seconds) => {
       elapsedSeconds.value = seconds;
-      if (selectedProtocol.value && seconds >= customDuration.value) {
-        stopMeasurement();
+      if (selectedProtocol.value && seconds >= captureDurationSeconds.value) {
+        const finalized = finalizeMeasurement(
+          measurementSession?.getResult().samples ?? [],
+          selectedProtocol.value.id as MeasurementProtocol,
+          {
+            settlingSeconds: SETTLING_SECONDS,
+            endingSeconds: ENDING_SECONDS,
+          }
+        );
+        const hasTargetAnalysisWindow = finalized.analyzedDurationSeconds >= customDuration.value;
+        if (hasTargetAnalysisWindow || seconds >= maxCaptureDurationSeconds.value) {
+          stopMeasurement();
+        }
       }
     },
     onStateChange: (state) => {
@@ -989,8 +1030,8 @@ function stopMeasurement() {
   const capturedSamples = measurementSession?.getResult().samples ?? [];
   const protocol = (selectedProtocol.value?.id as MeasurementProtocol | undefined) ?? 'freeform';
   const finalized = finalizeMeasurement(capturedSamples, protocol, {
-    settlingSeconds: 5,
-    endingSeconds: 3,
+    settlingSeconds: SETTLING_SECONDS,
+    endingSeconds: ENDING_SECONDS,
   });
   const sessionResult = measurementSession?.stop(finalized.samples);
   measurementSession = null;
@@ -1051,6 +1092,19 @@ function measurementEligibilityMessage(reasons: string[]): string {
   return 'There were not enough clean detected beats for a reliable result. Reposition the sensor and try again.';
 }
 
+function poincareUnavailableMessage(reason: PoincareUnavailableReason): string {
+  if (reason === 'protocol-not-supported') {
+    return 'This protocol does not include a Poincaré plot.';
+  }
+  if (reason === 'insufficient-data' || reason === 'insufficient-beats') {
+    return 'More clean pulse intervals are needed before this plot can be calculated.';
+  }
+  if (reason === 'low-signal-quality' || reason === 'too-many-artifacts') {
+    return 'Signal quality was not stable enough for a Poincaré plot. Stay still and try again.';
+  }
+  return 'This recording did not provide a valid interval series for a Poincaré plot.';
+}
+
 async function saveResults() {
   if (!currentAnalysis.value) return;
   await hrvStorage.saveMeasurement({
@@ -1058,7 +1112,7 @@ async function saveResults() {
     type: (selectedProtocol.value?.id as 'quick-check' | 'full-analysis' | 'morning-readiness') ?? 'freeform',
     startedAt: measurementStartTime.value,
     completedAt: new Date(),
-    durationSeconds: elapsedSeconds.value,
+    durationSeconds: currentEligibility.value?.observedDurationSeconds ?? elapsedSeconds.value,
     sensorMode: selectedSensor.value,
     analysis: currentAnalysis.value,
     algorithmVersion: 2,

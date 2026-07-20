@@ -102,13 +102,14 @@ describe('preprocessIBI', () => {
 
 describe('analyzeHRV input normalization', () => {
   it('sorts IBI samples and drops duplicate or invalid timestamps before metrics', () => {
+    const provenance = { source: 'ppg' as const, method: 'peak-detected' as const };
     const result = analyzeHRV([
-      { timestamp: 3000, interval: 1000, quality: 0.8 },
-      { timestamp: 1000, interval: 1000, quality: 0.9 },
-      { timestamp: 2000, interval: 1000, quality: 0.7 },
-      { timestamp: 2000, interval: 900, quality: 0.6 },
-      { timestamp: Number.NaN, interval: 1000, quality: 1 },
-      { timestamp: 4000, interval: 1000, quality: 2 },
+      { timestamp: 3000, interval: 1000, quality: 0.8, provenance },
+      { timestamp: 1000, interval: 1000, quality: 0.9, provenance },
+      { timestamp: 2000, interval: 1000, quality: 0.7, provenance },
+      { timestamp: 2000, interval: 900, quality: 0.6, provenance },
+      { timestamp: Number.NaN, interval: 1000, quality: 1, provenance },
+      { timestamp: 4000, interval: 1000, quality: 2, provenance },
     ]);
 
     expect(result.raw.timestamps).toEqual([1000, 2000, 3000, 4000]);
@@ -121,5 +122,29 @@ describe('analyzeHRV input normalization', () => {
       available: false,
       reason: 'duration-too-short',
     });
+  });
+
+  it.each([
+    ['missing provenance', undefined],
+    [
+      'autocorrelation estimate',
+      { source: 'ppg' as const, method: 'autocorrelation-estimate' as const },
+    ],
+    ['unknown non-peak method', { source: 'ppg' as const, method: 'estimated' as 'peak-detected' }],
+  ])('rejects %s at the public analysis boundary', (_label, provenance) => {
+    const result = analyzeHRV(
+      Array.from({ length: 5 }, (_, index) => ({
+        timestamp: index * 1_000,
+        interval: 1_000 + index,
+        quality: 0.9,
+        provenance,
+      }))
+    );
+
+    expect(result.raw.timestamps).toEqual([]);
+    expect(result.raw.rrIntervals).toEqual([]);
+    expect(result.quality.totalSamples).toBe(5);
+    expect(result.quality.artifactsDetected).toBe(5);
+    expect(result.poincare).toEqual({ available: false, reason: 'insufficient-data' });
   });
 });

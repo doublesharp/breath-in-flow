@@ -47,6 +47,17 @@ describe('finalizeMeasurement', () => {
     expect(result.eligibility.reasons).toContain('duration-too-short');
   });
 
+  it('returns zero analyzed duration for a retained singleton sample', () => {
+    const sample = detectedSamplesSpanning(0);
+
+    const result = finalizeMeasurement(sample, 'quick-check');
+
+    expect(result.samples).toEqual(sample);
+    expect(result.analyzedDurationSeconds).toBe(0);
+    expect(result.eligibility.eligible).toBe(false);
+    expect(result.eligibility.detectedBeatCount).toBe(1);
+  });
+
   it('treats non-finite and negative trim options as zero', () => {
     const samples = detectedSamplesSpanning(60);
     const result = finalizeMeasurement(samples, 'quick-check', {
