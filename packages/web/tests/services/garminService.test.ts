@@ -389,6 +389,26 @@ describe('GarminService', () => {
       expect(newService.isConnected()).toBe(false); // Should default to false
     });
 
+    it('ignores malformed localStorage connection state', () => {
+      mockStorage['garmin_connection'] = JSON.stringify({
+        connected: 'true',
+        mockMode: 'yes',
+        lastSync: 123,
+      });
+
+      const newService = new GarminService();
+
+      expect(newService.isConnected()).toBe(false);
+      expect(
+        (newService as unknown as { connectionData: { mockMode: boolean; lastSync?: string } })
+          .connectionData.mockMode
+      ).toBe(true);
+      expect(
+        (newService as unknown as { connectionData: { lastSync?: string } }).connectionData
+          .lastSync
+      ).toBeUndefined();
+    });
+
     it('returns empty arrays when not connected', async () => {
       // Ensure disconnected
       await service.disconnect();
@@ -445,6 +465,24 @@ describe('GarminService', () => {
 
       expect(biometrics.averages.preStress).toBeUndefined();
       expect(biometrics.averages.stressReduction).toBeUndefined();
+    });
+
+    it('calculates stress reduction when the pre-session stress is zero', async () => {
+      vi.spyOn(service, 'getStressData')
+        .mockResolvedValueOnce([{ timestamp: new Date(), value: 0, source: 'garmin' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ timestamp: new Date(), value: 12, source: 'garmin' }]);
+      vi.spyOn(service, 'getHeartRateData').mockResolvedValue([]);
+      vi.spyOn(service, 'getHRVData').mockResolvedValue([]);
+
+      const start = new Date();
+      const end = new Date(start.getTime() + 1000);
+
+      const biometrics = await service.getSessionBiometrics(start, end);
+
+      expect(biometrics.averages.preStress).toBe(0);
+      expect(biometrics.averages.postStress).toBe(12);
+      expect(biometrics.averages.stressReduction).toBe(-12);
     });
 
     it('generates mock data with time modifiers (daytime stress)', async () => {

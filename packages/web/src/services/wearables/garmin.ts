@@ -20,32 +20,51 @@ interface GarminConnectionData {
   mockMode: boolean;
 }
 
+const DEFAULT_CONNECTION_DATA: GarminConnectionData = {
+  connected: false,
+  mockMode: true,
+};
+
 export class GarminService implements WearableService {
   providerId = 'garmin';
   providerName = 'Garmin Connect';
 
-  private connectionData: GarminConnectionData = {
-    connected: false,
-    mockMode: true, // Use mock data until real OAuth is implemented
-  };
+  private connectionData: GarminConnectionData = { ...DEFAULT_CONNECTION_DATA };
 
   constructor() {
     this.loadConnectionState();
   }
 
+  private getStorage(): Storage | null {
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage;
+  }
+
   private loadConnectionState(): void {
-    const stored = localStorage.getItem(GARMIN_STORAGE_KEY);
-    if (stored) {
-      try {
-        this.connectionData = JSON.parse(stored);
-      } catch {
-        // Invalid data, use defaults
-      }
+    const storage = this.getStorage();
+    if (!storage) return;
+
+    try {
+      const stored = storage.getItem(GARMIN_STORAGE_KEY);
+      if (!stored) return;
+
+      const parsed = JSON.parse(stored) as Partial<GarminConnectionData>;
+      this.connectionData = {
+        connected: parsed.connected === true,
+        mockMode: typeof parsed.mockMode === 'boolean' ? parsed.mockMode : true,
+        lastSync: typeof parsed.lastSync === 'string' ? parsed.lastSync : undefined,
+      };
+    } catch {
+      this.connectionData = { ...DEFAULT_CONNECTION_DATA };
     }
   }
 
   private saveConnectionState(): void {
-    localStorage.setItem(GARMIN_STORAGE_KEY, JSON.stringify(this.connectionData));
+    try {
+      this.getStorage()?.setItem(GARMIN_STORAGE_KEY, JSON.stringify(this.connectionData));
+    } catch {
+      // Persistence is best-effort; connection state remains available in memory.
+    }
   }
 
   isConnected(): boolean {
@@ -279,7 +298,10 @@ export class GarminService implements WearableService {
       averages: {
         preStress: avgPreStress,
         postStress: avgPostStress,
-        stressReduction: avgPreStress && avgPostStress ? avgPreStress - avgPostStress : undefined,
+        stressReduction:
+          avgPreStress !== undefined && avgPostStress !== undefined
+            ? avgPreStress - avgPostStress
+            : undefined,
         preHR: avgPreHR,
         postHR: avgPostHR,
         preHRV: avgPreHRV,
