@@ -20,6 +20,12 @@ const completeLineAndFunctionThresholds = {
   functions: 100,
 };
 
+const guidedAudioThresholds = {
+  lines: 95,
+  branches: 80,
+  functions: 85,
+};
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -47,15 +53,17 @@ export default defineConfig({
         'build/',
       ],
       thresholds: {
-        statements: 80,
-        lines: 80,
-        branches: 70,
-        functions: 75,
+        statements: 89,
+        lines: 91,
+        branches: 81,
+        functions: 86,
         'src/services/measurementSession.ts': sensorServiceThresholds,
         'src/services/permissionService.ts': sensorServiceThresholds,
         'src/services/ppgService.ts': sensorServiceThresholds,
         'src/services/scgService.ts': sensorServiceThresholds,
         'src/services/sensorFusion.ts': sensorServiceThresholds,
+        'src/services/soundService.ts': guidedAudioThresholds,
+        'src/services/ttsService.ts': guidedAudioThresholds,
         'src/components/LabTab.vue': labComponentThresholds,
         'src/components/ResonanceAssessment.vue': labComponentThresholds,
         'src/composables/useAppLifecycle.ts': completeLineAndFunctionThresholds,
@@ -63,6 +71,7 @@ export default defineConfig({
         'src/services/adaptiveMotionGate.ts': completeLineAndFunctionThresholds,
         'src/utils/hrvAnalysisValidation.ts': completeLineAndFunctionThresholds,
         'src/utils/measurementTrends.ts': completeLineAndFunctionThresholds,
+        'src/utils/storageSerialization.ts': completeLineAndFunctionThresholds,
         'src/utils/storedRecordValidation.ts': completeLineAndFunctionThresholds,
       },
     },
