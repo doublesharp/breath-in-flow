@@ -79,6 +79,7 @@ describe('useStorage', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.resetModules();
     Object.defineProperty(globalThis, 'localStorage', {
       value: originalLocalStorage,
@@ -340,6 +341,20 @@ describe('useStorage', () => {
       expect(completed).toBeDefined();
       expect(completed?.status).toBe('COMPLETED');
       expect(completed?.completedAt).toBeInstanceOf(Date);
+    });
+
+    it('keeps the original completion timestamp when completion is requested twice', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-07-20T12:00:00.000Z'));
+      const storage = useStorage();
+      const session = storage.createSession(testConfig);
+
+      const firstCompletion = storage.completeSession(session.id!);
+      vi.setSystemTime(new Date('2026-07-20T12:05:00.000Z'));
+      const secondCompletion = storage.completeSession(session.id!);
+
+      expect(secondCompletion?.completedAt).toEqual(firstCompletion?.completedAt);
+      expect(secondCompletion?.completedAt).toEqual(new Date('2026-07-20T12:00:00.000Z'));
     });
 
     it('should cancel a session', () => {

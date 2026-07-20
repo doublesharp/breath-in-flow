@@ -1040,6 +1040,7 @@ import { useHrvStorage } from '../composables/useHrvStorage';
 import {
   DEFAULT_BREATHING_CONFIG,
   BreathingConfigSchema,
+  CreateBreathingConfigSchema,
   formatTime,
   type BreathingConfig,
   type Session,
@@ -1538,7 +1539,9 @@ function startNextSet() {
 }
 
 function finishSession() {
-  if (currentSession.value) {
+  // Automatic target-set completion is persisted by onSessionComplete. Manual
+  // finishes from SET_COMPLETE/SET_REST still need to finalize the session.
+  if (currentSession.value && timer.phase.value !== 'SESSION_COMPLETE') {
     storage.completeSession(currentSession.value.id!);
   }
   timer.stop();
@@ -1582,7 +1585,7 @@ function saveConfig() {
 
   // Save the new config
   storage.createConfig({
-    ...validatedConfig,
+    ...CreateBreathingConfigSchema.parse(validatedConfig),
     name: configName.value.trim(),
   });
 
@@ -1601,19 +1604,19 @@ function confirmOverwrite() {
     return;
   }
 
-  // Find and delete the existing config
+  // Preserve the preset identity so historical sessions keep their config link.
   const existingConfigs = storage.getAllConfigs();
   const existingConfig = existingConfigs?.find((c) => c.name.toLowerCase() === configName.value.trim().toLowerCase());
+  const updatedConfig = {
+    ...CreateBreathingConfigSchema.parse(validatedConfig),
+    name: configName.value.trim(),
+  };
 
   if (existingConfig?.id) {
-    storage.deleteConfig(existingConfig.id);
+    storage.updateConfig(existingConfig.id, updatedConfig);
+  } else {
+    storage.createConfig(updatedConfig);
   }
-
-  // Save the new config
-  storage.createConfig({
-    ...validatedConfig,
-    name: configName.value.trim(),
-  });
 
   successMessage.value = 'Configuration saved!';
   showSuccessNotification.value = true;

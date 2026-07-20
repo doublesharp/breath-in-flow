@@ -101,6 +101,30 @@ describe('App.vue', () => {
     removeListener.mockRestore();
   });
 
+  it('uses the restored scroll position so the first upward gesture keeps navigation visible', async () => {
+    Object.defineProperty(window, 'scrollY', { value: 500, configurable: true });
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          BreathingPractice: true,
+          SessionHistory: true,
+          PracticePresets: true,
+          AnalyticsDashboard: true,
+          LabTab: true,
+          HelpSystem: true,
+        },
+      },
+    });
+
+    Object.defineProperty(window, 'scrollY', { value: 470, configurable: true });
+    window.dispatchEvent(new Event('scroll'));
+    await nextTick();
+
+    expect(wrapper.find('header').classes()).toContain('translate-y-0');
+    wrapper.unmount();
+    Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
+  });
+
   it('switches between all tabs', async () => {
     const wrapper = mount(App, {
       global: {

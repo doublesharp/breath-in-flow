@@ -224,6 +224,9 @@ export function useStorage() {
   }
 
   function completeSession(id: string): Session | undefined {
+    const session = getSession(id);
+    if (!session || session.status === 'COMPLETED') return session;
+
     return updateSession(id, {
       status: 'COMPLETED',
       completedAt: new Date(),

@@ -417,7 +417,10 @@ function onScroll() {
   lastScrollY = currentY;
 }
 
-onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }));
+onMounted(() => {
+  lastScrollY = window.scrollY;
+  window.addEventListener('scroll', onScroll, { passive: true });
+});
 onUnmounted(() => window.removeEventListener('scroll', onScroll));
 
 function loadConfig(config: BreathingConfig) {

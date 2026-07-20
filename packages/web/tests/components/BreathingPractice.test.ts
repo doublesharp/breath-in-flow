@@ -38,6 +38,7 @@ const completeSessionMock = vi.fn();
 const cancelSessionMock = vi.fn();
 const updateSessionMock = vi.fn();
 const createConfigMock = vi.fn();
+const updateConfigMock = vi.fn();
 const deleteConfigMock = vi.fn();
 const deleteSessionMock = vi.fn();
 const getAllConfigsMock = vi.fn(() => [] as Array<{ id?: string; name: string }>);
@@ -76,6 +77,7 @@ vi.mock('@/composables/useStorage', () => ({
     cancelSession: cancelSessionMock,
     updateSession: updateSessionMock,
     createConfig: createConfigMock,
+    updateConfig: updateConfigMock,
     deleteConfig: deleteConfigMock,
     deleteSession: deleteSessionMock,
     getSoundTheme: vi.fn(() => 'wood'),
@@ -517,6 +519,7 @@ describe('BreathingPractice.vue', () => {
         completedRepetitions: number;
         extendedHolds: Array<Record<string, unknown>>;
       };
+      finishSession: () => void;
       startExercise: () => void;
     };
     vm.config.extendedHoldMode = 'TIMED';
@@ -533,10 +536,13 @@ describe('BreathingPractice.vue', () => {
     onRepetitionComplete(4);
     onExtendedHoldEnd(24.6, 'EXHALE');
     onSetComplete();
+    timerPhase.value = 'SESSION_COMPLETE';
     onSessionComplete();
+    const completedSet = vm.currentSetData;
+    vm.finishSession();
 
-    expect(vm.currentSetData.completedRepetitions).toBe(4);
-    expect(vm.currentSetData.extendedHolds[0]).toMatchObject({
+    expect(completedSet.completedRepetitions).toBe(4);
+    expect(completedSet.extendedHolds[0]).toMatchObject({
       type: 'EXHALE',
       mode: 'TIMED',
       targetDuration: 25,
@@ -546,6 +552,7 @@ describe('BreathingPractice.vue', () => {
       'session-recording',
       expect.objectContaining({ completedRepetitions: 4 })
     );
+    expect(completeSessionMock).toHaveBeenCalledOnce();
     expect(completeSessionMock).toHaveBeenCalledWith('session-recording');
   });
 
@@ -606,11 +613,15 @@ describe('BreathingPractice.vue', () => {
       },
     });
     const vm = wrapper.vm as unknown as {
+      config: { id?: string; createdAt?: Date; updatedAt?: Date };
       configName: string;
       showOverwriteConfirmation: boolean;
       saveConfig: () => void;
       confirmOverwrite: () => void;
     };
+    vm.config.id = '11111111-1111-4111-8111-111111111111';
+    vm.config.createdAt = new Date('2026-07-19T08:00:00.000Z');
+    vm.config.updatedAt = new Date('2026-07-20T08:00:00.000Z');
     vm.configName = ' evening reset ';
 
     vm.saveConfig();
@@ -618,10 +629,16 @@ describe('BreathingPractice.vue', () => {
     expect(createConfigMock).not.toHaveBeenCalled();
 
     vm.confirmOverwrite();
-    expect(deleteConfigMock).toHaveBeenCalledWith('preset-old');
-    expect(createConfigMock).toHaveBeenCalledWith(
+    expect(updateConfigMock).toHaveBeenCalledWith(
+      'preset-old',
       expect.objectContaining({ name: 'evening reset' })
     );
+    expect(deleteConfigMock).not.toHaveBeenCalled();
+    expect(createConfigMock).not.toHaveBeenCalled();
+    const updatePayload = updateConfigMock.mock.calls[0]?.[1];
+    expect(updatePayload).not.toHaveProperty('id');
+    expect(updatePayload).not.toHaveProperty('createdAt');
+    expect(updatePayload).not.toHaveProperty('updatedAt');
   });
 
   it('confirmExit does not stop session on cancel', async () => {
