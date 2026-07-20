@@ -193,4 +193,43 @@ describe('PracticePresets.vue', () => {
       expect(emitted).toBeDefined();
     }
   });
+
+  it('shows diaphragm resistance guidance and emits only its validated breathing config', async () => {
+    vi.resetModules();
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({ getAllConfigs: () => [] }),
+    }));
+
+    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
+    const wrapper = mount(PracticePresets as unknown);
+
+    expect(wrapper.text()).toContain('Diaphragm Resistance Training — Starter');
+    const guidanceButton = wrapper.get('[data-testid="guidance-diaphragm-resistance-starter"]');
+    expect(guidanceButton.attributes('aria-expanded')).toBe('false');
+
+    await guidanceButton.trigger('click');
+
+    expect(guidanceButton.attributes('aria-expanded')).toBe('true');
+    expect(wrapper.text()).toContain('Endurance');
+    expect(wrapper.text()).toContain('Strengthening');
+    expect(wrapper.text()).toContain('Stop for dizziness');
+    expect(wrapper.text()).toContain('purpose-designed inspiratory resistance trainer');
+
+    await wrapper.get('[data-testid="load-diaphragm-resistance-starter"]').trigger('click');
+    const emittedConfig = wrapper.emitted('loadConfig')?.at(-1)?.[0] as Record<string, unknown>;
+
+    expect(emittedConfig).toMatchObject({
+      name: 'Diaphragm Resistance Training — Starter',
+      inhaleTime: 3,
+      inhaleHoldTime: 1,
+      exhaleTime: 4,
+      exhaleHoldTime: 1,
+      repetitions: 10,
+      targetSets: 2,
+      restBetweenSetsSeconds: 60,
+      extendedHoldEnabled: false,
+    });
+    expect(emittedConfig.guidance).toBeUndefined();
+    expect(emittedConfig.description).toBeUndefined();
+  });
 });

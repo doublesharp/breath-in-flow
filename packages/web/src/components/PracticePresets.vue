@@ -210,17 +210,16 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <button
+        <article
           v-for="preset in presets"
-          :key="preset.name"
-          @click="$emit('loadConfig', preset)"
-          class="text-left glass rounded-xl p-5 hover:bg-white/10 hover:scale-[1.02] transition-all duration-300 group"
+          :key="preset.id"
+          class="glass rounded-xl p-5 transition-colors duration-300 hover:bg-white/10"
         >
-          <div class="font-semibold text-white group-hover:text-blue-400 transition-colors">
-            {{ preset.name }}
+          <div class="font-semibold text-white">
+            {{ preset.config.name }}
           </div>
           <div class="text-sm text-slate-400 mt-1">{{ preset.description }}</div>
-          <div class="flex items-center gap-4 text-xs text-slate-500 mt-3">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400 mt-3">
             <span class="flex items-center gap-1">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -231,7 +230,10 @@
               >
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
               </svg>
-              {{ preset.inhaleTime }}s in
+              {{ preset.config.inhaleTime }}s in
+            </span>
+            <span v-if="preset.config.inhaleHoldTime" class="text-amber-300">
+              {{ preset.config.inhaleHoldTime }}s hold
             </span>
             <span class="flex items-center gap-1">
               <svg
@@ -243,7 +245,10 @@
               >
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
-              {{ preset.exhaleTime }}s out
+              {{ preset.config.exhaleTime }}s out
+            </span>
+            <span v-if="preset.config.exhaleHoldTime" class="text-amber-300">
+              {{ preset.config.exhaleHoldTime }}s hold
             </span>
             <span class="flex items-center gap-1">
               <svg
@@ -260,10 +265,76 @@
                   d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                 />
               </svg>
-              {{ preset.repetitions }} reps
+              {{ preset.config.repetitions }} reps
+            </span>
+            <span v-if="preset.config.targetSets > 0">{{ preset.config.targetSets }} sets</span>
+            <span v-if="preset.config.restBetweenSetsSeconds > 0">
+              {{ preset.config.restBetweenSetsSeconds }}s rest
             </span>
           </div>
-        </button>
+
+          <div class="mt-5 flex flex-wrap gap-3">
+            <button
+              :data-testid="`load-${preset.id}`"
+              class="btn-primary min-h-11 px-4 py-2"
+              @click="loadPreset(preset)"
+            >
+              Use routine
+            </button>
+            <button
+              v-if="preset.guidance"
+              :data-testid="`guidance-${preset.id}`"
+              class="btn-secondary min-h-11 px-4 py-2"
+              :aria-expanded="expandedGuidanceId === preset.id"
+              :aria-controls="`guidance-panel-${preset.id}`"
+              @click="toggleGuidance(preset.id)"
+            >
+              {{ expandedGuidanceId === preset.id ? 'Hide guidance' : 'How to use' }}
+            </button>
+          </div>
+
+          <section
+            v-if="preset.guidance && expandedGuidanceId === preset.id"
+            :id="`guidance-panel-${preset.id}`"
+            class="mt-5 space-y-4 border-t border-white/10 pt-5 text-sm text-slate-300"
+            role="region"
+            :aria-label="`${preset.config.name} guidance`"
+          >
+            <p>{{ preset.guidance.purpose }}</p>
+
+            <div>
+              <h4 class="font-semibold text-white">Set up</h4>
+              <ul class="mt-2 list-disc space-y-1 pl-5">
+                <li v-for="item in preset.guidance.setup" :key="item">{{ item }}</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 class="font-semibold text-white">Technique</h4>
+              <ol class="mt-2 list-decimal space-y-1 pl-5">
+                <li v-for="item in preset.guidance.steps" :key="item">{{ item }}</li>
+              </ol>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="rounded-lg bg-white/5 p-3">
+                <h4 class="font-semibold text-teal-200">Endurance</h4>
+                <p class="mt-1">{{ preset.guidance.progression.endurance }}</p>
+              </div>
+              <div class="rounded-lg bg-white/5 p-3">
+                <h4 class="font-semibold text-amber-200">Strengthening</h4>
+                <p class="mt-1">{{ preset.guidance.progression.strengthening }}</p>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-amber-400/20 bg-amber-500/10 p-3">
+              <h4 class="font-semibold text-amber-100">Precautions</h4>
+              <ul class="mt-2 list-disc space-y-1 pl-5">
+                <li v-for="item in preset.guidance.precautions" :key="item">{{ item }}</li>
+              </ul>
+            </div>
+          </section>
+        </article>
       </div>
     </div>
   </div>
@@ -272,9 +343,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useStorage } from '../composables';
-import { DEFAULT_BREATHING_CONFIG, type BreathingConfig } from '@breath-in-flow/shared';
+import type { BreathingConfig } from '@breath-in-flow/shared';
+import { guidedPresets, presetConfig, type GuidedPreset } from '../data/guidedPresets';
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'loadConfig', config: BreathingConfig): void;
 }>();
 
@@ -284,108 +356,16 @@ const configs = computed(() => storage.getAllConfigs());
 const showDeleteConfirmation = ref(false);
 const configToDelete = ref<BreathingConfig | null>(null);
 
-interface Preset extends BreathingConfig {
-  description: string;
+const presets = guidedPresets;
+const expandedGuidanceId = ref<string | null>(null);
+
+function loadPreset(preset: GuidedPreset) {
+  emit('loadConfig', presetConfig(preset));
 }
 
-const presets: Preset[] = [
-  {
-    ...DEFAULT_BREATHING_CONFIG,
-    name: 'Box Breathing',
-    description: 'Equal inhale, hold, exhale, hold - great for relaxation',
-    inhaleTime: 4,
-    inhaleHoldTime: 4,
-    exhaleTime: 4,
-    exhaleHoldTime: 4,
-    repetitions: 4,
-    extendedHoldEnabled: false,
-    targetSets: 0,
-    soundEnabled: true,
-    soundTheme: 'subtle',
-    ttsEnabled: true,
-  },
-  {
-    ...DEFAULT_BREATHING_CONFIG,
-    name: '4-7-8 Relaxation',
-    description: 'Classic relaxation technique',
-    inhaleTime: 4,
-    inhaleHoldTime: 7,
-    exhaleTime: 8,
-    exhaleHoldTime: 0,
-    repetitions: 4,
-    extendedHoldEnabled: false,
-    targetSets: 0,
-    soundEnabled: true,
-    soundTheme: 'chimes',
-    ttsEnabled: true,
-  },
-  {
-    ...DEFAULT_BREATHING_CONFIG,
-    name: 'Cyclic Hyperventilation Method',
-    description: 'Fast breathing with extended exhale hold',
-    inhaleTime: 2,
-    inhaleHoldTime: 0,
-    exhaleTime: 2,
-    exhaleHoldTime: 0,
-    repetitions: 30,
-    extendedHoldEnabled: true,
-    extendedHoldType: 'EXHALE',
-    extendedHoldMode: 'TOLERANCE',
-    secondExtendedHoldEnabled: true,
-    secondExtendedHoldType: 'INHALE',
-    secondExtendedHoldMode: 'TIMED',
-    secondExtendedHoldDuration: 15,
-    targetSets: 3,
-    soundEnabled: true,
-    soundTheme: 'wind',
-    ttsEnabled: true,
-  },
-  {
-    ...DEFAULT_BREATHING_CONFIG,
-    name: 'Coherent Breathing',
-    description: '5-second inhale and exhale for heart coherence',
-    inhaleTime: 5,
-    inhaleHoldTime: 0,
-    exhaleTime: 5,
-    exhaleHoldTime: 0,
-    repetitions: 6,
-    extendedHoldEnabled: false,
-    targetSets: 0,
-    soundEnabled: true,
-    soundTheme: 'water',
-    ttsEnabled: true,
-  },
-  {
-    ...DEFAULT_BREATHING_CONFIG,
-    name: 'Altitude Adapted 3-5-7',
-    description: 'Shorter hold for high altitude - reduces oxygen debt',
-    inhaleTime: 3,
-    inhaleHoldTime: 5,
-    exhaleTime: 7,
-    exhaleHoldTime: 0,
-    repetitions: 6,
-    extendedHoldEnabled: false,
-    targetSets: 0,
-    soundEnabled: true,
-    soundTheme: 'wood',
-    ttsEnabled: true,
-  },
-  {
-    ...DEFAULT_BREATHING_CONFIG,
-    name: 'Stress Relief (Quick)',
-    description: '2-minute calming session',
-    inhaleTime: 4,
-    inhaleHoldTime: 2,
-    exhaleTime: 6,
-    exhaleHoldTime: 0,
-    repetitions: 8,
-    extendedHoldEnabled: false,
-    targetSets: 1,
-    soundEnabled: true,
-    soundTheme: 'water',
-    ttsEnabled: true,
-  },
-];
+function toggleGuidance(id: string) {
+  expandedGuidanceId.value = expandedGuidanceId.value === id ? null : id;
+}
 
 function formatDate(date?: Date): string {
   if (!date) return '';
