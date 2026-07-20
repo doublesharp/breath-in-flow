@@ -99,6 +99,12 @@ function generateSCGSequence(
   return { samples, beatIndices };
 }
 
+function bypassMotionGateForSignalProcessingTests(): void {
+  (scgService as unknown as TestSCGService).motionGate = {
+    addSample: () => ({ accepted: true }),
+  };
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('scgService', () => {
@@ -229,6 +235,7 @@ describe('scgService', () => {
   describe('signal processing', () => {
     it('detects heartbeat peaks and emits IBI samples for synthetic 60 BPM signal', async () => {
       await scgService.start();
+      bypassMotionGateForSignalProcessingTests();
 
       const SAMPLE_RATE = 100; // Hz
       const INTERVAL_MS = 1000 / SAMPLE_RATE; // 10 ms
@@ -255,6 +262,7 @@ describe('scgService', () => {
 
     it('detects heartbeats at 80 BPM (IBI ≈ 750 ms)', async () => {
       await scgService.start();
+      bypassMotionGateForSignalProcessingTests();
 
       const SAMPLE_RATE = 100;
       const INTERVAL_MS = 1000 / SAMPLE_RATE;
@@ -366,6 +374,29 @@ describe('scgService', () => {
       expect(peakDetector.addSample).toHaveBeenCalledTimes(2);
     });
 
+    it('rejects sub-2g movement after learning a 1g resting baseline', () => {
+      const service = scgService as unknown as TestSCGService;
+      const identityFilter = { filter: (value: number) => value };
+      const peakDetector = { addSample: vi.fn().mockReturnValue(null) };
+
+      service.axisCalibrated = true;
+      service.rateEstimated = true;
+      service.sampleRateHz = 100;
+      service.hpFilter = identityFilter;
+      service.lpFilter = identityFilter;
+      service.peakDetector = peakDetector;
+
+      for (let index = 0; index < 12; index++) {
+        service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 1 }, 10));
+      }
+      peakDetector.addSample.mockClear();
+
+      service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 1.5 }, 10));
+      service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 1.005 }, 10));
+
+      expect(peakDetector.addSample).toHaveBeenCalledOnce();
+    });
+
     it('reports autocorrelation as a heart-rate estimate without fabricating IBIs', () => {
       const service = scgService as unknown as TestSCGService;
 
@@ -390,6 +421,7 @@ describe('scgService', () => {
       // With the HP filter the respiratory component should be attenuated enough
       // that heartbeats are still detected.
       await scgService.start();
+      bypassMotionGateForSignalProcessingTests();
 
       const SAMPLE_RATE = 100;
       const INTERVAL_MS = 1000 / SAMPLE_RATE;
@@ -428,6 +460,7 @@ describe('scgService', () => {
       // Run enough beats to trigger template construction (needs ≥5 peaks),
       // then continue; the IBI count should keep growing.
       await scgService.start();
+      bypassMotionGateForSignalProcessingTests();
 
       const SAMPLE_RATE = 100;
       const INTERVAL_MS = 1000 / SAMPLE_RATE;
@@ -453,6 +486,7 @@ describe('scgService', () => {
 
     it('IBI detection remains accurate after template construction', async () => {
       await scgService.start();
+      bypassMotionGateForSignalProcessingTests();
 
       const SAMPLE_RATE = 100;
       const INTERVAL_MS = 1000 / SAMPLE_RATE;

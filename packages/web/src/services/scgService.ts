@@ -648,10 +648,7 @@ class SCGService {
     const magnitude = Math.sqrt(x * x + y * y + z * z);
     if (!Number.isFinite(magnitude)) return Number.NaN;
 
-    // Gravity-bearing samples provide a stable device-scale reference. Browser
-    // fallbacks sometimes omit gravity; do not mistake their tiny cardiac-only
-    // signal for whole-device movement before it reaches the SCG detector.
-    return magnitude >= 2 ? magnitude : 0;
+    return magnitude;
   }
 
   private estimateSampleRateFromWallClock(): void {

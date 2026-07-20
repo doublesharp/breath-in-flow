@@ -6,8 +6,13 @@ import {
 } from '../../src/services/sensorFusion';
 import type { IBISample } from '@breath-in-flow/shared';
 
-function makeSample(timestamp: number, interval: number, quality: number): IBISample {
-  return { timestamp, interval, quality };
+function makeSample(
+  timestamp: number,
+  interval: number,
+  quality: number,
+  source: 'ppg' | 'scg'
+): IBISample {
+  return { timestamp, interval, quality, provenance: { source, method: 'peak-detected' } };
 }
 
 function createRng(seed: number): () => number {
@@ -39,8 +44,8 @@ describe('SensorFusionService', () => {
       onFusedIBI: (s) => emitted.push(s),
     });
 
-    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8));
-    sensorFusionService.addSCGSample(makeSample(1050, 810, 0.7));
+    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8, 'ppg'));
+    sensorFusionService.addSCGSample(makeSample(1050, 810, 0.7, 'scg'));
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].source).toBe('fused');
@@ -50,6 +55,36 @@ describe('SensorFusionService', () => {
     });
   });
 
+  it.each([
+    ['missing', undefined],
+    ['estimated', { source: 'ppg' as const, method: 'autocorrelation-estimate' as const }],
+    ['wrong-source', { source: 'scg' as const, method: 'peak-detected' as const }],
+  ])('rejects %s PPG provenance without upgrading or queueing it', (_label, provenance) => {
+    const service = createSensorFusionService();
+    const emitted: FusedIBISample[] = [];
+    service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    service.addPPGSample({ timestamp: 1_000, interval: 800, quality: 0.8, provenance });
+    vi.advanceTimersByTime(200);
+
+    expect(emitted).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps an unmatched event through the offset-discovery horizon', () => {
+    const service = createSensorFusionService();
+    const emitted: FusedIBISample[] = [];
+    service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    service.addSCGSample(makeSample(1_000, 800, 0.8, 'scg'));
+    vi.advanceTimersByTime(140);
+    expect(emitted).toHaveLength(0);
+
+    service.addPPGSample(makeSample(1_140, 805, 0.8, 'ppg'));
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].source).toBe('fused');
+  });
+
   it.each([140, -120])('learns and applies a stable signed offset of %ims', (offset) => {
     const service = createSensorFusionService();
     const emitted: FusedIBISample[] = [];
@@ -57,8 +92,8 @@ describe('SensorFusionService', () => {
 
     for (let index = 0; index < 4; index++) {
       const scgTimestamp = 1_000 + index * 1_000;
-      service.addPPGSample(makeSample(scgTimestamp + offset, 800, 0.8));
-      service.addSCGSample(makeSample(scgTimestamp, 805, 0.8));
+      service.addPPGSample(makeSample(scgTimestamp + offset, 800, 0.8, 'ppg'));
+      service.addSCGSample(makeSample(scgTimestamp, 805, 0.8, 'scg'));
     }
 
     expect(emitted).toHaveLength(4);
@@ -73,8 +108,8 @@ describe('SensorFusionService', () => {
 
     [130, 140, 150, 160, 170].forEach((offset, index) => {
       const scgTimestamp = 1_000 + index * 1_000;
-      service.addSCGSample(makeSample(scgTimestamp, 800, 0.8));
-      service.addPPGSample(makeSample(scgTimestamp + offset, 805, 0.8));
+      service.addSCGSample(makeSample(scgTimestamp, 800, 0.8, 'scg'));
+      service.addPPGSample(makeSample(scgTimestamp + offset, 805, 0.8, 'ppg'));
     });
     vi.runOnlyPendingTimers();
 
@@ -88,8 +123,8 @@ describe('SensorFusionService', () => {
     const emitted: FusedIBISample[] = [];
     service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
 
-    service.addSCGSample(makeSample(1_000, 800, 0.8));
-    service.addPPGSample(makeSample(1_140, 805, 0.8));
+    service.addSCGSample(makeSample(1_000, 800, 0.8, 'scg'));
+    service.addPPGSample(makeSample(1_140, 805, 0.8, 'ppg'));
     vi.runOnlyPendingTimers();
 
     expect(emitted).toHaveLength(1);
@@ -101,10 +136,10 @@ describe('SensorFusionService', () => {
     const emitted: FusedIBISample[] = [];
     service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
 
-    service.addPPGSample(makeSample(1_000, 800, 0.8));
+    service.addPPGSample(makeSample(1_000, 800, 0.8, 'ppg'));
     vi.advanceTimersByTime(50);
-    service.addSCGSample(makeSample(2_000, 800, 0.8));
-    vi.advanceTimersByTime(51);
+    service.addSCGSample(makeSample(2_000, 800, 0.8, 'scg'));
+    vi.advanceTimersByTime(111);
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].source).toBe('ppg');
@@ -122,8 +157,8 @@ describe('SensorFusionService', () => {
 
     // PPG: quality=0.8, interval=800; SCG: quality=0.4, interval=810
     // weighted avg = (800*0.8 + 810*0.4) / (0.8+0.4) = (640+324)/1.2 = 964/1.2 ≈ 803.33
-    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8));
-    sensorFusionService.addSCGSample(makeSample(1050, 810, 0.4));
+    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8, 'ppg'));
+    sensorFusionService.addSCGSample(makeSample(1050, 810, 0.4, 'scg'));
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].source).toBe('fused');
@@ -139,8 +174,8 @@ describe('SensorFusionService', () => {
     });
 
     // Intervals differ by 50ms (>30ms) — PPG has higher quality
-    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.9));
-    sensorFusionService.addSCGSample(makeSample(1050, 850, 0.5));
+    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.9, 'ppg'));
+    sensorFusionService.addSCGSample(makeSample(1050, 850, 0.5, 'scg'));
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].source).toBe('fused');
@@ -154,12 +189,12 @@ describe('SensorFusionService', () => {
       onFusedIBI: (s) => emitted.push(s),
     });
 
-    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8));
+    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8, 'ppg'));
 
     expect(emitted).toHaveLength(0);
 
-    // Advance past the 100ms match window
-    vi.advanceTimersByTime(101);
+    // Before offset lock, retain candidates for the 160ms discovery horizon.
+    vi.advanceTimersByTime(161);
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].source).toBe('ppg');
@@ -174,8 +209,8 @@ describe('SensorFusionService', () => {
       onFusedIBI: (s) => emitted.push(s),
     });
 
-    sensorFusionService.addSCGSample(makeSample(1000, 800, 0.7));
-    vi.advanceTimersByTime(101);
+    sensorFusionService.addSCGSample(makeSample(1000, 800, 0.7, 'scg'));
+    vi.advanceTimersByTime(161);
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].source).toBe('scg');
@@ -189,12 +224,12 @@ describe('SensorFusionService', () => {
       onFusedIBI: (s) => emitted.push(s),
     });
 
-    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8));
-    sensorFusionService.addSCGSample(makeSample(1201, 760, 0.7));
+    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8, 'ppg'));
+    sensorFusionService.addSCGSample(makeSample(1201, 760, 0.7, 'scg'));
 
     expect(emitted).toHaveLength(0);
 
-    vi.advanceTimersByTime(101);
+    vi.advanceTimersByTime(161);
 
     expect(emitted).toHaveLength(2);
     expect(emitted[0]).toMatchObject({
@@ -215,9 +250,9 @@ describe('SensorFusionService', () => {
       onFusedIBI: (sample) => emitted.push(sample),
     });
 
-    sensorFusionService.addPPGSample(makeSample(1_000, 800, 0.8));
-    sensorFusionService.addPPGSample(makeSample(2_000, 790, 0.75));
-    sensorFusionService.addSCGSample(makeSample(1_020, 805, 0.7));
+    sensorFusionService.addPPGSample(makeSample(1_000, 800, 0.8, 'ppg'));
+    sensorFusionService.addPPGSample(makeSample(2_000, 790, 0.75, 'ppg'));
+    sensorFusionService.addSCGSample(makeSample(1_020, 805, 0.7, 'scg'));
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0]).toMatchObject({
@@ -226,7 +261,7 @@ describe('SensorFusionService', () => {
       scgInterval: 805,
     });
 
-    vi.advanceTimersByTime(101);
+    vi.advanceTimersByTime(161);
 
     expect(emitted).toHaveLength(2);
     expect(emitted[1]).toMatchObject({
@@ -246,14 +281,33 @@ describe('SensorFusionService', () => {
     // Fire 5 matching beats
     for (let i = 0; i < 5; i++) {
       const t = 1000 + i * 900;
-      sensorFusionService.addPPGSample(makeSample(t, 800, 0.8));
-      sensorFusionService.addSCGSample(makeSample(t + 30, 805, 0.8));
+      sensorFusionService.addPPGSample(makeSample(t, 800, 0.8, 'ppg'));
+      sensorFusionService.addSCGSample(makeSample(t + 30, 805, 0.8, 'scg'));
     }
 
     expect(emitted).toHaveLength(5);
     // After 5 consecutive matches the 1.2 multiplier should apply
     // (0.8+0.8)/2 * 1.2 = 0.96
     expect(emitted[4].confidence).toBeCloseTo(0.96, 5);
+  });
+
+  it('uses the 100ms fallback horizon after the offset is locked', () => {
+    const service = createSensorFusionService();
+    const emitted: FusedIBISample[] = [];
+    service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    for (let index = 0; index < 3; index++) {
+      const scgTimestamp = 1_000 + index * 1_000;
+      service.addSCGSample(makeSample(scgTimestamp, 800, 0.8, 'scg'));
+      service.addPPGSample(makeSample(scgTimestamp + 140, 805, 0.8, 'ppg'));
+    }
+    emitted.length = 0;
+
+    service.addPPGSample(makeSample(5_000, 800, 0.8, 'ppg'));
+    vi.advanceTimersByTime(101);
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].source).toBe('ppg');
   });
 
   it('resets consecutive matches on disagreement', () => {
@@ -265,21 +319,21 @@ describe('SensorFusionService', () => {
     // Build up 5 consecutive matches
     for (let i = 0; i < 5; i++) {
       const t = 1000 + i * 900;
-      sensorFusionService.addPPGSample(makeSample(t, 800, 0.8));
-      sensorFusionService.addSCGSample(makeSample(t + 30, 805, 0.8));
+      sensorFusionService.addPPGSample(makeSample(t, 800, 0.8, 'ppg'));
+      sensorFusionService.addSCGSample(makeSample(t + 30, 805, 0.8, 'scg'));
     }
 
     // Now a disagreeing beat
-    sensorFusionService.addPPGSample(makeSample(5500, 800, 0.9));
-    sensorFusionService.addSCGSample(makeSample(5540, 850, 0.5));
+    sensorFusionService.addPPGSample(makeSample(5500, 800, 0.9, 'ppg'));
+    sensorFusionService.addSCGSample(makeSample(5540, 850, 0.5, 'scg'));
 
     expect(emitted).toHaveLength(6);
     // Confidence after disagreement: max(0.9, 0.5) * 0.7 = 0.63
     expect(emitted[5].confidence).toBeCloseTo(0.63, 5);
 
     // Next agreement beat — consecutive matches reset to 1, no 1.2 multiplier yet
-    sensorFusionService.addPPGSample(makeSample(6400, 800, 0.8));
-    sensorFusionService.addSCGSample(makeSample(6430, 803, 0.8));
+    sensorFusionService.addPPGSample(makeSample(6400, 800, 0.8, 'ppg'));
+    sensorFusionService.addSCGSample(makeSample(6430, 803, 0.8, 'scg'));
     expect(emitted[6].confidence).toBeCloseTo(0.8, 5); // no 1.2 boost
   });
 
@@ -289,11 +343,11 @@ describe('SensorFusionService', () => {
       onFusedIBI: (s) => emitted.push(s),
     });
 
-    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8));
-    vi.advanceTimersByTime(101);
+    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8, 'ppg'));
+    vi.advanceTimersByTime(161);
 
-    sensorFusionService.addSCGSample(makeSample(2000, 750, 0.6));
-    vi.advanceTimersByTime(101);
+    sensorFusionService.addSCGSample(makeSample(2000, 750, 0.6, 'scg'));
+    vi.advanceTimersByTime(161);
 
     expect(emitted).toHaveLength(2);
     expect(emitted[0].source).toBe('ppg');
@@ -306,7 +360,7 @@ describe('SensorFusionService', () => {
       onFusedIBI: (s) => emitted.push(s),
     });
 
-    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8));
+    sensorFusionService.addPPGSample(makeSample(1000, 800, 0.8, 'ppg'));
     // Reset before the SCG sample or timeout
     sensorFusionService.reset();
 
@@ -336,8 +390,8 @@ describe('SensorFusionService', () => {
           : (rng() < 0.5 ? -1 : 1) * randomInt(rng, 31, 180));
       const ppgQuality = Number(rng().toFixed(4));
       const scgQuality = Number(rng().toFixed(4));
-      const ppg = makeSample(baseTimestamp, ppgInterval, ppgQuality);
-      const scg = makeSample(baseTimestamp + timestampOffset, scgInterval, scgQuality);
+      const ppg = makeSample(baseTimestamp, ppgInterval, ppgQuality, 'ppg');
+      const scg = makeSample(baseTimestamp + timestampOffset, scgInterval, scgQuality, 'scg');
       const expectedLength = emitted.length + 1;
 
       if (rng() < 0.5) {

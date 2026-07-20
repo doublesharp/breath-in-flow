@@ -46,6 +46,17 @@ describe('AdaptiveMotionGate', () => {
     expect(gate.getHistoryLength()).toBeLessThanOrEqual(60);
   });
 
+  it('forgets the learned baseline when reset', () => {
+    const gate = new AdaptiveMotionGate();
+    for (let timestamp = 0; timestamp < 12; timestamp++) gate.addSample(10, timestamp);
+    expect(gate.addSample(18, 12).accepted).toBe(false);
+
+    gate.reset();
+
+    expect(gate.getHistoryLength()).toBe(0);
+    expect(gate.addSample(18, 13)).toMatchObject({ accepted: true, baseline: 18 });
+  });
+
   it('makes the same decisions for proportionally scaled device fixtures', () => {
     const unitScaleGate = new AdaptiveMotionGate();
     const tenScaleGate = new AdaptiveMotionGate();

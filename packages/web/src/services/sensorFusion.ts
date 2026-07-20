@@ -30,6 +30,10 @@ function median(values: readonly number[]): number {
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
 
+function hasDirectPeakProvenance(sample: IBISample, source: Source): boolean {
+  return sample.provenance?.source === source && sample.provenance.method === 'peak-detected';
+}
+
 export class SensorFusionService {
   private callbacks: SensorFusionCallbacks = {};
   private pendingPPG: PendingSample[] = [];
@@ -44,8 +48,9 @@ export class SensorFusionService {
   }
 
   addPPGSample(sample: IBISample): void {
+    if (!hasDirectPeakProvenance(sample, 'ppg')) return;
     this.pendingPPG.push({
-      sample: { ...sample, provenance: { source: 'ppg', method: 'peak-detected' } },
+      sample: { ...sample },
       receivedAt: Date.now(),
     });
     this.tryMatch();
@@ -53,8 +58,9 @@ export class SensorFusionService {
   }
 
   addSCGSample(sample: IBISample): void {
+    if (!hasDirectPeakProvenance(sample, 'scg')) return;
     this.pendingSCG.push({
-      sample: { ...sample, provenance: { source: 'scg', method: 'peak-detected' } },
+      sample: { ...sample },
       receivedAt: Date.now(),
     });
     this.tryMatch();
@@ -160,13 +166,13 @@ export class SensorFusionService {
     );
     if (!Number.isFinite(oldestArrival)) return;
 
-    const delay = Math.max(0, MATCH_WINDOW_MS - (Date.now() - oldestArrival));
+    const delay = Math.max(0, this.getPairingHorizonMs() - (Date.now() - oldestArrival));
     this.matchTimeoutId = setTimeout(() => this.flushExpired(), delay);
   }
 
   private flushExpired(): void {
     this.matchTimeoutId = null;
-    const expiry = Date.now() - MATCH_WINDOW_MS;
+    const expiry = Date.now() - this.getPairingHorizonMs();
     const expired: Array<{ sample: IBISample; source: Source }> = [];
 
     this.pendingPPG = this.pendingPPG.filter((entry) => {
@@ -191,10 +197,13 @@ export class SensorFusionService {
     this.scheduleFlush();
   }
 
+  private getPairingHorizonMs(): number {
+    return this.getEstimatedOffset() === null ? OFFSET_DISCOVERY_WINDOW_MS : MATCH_WINDOW_MS;
+  }
+
   private emitFallback(sample: IBISample, source: Source): void {
     this.emit({
       ...sample,
-      provenance: { source, method: 'peak-detected' },
       source,
       ...(source === 'ppg' ? { ppgInterval: sample.interval } : { scgInterval: sample.interval }),
       confidence: sample.quality * 0.8,
