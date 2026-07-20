@@ -85,7 +85,13 @@
           <!-- Action Buttons -->
           <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
             <button data-testid="cancel-btn" @click="requestCancel" class="btn-secondary">Back</button>
-            <button data-testid="start-btn" @click="startAssessment" class="btn-success btn-action flex-1">
+            <button
+              data-testid="start-btn"
+              @click="startAssessment"
+              :disabled="isAssessmentStartPending"
+              :aria-busy="isAssessmentStartPending"
+              class="btn-success btn-action flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+            >
               Start Assessment
             </button>
           </div>
@@ -795,35 +801,54 @@ async function disableKeepAwake() {
 
 const ASSESSMENT_INTERRUPTION_MESSAGE =
   'Assessment interrupted when the app became inactive. Return to setup and restart when ready.';
+const isAssessmentStartPending = ref(false);
 let appIsActive = true;
+let assessmentStartGeneration = 0;
+let assessmentLifecycleGeneration = 0;
+let assessmentUnmounted = false;
 
 async function startAssessment() {
-  sensorStatusMessage.value = '';
-  if (selectedSensorMode.value !== 'none') {
-    const permissions = await requestSensorPermissions(selectedSensorMode.value);
-    const permissionMessage = getPermissionDeniedMessage(permissions);
-    if (permissionMessage) {
-      sensorStatusMessage.value = permissionMessage;
+  const generation = ++assessmentStartGeneration;
+  const lifecycleAtStart = assessmentLifecycleGeneration;
+  isAssessmentStartPending.value = true;
+
+  try {
+    sensorStatusMessage.value = '';
+    if (selectedSensorMode.value !== 'none') {
+      const permissions = await requestSensorPermissions(selectedSensorMode.value);
+      if (generation !== assessmentStartGeneration) return;
+      if (lifecycleAtStart !== assessmentLifecycleGeneration || !appIsActive) {
+        if (!assessmentUnmounted) sensorStatusMessage.value = ASSESSMENT_INTERRUPTION_MESSAGE;
+        return;
+      }
+
+      const permissionMessage = getPermissionDeniedMessage(permissions);
+      if (permissionMessage) {
+        sensorStatusMessage.value = permissionMessage;
+        return;
+      }
+    }
+
+    if (generation !== assessmentStartGeneration) return;
+    if (lifecycleAtStart !== assessmentLifecycleGeneration || !appIsActive) {
+      if (!assessmentUnmounted) sensorStatusMessage.value = ASSESSMENT_INTERRUPTION_MESSAGE;
       return;
     }
-  }
 
-  if (!appIsActive) {
-    sensorStatusMessage.value = ASSESSMENT_INTERRUPTION_MESSAGE;
-    return;
+    void enableKeepAwake();
+    const warmupTrial = ASSESSMENT_TRIALS.find((t) => t.rate === assessmentConfig.warmupRate) ?? ASSESSMENT_TRIALS[1];
+    const warmupReps = Math.ceil(
+      assessmentConfig.warmupDurationSeconds / (warmupTrial.inhaleTime + warmupTrial.exhaleTime)
+    );
+    timerConfig.inhaleTime = warmupTrial.inhaleTime;
+    timerConfig.exhaleTime = warmupTrial.exhaleTime;
+    timerConfig.repetitions = warmupReps;
+    phase.value = 'WARMUP';
+    ttsService.speak('Warmup starting');
+    timer.start();
+  } finally {
+    if (generation === assessmentStartGeneration) isAssessmentStartPending.value = false;
   }
-
-  void enableKeepAwake();
-  const warmupTrial = ASSESSMENT_TRIALS.find((t) => t.rate === assessmentConfig.warmupRate) ?? ASSESSMENT_TRIALS[1];
-  const warmupReps = Math.ceil(
-    assessmentConfig.warmupDurationSeconds / (warmupTrial.inhaleTime + warmupTrial.exhaleTime)
-  );
-  timerConfig.inhaleTime = warmupTrial.inhaleTime;
-  timerConfig.exhaleTime = warmupTrial.exhaleTime;
-  timerConfig.repetitions = warmupReps;
-  phase.value = 'WARMUP';
-  ttsService.speak('Warmup starting');
-  timer.start();
 }
 
 function handlePhaseComplete() {
@@ -941,6 +966,12 @@ function interruptAssessment() {
 useAppLifecycle({
   onInactive: () => {
     appIsActive = false;
+    assessmentLifecycleGeneration += 1;
+    assessmentStartGeneration += 1;
+    if (isAssessmentStartPending.value) {
+      sensorStatusMessage.value = ASSESSMENT_INTERRUPTION_MESSAGE;
+    }
+    isAssessmentStartPending.value = false;
     interruptAssessment();
   },
   onActive: () => {
@@ -1030,6 +1061,10 @@ defineExpose({ setPhaseForTesting, setTrialAnalysisForTesting });
 // ======================== Cleanup ========================
 
 onUnmounted(() => {
+  assessmentUnmounted = true;
+  appIsActive = false;
+  assessmentLifecycleGeneration += 1;
+  assessmentStartGeneration += 1;
   timer.stop();
   clearRestInterval();
   disableKeepAwake();

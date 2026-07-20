@@ -210,7 +210,12 @@
 
         <!-- Bottom buttons -->
         <div data-testid="prep-actions" class="mobile-action-dock px-6 pt-3 space-y-3">
-          <button @click="confirmStart" class="w-full btn-primary min-h-11 py-4 rounded-2xl font-bold text-lg">
+          <button
+            @click="confirmStart"
+            :disabled="isStartPending"
+            :aria-busy="isStartPending"
+            class="w-full btn-primary min-h-11 py-4 rounded-2xl font-bold text-lg disabled:cursor-not-allowed disabled:opacity-50"
+          >
             Start
           </button>
           <button
@@ -907,8 +912,10 @@ watch(isMeasuring, (measuring) => {
 // Measurement control
 const permissionError = ref<string | null>(null);
 const measurementNotice = ref<string | null>(null);
+const isStartPending = ref(false);
 let appIsActive = true;
 let startGeneration = 0;
+let lifecycleGeneration = 0;
 let pendingStartGeneration: number | null = null;
 
 async function showPrepScreen(protocol: Protocol | null) {
@@ -926,18 +933,33 @@ async function showPrepScreen(protocol: Protocol | null) {
 
 async function confirmStart() {
   const generation = ++startGeneration;
+  const lifecycleAtStart = lifecycleGeneration;
   pendingStartGeneration = generation;
+  isStartPending.value = true;
   const protocol = prepProtocol.value;
 
   try {
-    const hasPermissions = await checkPermissions();
-    if (generation !== startGeneration || !appIsActive) {
+    permissionError.value = null;
+    measurementNotice.value = null;
+    addDebugLine(`Requesting permissions for ${selectedSensor.value} mode...`);
+
+    const permissions = await requestSensorPermissions(selectedSensor.value);
+    addDebugLine(`Permissions: camera=${permissions.camera} motion=${permissions.motion}`);
+
+    if (generation !== startGeneration) return;
+    if (lifecycleAtStart !== lifecycleGeneration || !appIsActive) {
       permissionError.value = MEASUREMENT_INTERRUPTION_MESSAGE;
       showRecoveryActions.value = false;
       showPrep.value = true;
       return;
     }
-    if (!hasPermissions) return;
+
+    const permissionMessage = getPermissionDeniedMessage(permissions);
+    if (permissionMessage) {
+      permissionError.value = permissionMessage;
+      addDebugLine(`Permission denied: ${permissionMessage}`);
+      return;
+    }
 
     showPrep.value = false;
     if (protocol) {
@@ -946,7 +968,8 @@ async function confirmStart() {
       await startFreeform();
     }
 
-    if (generation !== startGeneration || !appIsActive) {
+    if (generation !== startGeneration) return;
+    if (lifecycleAtStart !== lifecycleGeneration || !appIsActive) {
       permissionError.value = MEASUREMENT_INTERRUPTION_MESSAGE;
       showPrep.value = true;
       prepProtocol.value = protocol;
@@ -956,25 +979,9 @@ async function confirmStart() {
   } finally {
     if (pendingStartGeneration === generation) {
       pendingStartGeneration = null;
+      isStartPending.value = false;
     }
   }
-}
-
-async function checkPermissions(): Promise<boolean> {
-  permissionError.value = null;
-  measurementNotice.value = null;
-  addDebugLine(`Requesting permissions for ${selectedSensor.value} mode...`);
-
-  const perms = await requestSensorPermissions(selectedSensor.value);
-  addDebugLine(`Permissions: camera=${perms.camera} motion=${perms.motion}`);
-
-  const msg = getPermissionDeniedMessage(perms);
-  if (msg) {
-    permissionError.value = msg;
-    addDebugLine(`Permission denied: ${msg}`);
-    return false;
-  }
-  return true;
 }
 
 async function enableKeepAwake() {
@@ -1251,11 +1258,14 @@ function formatType(type: string): string {
 useAppLifecycle({
   onInactive: () => {
     appIsActive = false;
+    lifecycleGeneration += 1;
     startGeneration += 1;
     if (pendingStartGeneration !== null) {
       permissionError.value = MEASUREMENT_INTERRUPTION_MESSAGE;
       showRecoveryActions.value = false;
       showPrep.value = true;
+      pendingStartGeneration = null;
+      isStartPending.value = false;
     }
     interruptMeasurement();
   },
@@ -1271,6 +1281,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   appIsActive = false;
+  lifecycleGeneration += 1;
   startGeneration += 1;
   if (measurementSession) {
     if (selectedSensor.value === 'dual') sensorFusionService.reset();

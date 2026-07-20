@@ -197,6 +197,33 @@ describe('ResonanceAssessment', () => {
     expect(wrapper.text()).toContain('Warmup');
   });
 
+  it('invalidates pending permission after inactive then active and requires another Start', async () => {
+    let resolvePermission!: (permissions: { camera: 'granted'; motion: 'granted' }) => void;
+    requestSensorPermissions.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePermission = resolve;
+      })
+    );
+    const wrapper = mount(ResonanceAssessment);
+
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+    expect(requestSensorPermissions).toHaveBeenCalledOnce();
+
+    await lastLifecycleOptions?.onInactive();
+    await lastLifecycleOptions?.onActive();
+    resolvePermission({ camera: 'granted', motion: 'granted' });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Start Assessment');
+    expect(wrapper.text()).toContain('interrupted');
+    expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(false);
+
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+    await flushPromises();
+    expect(requestSensorPermissions).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain('Warmup');
+  });
+
   it('returns to setup with actionable permission guidance when motion is denied', async () => {
     requestSensorPermissions.mockResolvedValueOnce({ camera: 'granted', motion: 'denied' });
     getPermissionDeniedMessage.mockReturnValueOnce(

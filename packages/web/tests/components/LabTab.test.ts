@@ -780,4 +780,70 @@ describe('LabTab.vue', () => {
     expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
     wrapper.unmount();
   });
+
+  it('ignores an older permission completion after a newer Start becomes active', async () => {
+    let resolveFirst!: (permissions: { camera: 'granted'; motion: 'granted' }) => void;
+    let resolveSecond!: (permissions: { camera: 'granted'; motion: 'granted' }) => void;
+    vi.mocked(requestSensorPermissions)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        })
+      );
+    const wrapper = mount(LabTab, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          HrTachogram: true,
+          SignalQualityIndicator: true,
+          HrvMetricsDashboard: true,
+          FrequencySpectrum: true,
+          PoincarePlot: true,
+          ResonanceAssessment: true,
+        },
+      },
+    });
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Freeform')!
+      .trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
+    await flushPromises();
+    const startButton = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Start'
+    ) as HTMLButtonElement;
+
+    startButton.click();
+    startButton.click();
+    await wrapper.vm.$nextTick();
+
+    expect(requestSensorPermissions).toHaveBeenCalledTimes(2);
+
+    resolveSecond({ camera: 'granted', motion: 'granted' });
+    await flushPromises();
+    expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
+
+    resolveFirst({ camera: 'granted', motion: 'granted' });
+    await flushPromises();
+
+    const vm = wrapper.vm as unknown as {
+      isMeasuring: boolean;
+      showPrep: boolean;
+      permissionError: string | null;
+    };
+    expect(ppgService.start).toHaveBeenCalledOnce();
+    expect(vm.isMeasuring).toBe(true);
+    expect(vm.showPrep).toBe(false);
+    expect(vm.permissionError).toBeNull();
+    wrapper.unmount();
+  });
 });
