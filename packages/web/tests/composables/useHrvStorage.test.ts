@@ -59,6 +59,47 @@ function makeMeasurement(overrides: Partial<HrvMeasurement> = {}): HrvMeasuremen
   };
 }
 
+function makePreAvailabilityMeasurement(overrides: Record<string, unknown> = {}) {
+  const current = makeMeasurement();
+  return {
+    ...current,
+    breathingRateBPM: 6,
+    analysis: {
+      timeDomain: current.analysis.timeDomain,
+      frequencyDomain: {
+        available: true,
+        vlfPower: 100,
+        lfPower: 300,
+        hfPower: 200,
+        totalPower: 600,
+        lfPowerNorm: 60,
+        hfPowerNorm: 40,
+        lfHfRatio: 1.5,
+        lfPeak: 0.1,
+        hfPeak: 0.25,
+        spectrum: [
+          { frequency: 0.1, power: 2 },
+          { frequency: 0.2, power: 3 },
+        ],
+      },
+      resonance: {
+        peakToTroughAmplitude: 15,
+        waveformSmoothness: 0.7,
+        phaseSynchrony: 0.8,
+        lfPeakCount: 1,
+        lfPeakAmplitude: 50,
+      },
+      quality: current.analysis.quality,
+      raw: {
+        rrIntervals: [800, 820, 790],
+        timestamps: [0, 800, 1620],
+        instantaneousHR: [75, 73.2, 75.9],
+      },
+    },
+    ...overrides,
+  };
+}
+
 function makeAssessment(overrides: Partial<AssessmentResult> = {}): AssessmentResult {
   return {
     id: crypto.randomUUID(),
@@ -129,6 +170,128 @@ describe('useHrvStorage', () => {
   });
 
   describe('getMeasurements', () => {
+    it('normalizes the exact pre-availability analysis shape without exposing absolute power', async () => {
+      const { saveMeasurement, deleteMeasurement, getMeasurementById, getMeasurementStats } =
+        useHrvStorage();
+      const legacy = makePreAvailabilityMeasurement({ completedAt: new Date() });
+      const seed = makeMeasurement();
+      await saveMeasurement(seed);
+      await deleteMeasurement(seed.id);
+      await putRawRecord('measurements', legacy);
+
+      const result = await getMeasurementById(legacy.id as string);
+
+      expect(result).not.toBeNull();
+      expect(result?.analysis.frequencyDomain).toEqual({
+        available: true,
+        value: {
+          lfPowerNorm: 60,
+          hfPowerNorm: 40,
+          lfHfRatio: 1.5,
+          lfPeak: 0.1,
+          hfPeak: 0.25,
+          spectrum: [
+            { frequency: 0.1, power: 40 },
+            { frequency: 0.2, power: 60 },
+          ],
+        },
+      });
+      expect(result?.analysis.frequencyDomain).not.toHaveProperty('lfPower');
+      expect(result?.analysis.poincare).toEqual({
+        available: true,
+        value: {
+          points: [
+            { previousInterval: 800, nextInterval: 820 },
+            { previousInterval: 820, nextInterval: 790 },
+          ],
+        },
+      });
+      expect(result?.analysis.resonance).toEqual({
+        available: true,
+        value: {
+          peakToTroughAmplitude: 15,
+          waveformSmoothness: 0.7,
+          phaseSynchrony: 0.8,
+          lfPeakCount: 1,
+          lfPeakAmplitude: 40,
+        },
+      });
+      await expect(getMeasurementStats(30)).resolves.toEqual(
+        expect.objectContaining({ count: 1, avgLfPowerNorm: 60 })
+      );
+    });
+
+    it('validates every optional field and bounds warnings while preserving valid siblings', async () => {
+      const { saveMeasurement, getMeasurements } = useHrvStorage();
+      const valid = makeMeasurement({
+        breathingRateBPM: 6,
+        assessmentId: 'assessment-1',
+        notes: 'Morning practice',
+        tags: ['morning'],
+        algorithmVersion: 2,
+        eligibility: {
+          eligible: true,
+          reasons: [],
+          warnings: [],
+          availableMetrics: ['average-pulse'],
+          artifactPercentage: 1,
+          meanQuality: 0.9,
+          detectedBeatCount: 100,
+          observedDurationSeconds: 120,
+        },
+        sampleProvenance: {
+          sources: ['ppg'],
+          detectionMethods: ['peak-detected'],
+        },
+      });
+      const invalidOverrides = [
+        { breathingRateBPM: Number.NaN },
+        { assessmentId: 42 },
+        { notes: false },
+        { tags: ['valid', 7] },
+        { algorithmVersion: 1.5 },
+        { eligibility: { eligible: true } },
+        { eligibility: { ...valid.eligibility, detectedBeatCount: 1.5 } },
+        {
+          sampleProvenance: {
+            sources: ['synthetic'],
+            detectionMethods: ['peak-detected'],
+          },
+        },
+      ];
+      await saveMeasurement(valid);
+      for (const [index, override] of invalidOverrides.entries()) {
+        await putRawRecord('measurements', {
+          ...makeMeasurement(),
+          ...override,
+          id: crypto.randomUUID(),
+          completedAt: new Date(Date.now() + index + 1),
+        });
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      expect((await getMeasurements()).map((measurement) => measurement.id)).toEqual([valid.id]);
+      expect(warn).toHaveBeenCalledTimes(4);
+      expect(warn.mock.calls.at(-1)?.[0]).toContain('Skipped 8 invalid records');
+      warn.mockRestore();
+    });
+
+    it('rejects availability reasons outside the current analysis contract', async () => {
+      const { saveMeasurement, getMeasurements } = useHrvStorage();
+      const valid = makeMeasurement();
+      await saveMeasurement(valid);
+      await putRawRecord('measurements', {
+        ...makeMeasurement(),
+        id: crypto.randomUUID(),
+        analysis: {
+          ...makeMeasurement().analysis,
+          frequencyDomain: { available: false, reason: 'fabricated-reason' },
+        },
+      });
+
+      expect((await getMeasurements()).map((measurement) => measurement.id)).toEqual([valid.id]);
+    });
+
     it('returns results sorted by completedAt descending', async () => {
       const { saveMeasurement, getMeasurements } = useHrvStorage();
 

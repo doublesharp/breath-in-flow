@@ -6,7 +6,7 @@ import type {
   SensorSource,
 } from '@breath-in-flow/shared';
 import { AssessmentResultSchema } from '@breath-in-flow/shared';
-import { isHrvAnalysis } from '@/utils/hrvAnalysisValidation';
+import { isHrvAnalysis, normalizeLegacyHrvAnalysis } from '@/utils/hrvAnalysisValidation';
 import {
   createStoredRecordWarningLogger,
   validateStoredArray,
@@ -73,7 +73,12 @@ function validateAssessment(value: unknown): AssessmentResult | null {
 }
 
 function validateMeasurement(value: unknown): HrvMeasurement | null {
-  if (!isRecord(value) || !isHrvAnalysis(value.analysis)) return null;
+  if (!isRecord(value)) return null;
+
+  const analysis = normalizeLegacyHrvAnalysis(value.analysis, {
+    breathingRateBPM: value.breathingRateBPM,
+  });
+  if (!isHrvAnalysis(analysis)) return null;
 
   const startedAt = restoreDate(value.startedAt);
   const completedAt = restoreDate(value.completedAt);
@@ -85,6 +90,56 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
     'assessment-trial',
   ];
   const sensorModes: HrvMeasurement['sensorMode'][] = ['none', 'camera', 'accelerometer', 'dual'];
+  const eligibilityReasons = [
+    'duration-too-short',
+    'insufficient-beats',
+    'invalid-sample',
+    'non-monotonic-timestamps',
+    'implausible-interval',
+    'unknown-provenance',
+    'estimated-samples',
+    'low-signal-quality',
+    'too-many-artifacts',
+    'sensor-error',
+  ];
+  const eligibilityWarnings = ['elevated-artifacts', 'short-recording-sdnn'];
+  const metricGroups = [
+    'average-pulse',
+    'rmssd',
+    'pnn50',
+    'sdnn-short-recording',
+    'sdnn',
+    'frequency-domain',
+    'poincare',
+    'resonance-training',
+  ];
+  const eligibility = value.eligibility;
+  const eligibilityIsValid =
+    eligibility === undefined ||
+    (isRecord(eligibility) &&
+      typeof eligibility.eligible === 'boolean' &&
+      Array.isArray(eligibility.reasons) &&
+      eligibility.reasons.every((reason) => eligibilityReasons.includes(reason)) &&
+      Array.isArray(eligibility.warnings) &&
+      eligibility.warnings.every((warning) => eligibilityWarnings.includes(warning)) &&
+      Array.isArray(eligibility.availableMetrics) &&
+      eligibility.availableMetrics.every((metric) => metricGroups.includes(metric)) &&
+      ['artifactPercentage', 'meanQuality', 'observedDurationSeconds'].every(
+        (key) => typeof eligibility[key] === 'number' && Number.isFinite(eligibility[key])
+      ) &&
+      typeof eligibility.detectedBeatCount === 'number' &&
+      Number.isInteger(eligibility.detectedBeatCount) &&
+      eligibility.detectedBeatCount >= 0);
+  const provenance = value.sampleProvenance;
+  const provenanceIsValid =
+    provenance === undefined ||
+    (isRecord(provenance) &&
+      Array.isArray(provenance.sources) &&
+      provenance.sources.every((source) => ['ppg', 'scg', 'fused'].includes(source)) &&
+      Array.isArray(provenance.detectionMethods) &&
+      provenance.detectionMethods.every((method) =>
+        ['peak-detected', 'autocorrelation-estimate'].includes(method)
+      ));
 
   if (
     typeof value.id !== 'string' ||
@@ -95,12 +150,24 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
     !(startedAt instanceof Date) ||
     Number.isNaN(+startedAt) ||
     !(completedAt instanceof Date) ||
-    Number.isNaN(+completedAt)
+    Number.isNaN(+completedAt) ||
+    (value.breathingRateBPM !== undefined &&
+      (typeof value.breathingRateBPM !== 'number' || !Number.isFinite(value.breathingRateBPM))) ||
+    (value.assessmentId !== undefined && typeof value.assessmentId !== 'string') ||
+    (value.notes !== undefined && typeof value.notes !== 'string') ||
+    (value.tags !== undefined &&
+      (!Array.isArray(value.tags) || !value.tags.every((tag) => typeof tag === 'string'))) ||
+    (value.algorithmVersion !== undefined &&
+      (typeof value.algorithmVersion !== 'number' ||
+        !Number.isInteger(value.algorithmVersion) ||
+        value.algorithmVersion <= 0)) ||
+    !eligibilityIsValid ||
+    !provenanceIsValid
   ) {
     return null;
   }
 
-  return { ...value, analysis: value.analysis, startedAt, completedAt } as HrvMeasurement;
+  return { ...value, analysis, startedAt, completedAt } as HrvMeasurement;
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -147,6 +214,8 @@ async function getMeasurements(query?: MeasurementQuery): Promise<HrvMeasurement
   const index = store.index('completedAt');
 
   const results: HrvMeasurement[] = [];
+  const warnings = createStoredRecordWarningLogger('IndexedDB pulse variability measurements');
+  let recordIndex = 0;
 
   await new Promise<void>((resolve, reject) => {
     // Use IDBKeyRange for date filtering if provided
@@ -164,6 +233,7 @@ async function getMeasurements(query?: MeasurementQuery): Promise<HrvMeasurement
     request.onsuccess = (event) => {
       const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
       if (!cursor) {
+        warnings.summarize();
         resolve();
         return;
       }
@@ -174,11 +244,15 @@ async function getMeasurements(query?: MeasurementQuery): Promise<HrvMeasurement
       if (measurement && (!query?.type || measurement.type === query.type)) {
         results.push(measurement);
         if (query?.limit && results.length >= query.limit) {
+          warnings.summarize();
           resolve();
           return;
         }
+      } else if (!measurement) {
+        warnings.warn(recordIndex);
       }
 
+      recordIndex += 1;
       cursor.continue();
     };
 
@@ -198,7 +272,15 @@ async function getMeasurementById(id: string): Promise<HrvMeasurement | null> {
     const request = store.get(id);
     request.onsuccess = () => {
       db.close();
-      resolve(validateMeasurement(request.result));
+      const measurement = validateMeasurement(request.result);
+      if (!measurement && request.result !== undefined) {
+        const warnings = createStoredRecordWarningLogger(
+          'IndexedDB pulse variability measurements'
+        );
+        warnings.warn(0);
+        warnings.summarize();
+      }
+      resolve(measurement);
     };
     request.onerror = () => {
       db.close();
