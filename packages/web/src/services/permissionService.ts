@@ -12,34 +12,20 @@ export type PermissionStatus = 'granted' | 'denied' | 'prompt' | 'unknown';
  * Check and request camera permission.
  * Returns 'granted' if permission is available.
  */
-export async function requestCameraPermission(): Promise<PermissionStatus> {
-  // Try navigator.permissions API first (Chrome, some WebViews)
+async function requestCameraPermission(): Promise<PermissionStatus> {
+  // Inspect permission state without opening a throwaway camera stream. The
+  // actual PPG startup owns the single getUserMedia request and its cleanup.
   try {
     if (navigator.permissions) {
       const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      console.log('Camera permission status:', result.state);
       if (result.state === 'granted') return 'granted';
       if (result.state === 'denied') return 'denied';
+      return 'prompt';
     }
   } catch {
-    // permissions.query not supported for camera — continue
+    // permissions.query is not consistently supported for camera.
   }
-
-  // Try getUserMedia to trigger the permission prompt
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    // Got it — immediately release
-    stream.getTracks().forEach(t => t.stop());
-    return 'granted';
-  } catch (err) {
-    const error = err as Error;
-    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-      return 'denied';
-    }
-    // NotFoundError = no camera, NotReadableError = camera in use
-    console.warn('Camera permission check failed:', error.name, error.message);
-    return 'unknown';
-  }
+  return 'unknown';
 }
 
 /**
@@ -47,7 +33,7 @@ export async function requestCameraPermission(): Promise<PermissionStatus> {
  * iOS 13+ requires explicit permission request.
  * Android Capacitor WebView may not have DeviceMotionEvent — use @capacitor/motion instead.
  */
-export async function requestMotionPermission(): Promise<PermissionStatus> {
+async function requestMotionPermission(): Promise<PermissionStatus> {
   // iOS 13+ requires explicit permission
   if (typeof window !== 'undefined' && 'DeviceMotionEvent' in window &&
     typeof (DeviceMotionEvent as unknown as { requestPermission?: () => Promise<string> })
@@ -106,7 +92,7 @@ export function getPermissionDeniedMessage(perms: { camera: PermissionStatus; mo
   if (denied.length === 0) return null;
 
   if (Capacitor.isNativePlatform()) {
-    return `${denied.join(' and ')} permission denied. Go to Settings → Apps → Breath in Flow → Permissions to enable.`;
+    return `${denied.join(' and ')} permission denied. Go to Settings -> Apps -> Breath in Flow -> Permissions to enable.`;
   }
   return `${denied.join(' and ')} permission denied. Please allow access in your browser settings and reload.`;
 }

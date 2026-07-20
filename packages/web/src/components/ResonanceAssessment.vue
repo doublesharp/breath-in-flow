@@ -84,6 +84,13 @@
           <h2 class="text-xl sm:text-2xl font-bold text-white text-center mb-4">
             {{ phaseHeaderText }}
           </h2>
+          <div
+            v-if="sensorStatusMessage && phase === 'TRIAL_BREATHING'"
+            class="mb-4 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-center text-sm text-amber-200"
+            role="status"
+          >
+            {{ sensorStatusMessage }}
+          </div>
 
           <!-- Sensor-active trial view (replaces BreathingVisualizer) -->
           <div v-if="selectedSensorMode !== 'none' && phase === 'TRIAL_BREATHING'" class="flex flex-col items-center gap-6 py-8">
@@ -432,12 +439,17 @@ import {
   type WaveformSmoothness,
   type IBISample,
   type HRVAnalysis,
+  type HeartRateEstimate,
   type SoundTheme,
 } from '@breath-in-flow/shared';
 import { ppgService } from '../services/ppgService';
 import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
 import type { FusedIBISample } from '../services/sensorFusion';
+import {
+  MeasurementSession,
+  type MeasurementStartOutcome,
+} from '../services/measurementSession';
 import { ttsService } from '../services/ttsService';
 import { scoreTrial, findSuggestedRate } from '../utils/assessmentScoring';
 import { v4 as uuidv4 } from 'uuid';
@@ -543,6 +555,8 @@ let restIntervalId: ReturnType<typeof setInterval> | null = null;
 const currentTrialIBIs = ref<IBISample[]>([]);
 const trialAnalyses = ref<(HRVAnalysis | null)[]>([null, null, null, null, null]);
 const sensorQuality = ref(0);
+const sensorStatusMessage = ref('');
+let measurementSession: MeasurementSession | null = null;
 
 // Expanded HRV panels in SCORING phase
 const expandedTrialHrv = reactive<boolean[]>([false, false, false, false, false]);
@@ -636,39 +650,73 @@ function autoPopulateScoring() {
 
 // ======================== Sensor Start/Stop ========================
 
-async function startSensor() {
-  if (selectedSensorMode.value === 'none') return;
+async function startSensor(): Promise<MeasurementStartOutcome> {
+  if (selectedSensorMode.value === 'none') return { ok: true };
 
   currentTrialIBIs.value = [];
+  sensorStatusMessage.value = '';
+  measurementSession = new MeasurementSession({
+    protocol: 'resonance-trial',
+    onStateChange: (state) => {
+      if (state === 'no-data') {
+        sensorStatusMessage.value = measurementSession?.getResult().errorMessage ??
+          'No detected heart beats were received. Continue with manual scoring or retry the sensor.';
+        if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
+      }
+    },
+  });
 
   if (selectedSensorMode.value === 'dual') {
     sensorFusionService.reset();
     sensorFusionService.setCallbacks({
-      onFusedIBI: (sample: FusedIBISample) => currentTrialIBIs.value.push(sample),
+      onFusedIBI: (sample: FusedIBISample) => measurementSession?.addDetectedSample(sample),
       onQualityChange: (q: number) => { sensorQuality.value = q; },
     });
 
-    // Start both sensors, routing through fusion
-    await ppgService.start({
-      onIBI: (sample) => sensorFusionService.addPPGSample(sample),
+    const ppgCallbacks = {
+      onIBI: (sample: IBISample) => sensorFusionService.addPPGSample(sample),
+      onHeartRateEstimate: (estimate: HeartRateEstimate) =>
+        measurementSession?.addHeartRateEstimate(estimate),
       onQualityChange: () => {}, // fusion handles quality
-    });
+    };
     scgService.setCallbacks({
       onIBI: (sample) => sensorFusionService.addSCGSample(sample),
+      onHeartRateEstimate: (estimate) => measurementSession?.addHeartRateEstimate(estimate),
       onQualityChange: () => {},
     });
-    await scgService.start();
+    return measurementSession.start({
+      ppg: {
+        start: () => ppgService.start(ppgCallbacks),
+        stop: () => ppgService.stop(),
+      },
+      scg: {
+        start: () => scgService.start(),
+        stop: () => scgService.stop(),
+      },
+    });
   } else {
     const callbacks = {
-      onIBI: (sample: IBISample) => currentTrialIBIs.value.push(sample),
+      onIBI: (sample: IBISample) => measurementSession?.addDetectedSample(sample),
+      onHeartRateEstimate: (estimate: HeartRateEstimate) =>
+        measurementSession?.addHeartRateEstimate(estimate),
       onQualityChange: (q: number) => { sensorQuality.value = q; },
     };
 
     if (selectedSensorMode.value === 'camera') {
-      await ppgService.start(callbacks);
+      return measurementSession.start({
+        ppg: {
+          start: () => ppgService.start(callbacks),
+          stop: () => ppgService.stop(),
+        },
+      });
     } else {
       scgService.setCallbacks(callbacks);
-      await scgService.start();
+      return measurementSession.start({
+        scg: {
+          start: () => scgService.start(),
+          stop: () => scgService.stop(),
+        },
+      });
     }
   }
 }
@@ -676,22 +724,19 @@ async function startSensor() {
 function stopSensorAndAnalyze() {
   if (selectedSensorMode.value === 'none') return;
 
-  // Stop sensor(s)
-  if (selectedSensorMode.value === 'dual') {
-    ppgService.stop();
-    scgService.stop();
-    sensorFusionService.reset();
-  } else if (selectedSensorMode.value === 'camera') {
-    ppgService.stop();
-  } else {
-    scgService.stop();
-  }
+  if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
+  const sessionResult = measurementSession?.stop();
+  measurementSession = null;
+  currentTrialIBIs.value = sessionResult?.samples ?? [];
 
   // Analyze collected IBI data
-  if (currentTrialIBIs.value.length >= 10) {
+  if (sessionResult?.eligibility?.eligible && currentTrialIBIs.value.length >= 10) {
     const trial = trials.value[currentTrialIndex.value];
     const analysis = analyzeHRV(currentTrialIBIs.value, trial.rate);
     trialAnalyses.value[currentTrialIndex.value] = analysis;
+  } else if (sessionResult?.eligibility && !sessionResult.eligibility.eligible) {
+    sensorStatusMessage.value =
+      'This trial did not produce enough clean detected beats for automatic HRV scoring. Use the comfort and waveform questions to score it manually.';
   }
 }
 
@@ -762,7 +807,12 @@ async function startTrial(index: number) {
   ttsService.speak(`Trial ${index + 1} starting at ${trial.rate} breaths per minute`);
 
   // Start sensor for IBI collection
-  await startSensor();
+  const outcome = await startSensor();
+  if (!outcome.ok) {
+    sensorStatusMessage.value = `${outcome.message ?? 'The sensor could not start.'} Continue with manual scoring for this trial.`;
+  } else if (outcome.degradedSources?.length) {
+    sensorStatusMessage.value = `Continuing with one sensor; ${outcome.degradedSources.join(' and ')} is unavailable.`;
+  }
 
   timer.start();
 }
@@ -812,16 +862,9 @@ function confirmCancel() {
   timer.stop();
   clearRestInterval();
   disableKeepAwake();
-  // Stop any active sensor(s)
-  if (selectedSensorMode.value === 'dual') {
-    ppgService.stop();
-    scgService.stop();
-    sensorFusionService.reset();
-  } else if (selectedSensorMode.value === 'camera') {
-    ppgService.stop();
-  } else if (selectedSensorMode.value === 'accelerometer') {
-    scgService.stop();
-  }
+  if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
+  measurementSession?.stop();
+  measurementSession = null;
   showCancelConfirm.value = false;
   emit('cancel');
 }
@@ -905,15 +948,8 @@ onUnmounted(() => {
   timer.stop();
   clearRestInterval();
   disableKeepAwake();
-  // Stop any active sensor(s)
-  if (selectedSensorMode.value === 'dual') {
-    ppgService.stop();
-    scgService.stop();
-    sensorFusionService.reset();
-  } else if (selectedSensorMode.value === 'camera') {
-    ppgService.stop();
-  } else if (selectedSensorMode.value === 'accelerometer') {
-    scgService.stop();
-  }
+  if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
+  measurementSession?.stop();
+  measurementSession = null;
 });
 </script>

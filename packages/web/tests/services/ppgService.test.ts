@@ -12,7 +12,7 @@ vi.mock('@capawesome/capacitor-torch', () => ({
   },
 }));
 
-import { ppgService } from '../../src/services/ppgService';
+import { listCameras, ppgService } from '../../src/services/ppgService';
 import type { PPGStatus } from '../../src/services/ppgService';
 import type { HeartRateEstimate, IBISample } from '@breath-in-flow/shared';
 
@@ -1077,5 +1077,26 @@ describe('ppgService', () => {
       expect(rawB.length).toBe(1);
       expect(rawA.length).toBe(0);
     });
+  });
+});
+
+describe('listCameras', () => {
+  it('enumerates cameras without opening a permission-triggering stream', async () => {
+    const getUserMedia = vi.fn();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia,
+        enumerateDevices: vi.fn().mockResolvedValue([
+          { kind: 'videoinput', deviceId: 'rear-camera', label: 'Rear camera' },
+          { kind: 'audioinput', deviceId: 'microphone', label: 'Microphone' },
+        ]),
+      },
+    });
+
+    await expect(listCameras()).resolves.toEqual([
+      { deviceId: 'rear-camera', label: 'Rear camera' },
+    ]);
+    expect(getUserMedia).not.toHaveBeenCalled();
   });
 });

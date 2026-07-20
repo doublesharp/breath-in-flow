@@ -1,4 +1,10 @@
-import type { HRVAnalysis, AssessmentResult } from '@breath-in-flow/shared';
+import type {
+  AssessmentResult,
+  DetectionMethod,
+  HRVAnalysis,
+  MeasurementEligibility,
+  SensorSource,
+} from '@breath-in-flow/shared';
 import { parseJsonWithDateFields } from '@/utils/storageSerialization';
 
 export interface HrvMeasurement {
@@ -13,6 +19,12 @@ export interface HrvMeasurement {
   assessmentId?: string;
   notes?: string;
   tags?: string[];
+  algorithmVersion?: number;
+  eligibility?: MeasurementEligibility;
+  sampleProvenance?: {
+    sources: SensorSource[];
+    detectionMethods: DetectionMethod[];
+  };
 }
 
 interface MeasurementQuery {
@@ -172,8 +184,15 @@ async function getMeasurementStats(days: number = 30): Promise<MeasurementStats>
   const count = measurements.length;
   const avgRmssd = measurements.reduce((sum, m) => sum + m.analysis.timeDomain.rmssd, 0) / count;
   const avgSdnn = measurements.reduce((sum, m) => sum + m.analysis.timeDomain.sdnn, 0) / count;
-  const avgLfPower =
-    measurements.reduce((sum, m) => sum + m.analysis.frequencyDomain.lfPower, 0) / count;
+  const frequencyMeasurements = measurements.filter(
+    (measurement) => measurement.analysis.frequencyDomain.available !== false,
+  );
+  const avgLfPower = frequencyMeasurements.length > 0
+    ? frequencyMeasurements.reduce(
+        (sum, measurement) => sum + measurement.analysis.frequencyDomain.lfPower,
+        0,
+      ) / frequencyMeasurements.length
+    : 0;
   const avgMeanHR = measurements.reduce((sum, m) => sum + m.analysis.timeDomain.meanHR, 0) / count;
 
   // measurements are sorted descending so first is latest

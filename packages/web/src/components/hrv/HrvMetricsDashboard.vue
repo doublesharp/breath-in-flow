@@ -217,6 +217,9 @@ function fmtDecimal(v: number) {
 }
 
 function frequencyUnavailableMessage(reason?: FrequencyDomainUnavailableReason): string {
+  if (reason === 'protocol-not-supported') {
+    return 'This protocol is designed for short-recording metrics. Use Full Analysis for frequency-domain results.';
+  }
   if (reason === 'no-variability') {
     return 'This recording did not contain enough beat-to-beat variation for a reliable spectrum.';
   }

@@ -127,8 +127,8 @@ describe('LabTab.vue', () => {
 
     expect(wrapper.find('[data-testid="sensor-selection"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('Camera');
-    expect(wrapper.text()).toContain('Chest (recommended)');
-    expect(wrapper.text()).toContain('Both');
+    expect(wrapper.text()).toContain('Chest (Beta)');
+    expect(wrapper.text()).toContain('Both (Beta)');
   });
 
   it('shows RF assessment section with "Find My Resonance Frequency" button', () => {
@@ -183,7 +183,7 @@ describe('LabTab.vue', () => {
     });
 
     await wrapper.findAll('button').find((button) => button.text() === 'Freeform')!.trigger('click');
-    await wrapper.findAll('button').find((button) => button.text() === 'Both')!.trigger('click');
+    await wrapper.findAll('button').find((button) => button.text() === 'Both (Beta)')!.trigger('click');
     await wrapper.findAll('button').find((button) => button.text() === 'Start Measurement')!.trigger('click');
     await flushPromises();
     const startButton = Array.from(document.body.querySelectorAll('button')).find(
@@ -219,6 +219,42 @@ describe('LabTab.vue', () => {
     });
     await wrapper.vm.$nextTick();
     expect(document.body.querySelector('hr-tachogram-stub')).not.toBeNull();
+
+    wrapper.unmount();
+  });
+
+  it('does not begin measurement when the sensor fails to start', async () => {
+    vi.mocked(ppgService.start).mockResolvedValueOnce({
+      ok: false,
+      reason: 'start-failed',
+      message: 'Unable to start camera preview.',
+    });
+    const wrapper = mount(LabTab, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          HrTachogram: true,
+          SignalQualityIndicator: true,
+          HrvMetricsDashboard: true,
+          FrequencySpectrum: true,
+          PoincarePlot: true,
+          ResonanceAssessment: true,
+        },
+      },
+    });
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Freeform')!.trigger('click');
+    await wrapper.findAll('button').find((button) => button.text() === 'Camera')!.trigger('click');
+    await wrapper.findAll('button').find((button) => button.text() === 'Start Measurement')!.trigger('click');
+    await flushPromises();
+    const startButton = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Start',
+    );
+    startButton!.click();
+    await flushPromises();
+
+    expect(document.body.textContent).toContain('Unable to start camera preview.');
+    expect(document.body.textContent).not.toContain('Stop Measurement');
 
     wrapper.unmount();
   });

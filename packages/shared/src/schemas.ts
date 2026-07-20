@@ -213,6 +213,21 @@ export const TimerStateSchema = z.object({
 export type TimerState = z.infer<typeof TimerStateSchema>;
 
 // ============================================
+// Measurement Record Metadata
+// ============================================
+
+export const MeasurementRecordMetadataSchema = z.object({
+  // Version 1 represents legacy records created before provenance was stored.
+  algorithmVersion: z.number().int().positive().default(1),
+  sampleProvenance: z.object({
+    sources: z.array(z.enum(['ppg', 'scg', 'fused'])),
+    detectionMethods: z.array(z.enum(['peak-detected', 'autocorrelation-estimate'])),
+  }).optional(),
+});
+
+export type MeasurementRecordMetadata = z.infer<typeof MeasurementRecordMetadataSchema>;
+
+// ============================================
 // Default Values
 // ============================================
 

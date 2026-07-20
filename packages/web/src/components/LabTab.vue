@@ -31,6 +31,9 @@
       <div v-if="permissionError" class="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-xs text-red-400">
         {{ permissionError }}
       </div>
+      <div v-if="measurementNotice" class="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-xs text-amber-300" role="status">
+        {{ measurementNotice }}
+      </div>
 
       <!-- Guided protocols — compact single-line cards -->
       <div v-if="mode === 'guided'" class="space-y-2">
@@ -327,9 +330,15 @@ import FrequencySpectrum from './hrv/FrequencySpectrum.vue';
 import PoincarePlot from './hrv/PoincarePlot.vue';
 import ResonanceAssessment from './ResonanceAssessment.vue';
 import { ppgService, listCameras } from '../services/ppgService';
+import type { PPGCallbacks } from '../services/ppgService';
 import { soundService } from '../services/soundService';
 import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
+import {
+  limitAnalysisToEligibility,
+  MeasurementSession,
+  type MeasurementStartOutcome,
+} from '../services/measurementSession';
 import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
 import { analyzeHRV } from '@breath-in-flow/shared';
 import { useHrvStorage } from '../composables/useHrvStorage';
@@ -338,6 +347,9 @@ import type {
   HeartRateEstimate,
   HRVAnalysis,
   IBISample,
+  MeasurementProtocol,
+  MeasurementEligibility,
+  SampleProvenance,
 } from '@breath-in-flow/shared';
 
 interface Protocol {
@@ -355,9 +367,9 @@ const protocols: Protocol[] = [
 ];
 
 const sensorOptions = [
-  { value: 'accelerometer' as const, label: 'Chest (recommended)' },
   { value: 'camera' as const, label: 'Camera' },
-  { value: 'dual' as const, label: 'Both' },
+  { value: 'accelerometer' as const, label: 'Chest (Beta)' },
+  { value: 'dual' as const, label: 'Both (Beta)' },
 ];
 
 const hrvStorage = useHrvStorage();
@@ -370,7 +382,7 @@ const showAssessment = ref(false);
 const currentAnalysis = ref<HRVAnalysis | null>(null);
 const sensorQuality = ref(0);
 const elapsedSeconds = ref(0);
-const selectedSensor = ref<'camera' | 'accelerometer' | 'dual'>('accelerometer');
+const selectedSensor = ref<'camera' | 'accelerometer' | 'dual'>('camera');
 const selectedProtocol = ref<Protocol | null>(null);
 const showPrep = ref(false);
 const prepProtocol = ref<Protocol | null>(null);
@@ -381,6 +393,8 @@ const customDuration = ref(120); // seconds, adjustable in prep screen
 const collectedIBIs = ref<IBISample[]>([]);
 const measurementNotes = ref('');
 const measurementStartTime = ref<Date>(new Date());
+const currentEligibility = ref<MeasurementEligibility | null>(null);
+const currentSampleProvenance = ref<SampleProvenance[]>([]);
 const recentMeasurements = ref<Array<{
   id: string;
   type: string;
@@ -403,15 +417,34 @@ function addDebugLine(msg: string) {
   if (debugLog.value.length > DEBUG_LOG_MAX) debugLog.value.shift();
 }
 
-let timerInterval: ReturnType<typeof setInterval> | null = null;
+let measurementSession: MeasurementSession | null = null;
 
 // Sensor management
-async function startSensor() {
+async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementStartOutcome> {
+  measurementSession = new MeasurementSession({
+    protocol,
+    onElapsed: (seconds) => {
+      elapsedSeconds.value = seconds;
+      if (selectedProtocol.value && seconds >= customDuration.value) {
+        stopMeasurement();
+      }
+    },
+    onStateChange: (state) => {
+      if (state === 'no-data') {
+        if (selectedSensor.value === 'dual') sensorFusionService.reset();
+        permissionError.value = measurementSession?.getResult().errorMessage ??
+          'No detected heart beats were received. Reposition the sensor and try again.';
+        isMeasuring.value = false;
+        void disableKeepAwake();
+      }
+    },
+  });
+
   if (selectedSensor.value === 'dual') {
     sensorFusionService.reset();
     sensorFusionService.setCallbacks({
       onFusedIBI: (sample) => {
-        collectedIBIs.value.push(sample);
+        measurementSession?.addDetectedSample(sample);
         addHrDataPoint(sample);
       },
       onQualityChange: (q: number) => { sensorQuality.value = q; },
@@ -419,12 +452,11 @@ async function startSensor() {
 
     // Detected beats flow through fusion exactly once. If only one sensor sees
     // a beat, fusion emits that source after its short match window.
-    await ppgService.start({
-      callbacks: {
+    const ppgCallbacks = {
         onIBI: (sample) => {
           sensorFusionService.addPPGSample(sample);
         },
-        onHeartRateEstimate: addHeartRateEstimateDataPoint,
+        onHeartRateEstimate: recordHeartRateEstimate,
         onRawSignal: (value: number, timestamp: number) => {
           rawSignalData.value.push({ time: timestamp, value });
           if (rawSignalData.value.length > RAW_SIGNAL_MAX_POINTS) {
@@ -432,26 +464,36 @@ async function startSensor() {
           }
         },
         onQualityChange: (q: number) => { sensorQuality.value = Math.max(sensorQuality.value, q); },
-      },
-      cameraDeviceId: selectedCameraId.value || undefined,
-      torchEnabled: useTorch.value,
-    });
+      } satisfies PPGCallbacks;
     scgService.setCallbacks({
       onIBI: (sample) => {
         sensorFusionService.addSCGSample(sample);
       },
-      onHeartRateEstimate: addHeartRateEstimateDataPoint,
+      onHeartRateEstimate: recordHeartRateEstimate,
       onQualityChange: (q: number) => { sensorQuality.value = Math.max(sensorQuality.value, q); },
     });
-    await scgService.start();
+    return measurementSession.start({
+      ppg: {
+        start: () => ppgService.start({
+          callbacks: ppgCallbacks,
+          cameraDeviceId: selectedCameraId.value || undefined,
+          torchEnabled: useTorch.value,
+        }),
+        stop: () => ppgService.stop(),
+      },
+      scg: {
+        start: () => scgService.start(),
+        stop: () => scgService.stop(),
+      },
+    });
   } else {
     const callbacks = {
       onIBI: (sample: IBISample) => {
-        collectedIBIs.value.push(sample);
+        measurementSession?.addDetectedSample(sample);
         addHrDataPoint(sample);
         addDebugLine(`IBI: ${sample.interval.toFixed(0)}ms (${(60000/sample.interval).toFixed(0)} BPM) q=${sample.quality.toFixed(2)}`);
       },
-      onHeartRateEstimate: addHeartRateEstimateDataPoint,
+      onHeartRateEstimate: recordHeartRateEstimate,
       onRawSignal: (value: number, timestamp: number) => {
         rawSignalData.value.push({ time: timestamp, value });
         if (rawSignalData.value.length > RAW_SIGNAL_MAX_POINTS) {
@@ -469,30 +511,26 @@ async function startSensor() {
 
     if (selectedSensor.value === 'camera') {
       addDebugLine(`Starting camera PPG (torch=${useTorch.value}, camera=${selectedCameraId.value || 'default'})...`);
-      await ppgService.start({
-        callbacks,
-        cameraDeviceId: selectedCameraId.value || undefined,
-        torchEnabled: useTorch.value,
+      return measurementSession.start({
+        ppg: {
+          start: () => ppgService.start({
+            callbacks,
+            cameraDeviceId: selectedCameraId.value || undefined,
+            torchEnabled: useTorch.value,
+          }),
+          stop: () => ppgService.stop(),
+        },
       });
-      addDebugLine(`Camera status: ${ppgService.getStatus()}`);
     } else {
       addDebugLine('Starting accelerometer SCG...');
       scgService.setCallbacks(callbacks);
-      await scgService.start();
-      addDebugLine(`SCG status: ${scgService.getStatus()}`);
+      return measurementSession.start({
+        scg: {
+          start: () => scgService.start(),
+          stop: () => scgService.stop(),
+        },
+      });
     }
-  }
-}
-
-function stopSensor() {
-  if (selectedSensor.value === 'dual') {
-    ppgService.stop();
-    scgService.stop();
-    sensorFusionService.reset();
-  } else if (selectedSensor.value === 'camera') {
-    ppgService.stop();
-  } else {
-    scgService.stop();
   }
 }
 
@@ -511,6 +549,11 @@ function addHeartRateEstimateDataPoint(estimate: HeartRateEstimate) {
     hr: estimate.bpm,
     quality: estimate.quality,
   });
+}
+
+function recordHeartRateEstimate(estimate: HeartRateEstimate) {
+  measurementSession?.addHeartRateEstimate(estimate);
+  addHeartRateEstimateDataPoint(estimate);
 }
 
 // Raw signal canvas
@@ -671,6 +714,7 @@ watch(isMeasuring, (measuring) => {
 
 // Measurement control
 const permissionError = ref<string | null>(null);
+const measurementNotice = ref<string | null>(null);
 
 async function showPrepScreen(protocol: Protocol | null) {
   prepProtocol.value = protocol;
@@ -698,6 +742,7 @@ async function confirmStart() {
 
 async function checkPermissions(): Promise<boolean> {
   permissionError.value = null;
+  measurementNotice.value = null;
   addDebugLine(`Requesting permissions for ${selectedSensor.value} mode...`);
 
   const perms = await requestSensorPermissions(selectedSensor.value);
@@ -730,55 +775,70 @@ async function startProtocol(protocol: Protocol) {
   hrDataPoints.value = [];
   rawSignalData.value = [];
   debugLog.value = [];
-  isMeasuring.value = true;
-  void enableKeepAwake();
+  isMeasuring.value = false;
   showResults.value = false;
   elapsedSeconds.value = 0;
   sensorQuality.value = 0;
   measurementNotes.value = '';
   measurementStartTime.value = new Date();
+  currentEligibility.value = null;
+  currentSampleProvenance.value = [];
 
   addDebugLine(`Starting ${protocol.name} with ${selectedSensor.value} sensor`);
-  await startSensor();
-
-  timerInterval = setInterval(() => {
-    elapsedSeconds.value++;
-    if (selectedProtocol.value && elapsedSeconds.value >= customDuration.value) {
-      stopMeasurement();
-    }
-  }, 1000);
+  const outcome = await startSensor(protocol.id as MeasurementProtocol);
+  if (!outcome.ok) {
+    permissionError.value = outcome.message ?? 'Unable to start the selected sensor.';
+    return;
+  }
+  if (outcome.degradedSources?.length) {
+    addDebugLine(`Continuing without ${outcome.degradedSources.join(' and ')}`);
+    measurementNotice.value = `One sensor is unavailable. Continuing with ${
+      outcome.degradedSources.includes('scg') ? 'the camera' : 'the chest sensor'
+    } only.`;
+  }
+  isMeasuring.value = true;
+  void enableKeepAwake();
 }
 
 async function startFreeform() {
-  if (!(await checkPermissions())) return;
-
   selectedProtocol.value = null;
   collectedIBIs.value = [];
   hrDataPoints.value = [];
   rawSignalData.value = [];
   debugLog.value = [];
-  isMeasuring.value = true;
-  void enableKeepAwake();
+  isMeasuring.value = false;
   showResults.value = false;
   elapsedSeconds.value = 0;
   sensorQuality.value = 0;
   measurementNotes.value = '';
   measurementStartTime.value = new Date();
+  currentEligibility.value = null;
+  currentSampleProvenance.value = [];
 
-  startSensor();
-
-  timerInterval = setInterval(() => {
-    elapsedSeconds.value++;
-  }, 1000);
+  const outcome = await startSensor('freeform');
+  if (!outcome.ok) {
+    permissionError.value = outcome.message ?? 'Unable to start the selected sensor.';
+    return;
+  }
+  if (outcome.degradedSources?.length) {
+    addDebugLine(`Continuing without ${outcome.degradedSources.join(' and ')}`);
+    measurementNotice.value = `One sensor is unavailable. Continuing with ${
+      outcome.degradedSources.includes('scg') ? 'the camera' : 'the chest sensor'
+    } only.`;
+  }
+  isMeasuring.value = true;
+  void enableKeepAwake();
 }
 
 function stopMeasurement() {
   void disableKeepAwake();
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-  stopSensor();
+  if (selectedSensor.value === 'dual') sensorFusionService.reset();
+  const sessionResult = measurementSession?.stop();
+  measurementSession = null;
+  collectedIBIs.value = sessionResult?.samples ?? [];
+  currentEligibility.value = sessionResult?.eligibility ?? null;
+  currentSampleProvenance.value = sessionResult?.samples
+    .flatMap((sample) => sample.provenance ? [sample.provenance] : []) ?? [];
   isMeasuring.value = false;
 
   // Trim first 5 seconds and last 3 seconds of IBI data.
@@ -798,13 +858,29 @@ function stopMeasurement() {
     addDebugLine(`Trimmed IBIs: ${collectedIBIs.value.length} → ${ibis.length} (removed ${trimStartMs/1000}s start, ${trimEndMs/1000}s end)`);
   }
 
-  if (ibis.length >= 10) {
-    currentAnalysis.value = analyzeHRV(ibis);
+  if (sessionResult?.eligibility && !sessionResult.eligibility.eligible) {
+    permissionError.value = measurementEligibilityMessage(sessionResult.eligibility.reasons);
+    addDebugLine(`Measurement unavailable: ${sessionResult.eligibility.reasons.join(', ')}`);
+  } else if (ibis.length >= 10) {
+    const analysis = analyzeHRV(ibis);
+    currentAnalysis.value = sessionResult?.eligibility
+      ? limitAnalysisToEligibility(analysis, sessionResult.eligibility)
+      : analysis;
     showResults.value = true;
     soundService.playCompletionChime();
   } else {
     addDebugLine(`Not enough IBIs after trimming: ${ibis.length} (need >= 10)`);
   }
+}
+
+function measurementEligibilityMessage(reasons: string[]): string {
+  if (reasons.includes('duration-too-short')) {
+    return 'This recording was too short for the selected protocol. Try again and complete the full timer.';
+  }
+  if (reasons.includes('low-signal-quality') || reasons.includes('too-many-artifacts')) {
+    return 'Signal quality was too low for a reliable result. Reposition the sensor, stay still, and try again.';
+  }
+  return 'There were not enough clean detected beats for a reliable result. Reposition the sensor and try again.';
 }
 
 async function saveResults() {
@@ -817,6 +893,12 @@ async function saveResults() {
     durationSeconds: elapsedSeconds.value,
     sensorMode: selectedSensor.value,
     analysis: currentAnalysis.value,
+    algorithmVersion: 2,
+    eligibility: currentEligibility.value ?? undefined,
+    sampleProvenance: {
+      sources: [...new Set(currentSampleProvenance.value.map((item) => item.source))],
+      detectionMethods: [...new Set(currentSampleProvenance.value.map((item) => item.method))],
+    },
     notes: measurementNotes.value || undefined,
   });
   showResults.value = false;
@@ -887,12 +969,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-  if (isMeasuring.value) {
-    stopSensor();
+  if (measurementSession) {
+    if (selectedSensor.value === 'dual') sensorFusionService.reset();
+    measurementSession.stop();
+    measurementSession = null;
     void disableKeepAwake();
   }
 });

@@ -58,10 +58,6 @@ export interface PPGStartOptions {
  */
 export async function listCameras(): Promise<{ deviceId: string; label: string }[]> {
   try {
-    // Need a brief getUserMedia call to get labeled devices on Android
-    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
-    tempStream.getTracks().forEach(t => t.stop());
-
     const devices = await navigator.mediaDevices.enumerateDevices();
     return devices
       .filter(d => d.kind === 'videoinput')

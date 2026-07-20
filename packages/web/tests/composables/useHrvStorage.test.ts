@@ -318,6 +318,36 @@ describe('useHrvStorage', () => {
       const stats = await getMeasurementStats(30);
       expect(stats.count).toBe(1);
     });
+
+    it('does not average unavailable frequency values as real zero measurements', async () => {
+      const { saveMeasurement, getMeasurementStats } = useHrvStorage();
+      const available = makeMeasurement({
+        analysis: {
+          ...makeMeasurement().analysis,
+          frequencyDomain: {
+            ...makeMeasurement().analysis.frequencyDomain,
+            available: true,
+            lfPower: 400,
+          },
+        },
+      });
+      const unavailable = makeMeasurement({
+        analysis: {
+          ...makeMeasurement().analysis,
+          frequencyDomain: {
+            ...makeMeasurement().analysis.frequencyDomain,
+            available: false,
+            unavailableReason: 'protocol-not-supported',
+            lfPower: 0,
+          },
+        },
+      });
+
+      await saveMeasurement(available);
+      await saveMeasurement(unavailable);
+
+      expect((await getMeasurementStats(30)).avgLfPower).toBe(400);
+    });
   });
 
   describe('hasAnyMeasurements', () => {

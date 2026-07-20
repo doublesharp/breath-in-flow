@@ -4,6 +4,7 @@ import {
   DEFAULT_BREATHING_CONFIG,
   TimerStateSchema,
   INITIAL_TIMER_STATE,
+  MeasurementRecordMetadataSchema,
 } from '../src/schemas';
 
 function createRng(seed: number): () => number {
@@ -293,5 +294,31 @@ describe('TimerStateSchema', () => {
     const result = TimerStateSchema.parse(state);
     expect(result.phase).toBe('EXTENDED_EXHALE_HOLD');
     expect(result.extendedHoldElapsed).toBe(15.3);
+  });
+});
+
+describe('MeasurementRecordMetadataSchema', () => {
+  it('parses legacy records with backward-compatible metadata defaults', () => {
+    expect(MeasurementRecordMetadataSchema.parse({})).toEqual({
+      algorithmVersion: 1,
+    });
+  });
+
+  it('validates versioned provenance metadata', () => {
+    expect(
+      MeasurementRecordMetadataSchema.parse({
+        algorithmVersion: 2,
+        sampleProvenance: {
+          sources: ['ppg', 'fused'],
+          detectionMethods: ['peak-detected'],
+        },
+      }),
+    ).toEqual({
+      algorithmVersion: 2,
+      sampleProvenance: {
+        sources: ['ppg', 'fused'],
+        detectionMethods: ['peak-detected'],
+      },
+    });
   });
 });
