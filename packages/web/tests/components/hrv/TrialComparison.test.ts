@@ -73,14 +73,14 @@ describe('TrialComparison', () => {
     const wrapper = mount(TrialComparison, {
       props: { trials: sampleTrials, metric: 'amplitude' },
     });
-    expect((wrapper.vm as any).$.props.metric).toBe('amplitude');
+    expect(wrapper.props('metric')).toBe('amplitude');
   });
 
   it('accepts custom height', () => {
     const wrapper = mount(TrialComparison, {
       props: { trials: sampleTrials, height: 250 },
     });
-    expect((wrapper.vm as any).$.props.height).toBe(250);
+    expect(wrapper.props('height')).toBe(250);
   });
 
   it('handles single trial', () => {

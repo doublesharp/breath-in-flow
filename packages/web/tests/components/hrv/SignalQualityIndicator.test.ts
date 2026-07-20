@@ -91,7 +91,7 @@ describe('SignalQualityIndicator', () => {
     const wrapper = mount(SignalQualityIndicator, {
       props: { quality: 0.8, sensorType: 'ppg', ringSize: 100 },
     });
-    expect((wrapper.vm as any).$.props.ringSize).toBe(100);
+    expect(wrapper.props('ringSize')).toBe(100);
   });
 
   it('shows "Adjust finger position" for mid-range PPG quality', () => {

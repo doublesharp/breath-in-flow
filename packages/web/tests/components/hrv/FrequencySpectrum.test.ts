@@ -75,7 +75,7 @@ describe('FrequencySpectrum', () => {
     const wrapper = mount(FrequencySpectrum, {
       props: { spectrum: sampleSpectrum, height: 250 },
     });
-    expect((wrapper.vm as any).$.props.height).toBe(250);
+    expect(wrapper.props('height')).toBe(250);
   });
 
   it('handles single-point spectrum gracefully', () => {

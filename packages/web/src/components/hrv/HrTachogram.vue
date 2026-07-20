@@ -237,25 +237,32 @@ function draw() {
   ctx.restore();
 }
 
-function tick() {
-  draw();
-  animFrameId = requestAnimationFrame(tick);
+function scheduleDraw() {
+  if (animFrameId !== null) return;
+
+  animFrameId = requestAnimationFrame(() => {
+    animFrameId = null;
+    draw();
+  });
 }
 
 watch(
-  () => props.hrData,
-  (newData) => {
+  () => [props.hrData, props.breathingPhases, props.duration, props.showBreathingOverlay, props.height] as const,
+  ([newData]) => {
     lastData = [...newData];
+    scheduleDraw();
   },
   { deep: true, immediate: true }
 );
 
 onMounted(() => {
   lastData = [...props.hrData];
-  tick();
+  scheduleDraw();
+  window.addEventListener('resize', scheduleDraw, { passive: true });
 });
 
 onUnmounted(() => {
   if (animFrameId !== null) cancelAnimationFrame(animFrameId);
+  window.removeEventListener('resize', scheduleDraw);
 });
 </script>

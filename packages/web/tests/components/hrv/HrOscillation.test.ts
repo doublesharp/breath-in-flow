@@ -113,6 +113,6 @@ describe('HrOscillation', () => {
         height: 280,
       },
     });
-    expect((wrapper.vm as any).$.props.height).toBe(280);
+    expect(wrapper.props('height')).toBe(280);
   });
 });

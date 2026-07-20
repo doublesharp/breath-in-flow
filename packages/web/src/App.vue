@@ -358,14 +358,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, provide, onMounted, onUnmounted } from 'vue';
+import { defineAsyncComponent, ref, provide, onMounted, onUnmounted } from 'vue';
 import BreathingPractice from './components/BreathingPractice.vue';
-import SessionHistory from './components/SessionHistory.vue';
-import PracticePresets from './components/PracticePresets.vue';
-import AnalyticsDashboard from './components/AnalyticsDashboard.vue';
-import LabTab from './components/LabTab.vue';
 import HelpSystem from './components/HelpSystem.vue';
 import { AppConfig, type BreathingConfig } from '@breath-in-flow/shared';
+
+const AnalyticsDashboard = defineAsyncComponent(() => import('./components/AnalyticsDashboard.vue'));
+const LabTab = defineAsyncComponent(() => import('./components/LabTab.vue'));
+const PracticePresets = defineAsyncComponent(() => import('./components/PracticePresets.vue'));
+const SessionHistory = defineAsyncComponent(() => import('./components/SessionHistory.vue'));
 
 const activeTab = ref<'practice' | 'lab' | 'history' | 'configs' | 'analytics'>('practice');
 const selectedConfig = ref<BreathingConfig | null>(null);

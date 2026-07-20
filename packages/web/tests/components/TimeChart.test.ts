@@ -1,8 +1,11 @@
 import { shallowMount } from '@vue/test-utils';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 // The project uses `HoldTimeChart.vue` as the time chart component.
 import HoldTimeChart from '@/components/charts/HoldTimeChart.vue';
+import SessionsPerWeekChart from '@/components/charts/SessionsPerWeekChart.vue';
+import StressChart from '@/components/charts/StressChart.vue';
 import type { Session } from '@breath-in-flow/shared';
+import type { StressDataPoint } from '@/services/wearables/types';
 
 // Stub Chart.js used by the chart components to avoid initializing canvases.
 vi.mock('chart.js', async (importOriginal) => {
@@ -16,6 +19,32 @@ vi.mock('chart.js', async (importOriginal) => {
       constructor() {}
     },
   };
+});
+
+function makeSession(id: string, startedAt: Date): Session {
+  return {
+    id,
+    configId: 'config',
+    configSnapshot: {} as Record<string, unknown>,
+    status: 'COMPLETED',
+    sets: [],
+    targetSets: 1,
+    completedSets: 1,
+    startedAt,
+    completedAt: startedAt,
+  } as unknown as Session;
+}
+
+function makeStressPoint(value: number, timestamp: string): StressDataPoint {
+  return {
+    value,
+    timestamp: new Date(timestamp),
+    source: 'test',
+  };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('HoldTimeChart.vue', () => {
@@ -354,5 +383,76 @@ describe('HoldTimeChart.vue', () => {
 
     expect(text).toContain('Best');
     expect(text).toContain('1');
+  });
+});
+
+describe('SessionsPerWeekChart.vue', () => {
+  it('renders empty-state copy when no sessions are available', () => {
+    const wrapper = shallowMount(SessionsPerWeekChart, { props: { sessions: [] } });
+
+    expect(wrapper.text()).toContain('No session data available');
+  });
+
+  it('buckets sessions by ISO-style week and summarizes current-week activity', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-24T12:00:00Z'));
+
+    const wrapper = shallowMount(SessionsPerWeekChart, {
+      props: {
+        sessions: [
+          makeSession('this-week-1', new Date('2026-06-22T09:00:00Z')),
+          makeSession('this-week-2', new Date('2026-06-24T09:00:00Z')),
+          makeSession('last-week', new Date('2026-06-17T09:00:00Z')),
+          makeSession('too-old', new Date('2026-03-01T09:00:00Z')),
+        ],
+      },
+    });
+
+    const text = wrapper.text();
+    expect(text).toContain('Avg per Week');
+    expect(text).toContain('This Week');
+    expect(text).toContain('0.4');
+    expect(text).toContain('2');
+  });
+});
+
+describe('StressChart.vue', () => {
+  it('renders empty-state copy when no stress data is available', () => {
+    const wrapper = shallowMount(StressChart);
+
+    expect(wrapper.text()).toContain('No data available');
+  });
+
+  it('shows stress reduction and legend when pre and post averages improve', () => {
+    const wrapper = shallowMount(StressChart, {
+      props: {
+        preData: [
+          makeStressPoint(80, '2026-06-24T08:00:00Z'),
+          makeStressPoint(60, '2026-06-24T08:05:00Z'),
+        ],
+        duringData: [makeStressPoint(50, '2026-06-24T08:30:00Z')],
+        postData: [
+          makeStressPoint(40, '2026-06-24T09:00:00Z'),
+          makeStressPoint(30, '2026-06-24T09:05:00Z'),
+        ],
+      },
+    });
+
+    const text = wrapper.text();
+    expect(text).toContain('50.0%');
+    expect(text).toContain('Pre-session');
+    expect(text).toContain('During session');
+    expect(text).toContain('Post-session');
+  });
+
+  it('hides legend when requested', () => {
+    const wrapper = shallowMount(StressChart, {
+      props: {
+        showLegend: false,
+        duringData: [makeStressPoint(42, '2026-06-24T08:30:00Z')],
+      },
+    });
+
+    expect(wrapper.text()).not.toContain('During session');
   });
 });

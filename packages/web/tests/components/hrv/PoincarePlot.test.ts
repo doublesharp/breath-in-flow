@@ -59,7 +59,7 @@ describe('PoincarePlot', () => {
     const wrapper = mount(PoincarePlot, {
       props: { rrIntervals: sampleRR, size: 320 },
     });
-    expect((wrapper.vm as any).$.props.size).toBe(320);
+    expect(wrapper.props('size')).toBe(320);
   });
 
   it('handles large datasets', () => {

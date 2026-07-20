@@ -110,6 +110,7 @@ const averagePerWeek = computed(() => {
 });
 
 const chartData = computed<ChartData<'bar'> | null>(() => {
+  if (!props.sessions.length) return null;
   if (!weeklyData.value.length) return null;
 
   return {

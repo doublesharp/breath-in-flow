@@ -43,14 +43,14 @@ describe('HrTachogram', () => {
       props: { hrData: [] },
     });
     // Default duration prop should be 60
-    expect((wrapper.vm as any).$.props.duration ?? 60).toBe(60);
+    expect(wrapper.props('duration') ?? 60).toBe(60);
   });
 
   it('accepts custom duration prop', () => {
     const wrapper = mount(HrTachogram, {
       props: { hrData: [], duration: 30 },
     });
-    expect((wrapper.vm as any).$.props.duration).toBe(30);
+    expect(wrapper.props('duration')).toBe(30);
   });
 
   it('accepts breathing phases overlay props', () => {
@@ -68,7 +68,7 @@ describe('HrTachogram', () => {
     const wrapper = mount(HrTachogram, {
       props: { hrData: [], height: 300 },
     });
-    expect((wrapper.vm as any).$.props.height).toBe(300);
+    expect(wrapper.props('height')).toBe(300);
   });
 
   it('handles large datasets without crashing', () => {
@@ -93,5 +93,35 @@ describe('HrTachogram', () => {
       props: { hrData },
     });
     expect(wrapper.exists()).toBe(true);
+  });
+
+  it('coalesces redraws instead of running a continuous animation loop', async () => {
+    const callbacks: FrameRequestCallback[] = [];
+    const requestAnimationFrameMock = vi.fn((cb: FrameRequestCallback) => {
+      callbacks.push(cb);
+      return callbacks.length;
+    });
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrameMock);
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+    const wrapper = mount(HrTachogram, {
+      props: {
+        hrData: [{ time: 0, hr: 60, quality: 0.9 }],
+      },
+    });
+
+    expect(requestAnimationFrameMock).toHaveBeenCalledTimes(1);
+    callbacks.shift()?.(0);
+    expect(requestAnimationFrameMock).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({
+      hrData: [
+        { time: 0, hr: 60, quality: 0.9 },
+        { time: 1, hr: 62, quality: 0.9 },
+      ],
+    });
+
+    expect(requestAnimationFrameMock).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
   });
 });
