@@ -242,6 +242,7 @@ const phaseBackgroundStyle = computed(() => {
     EXHALE_HOLD: 'linear-gradient(135deg, #fbbf24, #f59e0b 45%, #c2410c)',
     EXTENDED_INHALE_HOLD: 'linear-gradient(135deg, #f87171, #ef4444 45%, #b91c1c)',
     EXTENDED_EXHALE_HOLD: 'linear-gradient(135deg, #f87171, #ef4444 45%, #b91c1c)',
+    SET_REST: 'linear-gradient(135deg, #2dd4bf, #0d9488 45%, #115e59)',
     SET_COMPLETE: 'linear-gradient(135deg, #34d399, #10b981 45%, #0f766e)',
     SESSION_COMPLETE: 'linear-gradient(135deg, #34d399, #10b981 45%, #0f766e)',
     PAUSED: 'linear-gradient(135deg, #cbd5e1, #94a3b8 45%, #475569)',
@@ -318,7 +319,12 @@ watch([() => props.phase, () => props.currentTime, () => props.totalTime], ([pha
   const progress = total > 0 ? 1 - currentTime / total : 0;
   const clampedProgress = Math.max(0, Math.min(1, progress));
   const offset = circumference * (1 - clampedProgress);
-  const forceFade = phase === 'IDLE' || phase === 'PAUSED' || phase === 'SET_COMPLETE' || phase === 'SESSION_COMPLETE';
+  const forceFade =
+    phase === 'IDLE' ||
+    phase === 'PAUSED' ||
+    phase === 'SET_REST' ||
+    phase === 'SET_COMPLETE' ||
+    phase === 'SESSION_COMPLETE';
   const fadeProgress = forceFade ? 1 : clampedProgress;
 
   switch (phase) {
@@ -393,6 +399,8 @@ const phaseColorClass = computed(() => {
     case 'SET_COMPLETE':
     case 'SESSION_COMPLETE':
       return 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-500/40';
+    case 'SET_REST':
+      return 'bg-gradient-to-r from-teal-500 to-cyan-600 text-white shadow-teal-500/40';
     case 'PAUSED':
       return 'bg-gradient-to-r from-slate-500 to-slate-600 text-white shadow-slate-500/40';
     default:
@@ -416,6 +424,8 @@ const phaseColorBgClass = computed(() => {
     case 'SET_COMPLETE':
     case 'SESSION_COMPLETE':
       return 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700';
+    case 'SET_REST':
+      return 'bg-gradient-to-br from-teal-400 via-teal-500 to-cyan-700';
     case 'PAUSED':
       return 'bg-gradient-to-br from-slate-400 via-slate-500 to-slate-700';
     default:

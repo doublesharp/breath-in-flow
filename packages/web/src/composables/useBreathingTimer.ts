@@ -89,6 +89,20 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     return getExtendedHoldMode(isFirst) === 'TOLERANCE';
   }
 
+  function isExtendedHoldPhase(phase: BreathingPhase) {
+    return phase === 'EXTENDED_INHALE_HOLD' || phase === 'EXTENDED_EXHALE_HOLD';
+  }
+
+  function getCurrentExtendedHoldElapsed(): number {
+    if (!isExtendedHoldPhase(state.value.phase)) return state.value.extendedHoldElapsed;
+    if (isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)) {
+      return state.value.extendedHoldElapsed;
+    }
+
+    const elapsed = phaseStartTime > 0 ? (Date.now() - phaseStartTime) / 1000 : 0;
+    return Math.min(state.value.totalPhaseTime, Math.max(0, elapsed));
+  }
+
   function tick() {
     if (state.value.isPaused) return;
 
@@ -112,6 +126,9 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     // Calculate time remaining based on actual elapsed time (no drift)
     const elapsed = (Date.now() - phaseStartTime) / 1000;
     const newTime = Math.max(0, state.value.totalPhaseTime - elapsed);
+    const extendedHoldElapsed = isExtendedHoldPhase(state.value.phase)
+      ? Math.min(state.value.totalPhaseTime, Math.max(0, elapsed))
+      : state.value.extendedHoldElapsed;
 
     // Use floor to determine when we've crossed into a new second
     const currentSecond = Math.floor(newTime);
@@ -129,7 +146,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       }
     }
 
-    state.value = { ...state.value, currentTime: newTime };
+    state.value = { ...state.value, currentTime: newTime, extendedHoldElapsed };
 
     // When we've elapsed the full duration, transition to next phase
     // Use lastSoundedSecond === 0 to ensure we've played the final click before transitioning
@@ -191,10 +208,14 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       case 'EXTENDED_EXHALE_HOLD':
         const holdType = currentPhase === 'EXTENDED_INHALE_HOLD' ? 'INHALE' : 'EXHALE';
         // Always pass the actual elapsed time, which is accurate for both TIMED and TOLERANCE modes
-        const actualDuration = state.value.extendedHoldElapsed;
+        const actualDuration = getCurrentExtendedHoldElapsed();
 
         options.onExtendedHoldEnd?.(actualDuration, holdType, state.value);
         handlePostExtendedHold();
+        break;
+
+      case 'SET_REST':
+        startNextSet();
         break;
     }
   }
@@ -284,8 +305,12 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       return;
     }
 
-    setPhase('SET_COMPLETE', 0);
-    stopInterval();
+    if (config.restBetweenSetsSeconds > 0) {
+      setPhase('SET_REST', config.restBetweenSetsSeconds);
+    } else {
+      setPhase('SET_COMPLETE', 0);
+      stopInterval();
+    }
   }
 
   function completeSession() {
@@ -384,15 +409,13 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     }
 
     const holdType = state.value.phase === 'EXTENDED_INHALE_HOLD' ? 'INHALE' : 'EXHALE';
-    const duration = state.value.extendedHoldElapsed;
+    const duration = getCurrentExtendedHoldElapsed();
 
     options.onExtendedHoldEnd?.(duration, holdType, state.value);
     handlePostExtendedHold();
   }
 
-  function nextSet() {
-    if (state.value.phase !== 'SET_COMPLETE') return;
-
+  function startNextSet() {
     state.value = {
       ...state.value,
       currentSet: state.value.currentSet + 1,
@@ -405,14 +428,21 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     startInterval();
   }
 
+  function nextSet() {
+    if (state.value.phase !== 'SET_COMPLETE' && state.value.phase !== 'SET_REST') return;
+    startNextSet();
+  }
+
   function skipPhase() {
     if (!state.value.isRunning || state.value.isPaused) return;
     if (isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)) {
       endExtendedHold();
       return;
     }
+
+    transitionPending = false;
     state.value = { ...state.value, currentTime: 0 };
-    tick();
+    transitionToNextPhase();
   }
 
   // Only register onUnmounted if called from a component's setup()

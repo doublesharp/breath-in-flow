@@ -20,6 +20,7 @@ export const BreathingPhaseSchema = z.enum([
   'EXHALE_HOLD',
   'EXTENDED_INHALE_HOLD',
   'EXTENDED_EXHALE_HOLD',
+  'SET_REST',
   'SET_COMPLETE',
   'SESSION_COMPLETE',
   'PAUSED',
@@ -60,6 +61,7 @@ const BaseBreathingConfigSchema = z.object({
 
   // Set configuration
   targetSets: z.number().min(0).max(20).default(0), // 0 means record as you go
+  restBetweenSetsSeconds: z.number().int().min(0).max(600).default(0),
 
   // Audio configuration
   soundEnabled: z.boolean().default(true),
@@ -230,6 +232,7 @@ export const DEFAULT_BREATHING_CONFIG: CreateBreathingConfig = {
   secondExtendedHoldMode: 'TIMED',
   secondExtendedHoldDuration: 15,
   targetSets: 0,
+  restBetweenSetsSeconds: 0,
   soundEnabled: true,
   soundTheme: 'wood',
   ttsEnabled: false,
@@ -322,6 +325,12 @@ export function getPhaseInfo(phase: BreathingPhase, config?: BreathingConfig): P
       instruction: 'Hold as long as comfortable',
       color: 'red',
     },
+    SET_REST: {
+      phase: 'SET_REST',
+      label: 'Rest',
+      instruction: 'Recover before the next set',
+      color: 'teal',
+    },
     SET_COMPLETE: {
       phase: 'SET_COMPLETE',
       label: 'Set Complete',
@@ -367,6 +376,7 @@ export const PHASE_INFO: Record<BreathingPhase, PhaseInfo> = {
   EXHALE_HOLD: getPhaseInfo('EXHALE_HOLD'),
   EXTENDED_INHALE_HOLD: getPhaseInfo('EXTENDED_INHALE_HOLD'),
   EXTENDED_EXHALE_HOLD: getPhaseInfo('EXTENDED_EXHALE_HOLD'),
+  SET_REST: getPhaseInfo('SET_REST'),
   SET_COMPLETE: getPhaseInfo('SET_COMPLETE'),
   SESSION_COMPLETE: getPhaseInfo('SESSION_COMPLETE'),
   PAUSED: getPhaseInfo('PAUSED'),

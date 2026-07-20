@@ -77,22 +77,32 @@ vi.mock('@/composables/useBreathingTimer', () => {
           // simulate ending an extended hold (default values)
           (
             opts.onExtendedHoldEnd as
-              | ((duration: number, type: string, data: Record<string, unknown>) => void)
-              | undefined
+              ((duration: number, type: string, data: Record<string, unknown>) => void) | undefined
           )?.(12, 'INHALE', {});
         },
         // Test helpers that the test can call via wrapper.vm.timer
         triggerSetComplete: (setNum = 1) => {
           (
             opts.onSetComplete as
-              | ((setNum: number, data: Record<string, unknown>) => void)
-              | undefined
+              ((setNum: number, data: Record<string, unknown>) => void) | undefined
           )?.(setNum, {});
           phase.value = 'SET_COMPLETE';
         },
         triggerSessionComplete: () => {
           (opts.onSessionComplete as ((data: Record<string, unknown>) => void) | undefined)?.({});
           phase.value = 'SESSION_COMPLETE';
+        },
+        triggerTimedRestComplete: () => {
+          currentSet.value += 1;
+          currentRepetition.value = 1;
+          phase.value = 'INHALE';
+          (
+            opts.onPhaseChange as
+              ((phase: string, data: Record<string, unknown>) => void) | undefined
+          )?.('INHALE', {
+            currentSet: currentSet.value,
+            currentRepetition: currentRepetition.value,
+          });
         },
       };
     },
@@ -132,6 +142,7 @@ describe('BreathingPractice flows', () => {
     completeSessionMock.mockReset();
     updateSessionMock.mockReset();
     createConfigMock.mockReset();
+    cancelSessionMock.mockReset();
 
     speakMock = vi.fn();
     loadVoicesMock = vi.fn().mockResolvedValue([]);
@@ -168,6 +179,69 @@ describe('BreathingPractice flows', () => {
     // wait for DOM to update
     await (vm as { $nextTick: () => Promise<void> }).$nextTick();
     expect(addSetMock).toHaveBeenCalled();
+  });
+
+  it('opens a fresh set record when timed rest starts the next set automatically', async () => {
+    createSessionMock.mockReturnValue({ id: 'sess-rest', sets: [] });
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    const startButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().toLowerCase().includes('start practice'));
+    await startButton!.trigger('click');
+
+    const vm = wrapper.vm as unknown as {
+      timer: {
+        triggerSetComplete: (setNumber?: number) => void;
+        triggerTimedRestComplete: () => void;
+      };
+      currentSetData: { setNumber: number } | null;
+    };
+    vm.timer.triggerSetComplete(1);
+    vm.timer.triggerTimedRestComplete();
+    await nextTick();
+
+    expect(vm.currentSetData?.setNumber).toBe(2);
+    wrapper.unmount();
+  });
+
+  it('blocks starting practice when timing settings are invalid', async () => {
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref(null),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    const vm = wrapper.vm as unknown as {
+      config: {
+        extendedHoldEnabled: boolean;
+        extendedHoldMode: 'TIMED' | 'TOLERANCE';
+        extendedHoldDuration: number;
+      };
+    };
+    vm.config.extendedHoldEnabled = true;
+    vm.config.extendedHoldMode = 'TIMED';
+    vm.config.extendedHoldDuration = 0;
+    await nextTick();
+
+    const validation = wrapper.find('[data-testid="quick-config-validation-error"]');
+    expect(validation.exists()).toBe(true);
+    expect(validation.text()).toContain('Extended hold duration');
+
+    const startBtn = wrapper
+      .findAll('button')
+      .find((b) => b.text().toLowerCase().includes('start practice'));
+    expect(startBtn?.attributes('disabled')).toBeDefined();
+    expect(createSessionMock).not.toHaveBeenCalled();
   });
 
   it('records extended hold when ending hold', async () => {

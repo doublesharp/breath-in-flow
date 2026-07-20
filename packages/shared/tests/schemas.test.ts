@@ -6,6 +6,18 @@ import {
   INITIAL_TIMER_STATE,
 } from '../src/schemas';
 
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rng: () => number, min: number, max: number): number {
+  return Math.floor(rng() * (max - min + 1)) + min;
+}
+
 describe('BreathingConfigSchema', () => {
   it('should validate a valid config', () => {
     const config = {
@@ -43,6 +55,28 @@ describe('BreathingConfigSchema', () => {
     expect(result.repetitions).toBe(4);
     expect(result.extendedHoldEnabled).toBe(false);
     expect(result.targetSets).toBe(0);
+    expect(result.restBetweenSetsSeconds).toBe(0);
+  });
+
+  it('validates rest between sets from zero through ten minutes', () => {
+    expect(
+      CreateBreathingConfigSchema.parse({
+        name: 'Timed Rest',
+        restBetweenSetsSeconds: 60,
+      }).restBetweenSetsSeconds
+    ).toBe(60);
+    expect(
+      CreateBreathingConfigSchema.safeParse({
+        name: 'Too Much Rest',
+        restBetweenSetsSeconds: 601,
+      }).success
+    ).toBe(false);
+    expect(
+      CreateBreathingConfigSchema.safeParse({
+        name: 'Negative Rest',
+        restBetweenSetsSeconds: -1,
+      }).success
+    ).toBe(false);
   });
 
   it('should reject invalid inhale time', () => {
@@ -86,6 +120,118 @@ describe('BreathingConfigSchema', () => {
     expect(result.extendedHoldMode).toBe('TIMED');
     expect(result.extendedHoldDuration).toBe(60);
   });
+
+  it('should reject timed extended holds without a positive duration', () => {
+    const config = {
+      name: 'Invalid timed hold',
+      extendedHoldEnabled: true,
+      extendedHoldMode: 'TIMED' as const,
+      extendedHoldDuration: 0,
+    };
+
+    expect(CreateBreathingConfigSchema.safeParse(config).success).toBe(false);
+  });
+
+  it('should reject timed second extended holds without a positive duration', () => {
+    const config = {
+      name: 'Invalid second timed hold',
+      secondExtendedHoldEnabled: true,
+      secondExtendedHoldMode: 'TIMED' as const,
+      secondExtendedHoldDuration: 0,
+    };
+
+    expect(CreateBreathingConfigSchema.safeParse(config).success).toBe(false);
+  });
+
+  it('fuzzes valid bounded config inputs', () => {
+    const rng = createRng(0xb1f2026);
+
+    for (let i = 0; i < 100; i++) {
+      const extendedHoldEnabled = rng() < 0.5;
+      const extendedHoldMode = rng() < 0.5 ? 'TIMED' : 'TOLERANCE';
+      const secondExtendedHoldEnabled = rng() < 0.35;
+      const secondExtendedHoldMode = rng() < 0.5 ? 'TIMED' : 'TOLERANCE';
+      const config = {
+        name: `Fuzz Config ${i}`,
+        inhaleTime: randomInt(rng, 1, 60),
+        inhaleHoldTime: randomInt(rng, 0, 60),
+        exhaleTime: randomInt(rng, 1, 60),
+        exhaleHoldTime: randomInt(rng, 0, 60),
+        repetitions: randomInt(rng, 1, 100),
+        extendedHoldEnabled,
+        extendedHoldType: rng() < 0.5 ? ('INHALE' as const) : ('EXHALE' as const),
+        extendedHoldMode,
+        extendedHoldDuration:
+          extendedHoldEnabled && extendedHoldMode === 'TIMED'
+            ? randomInt(rng, 1, 300)
+            : randomInt(rng, 0, 300),
+        secondExtendedHoldEnabled,
+        secondExtendedHoldType: rng() < 0.5 ? ('INHALE' as const) : ('EXHALE' as const),
+        secondExtendedHoldMode,
+        secondExtendedHoldDuration:
+          secondExtendedHoldEnabled && secondExtendedHoldMode === 'TIMED'
+            ? randomInt(rng, 1, 300)
+            : randomInt(rng, 0, 300),
+        targetSets: randomInt(rng, 0, 20),
+        soundEnabled: rng() < 0.5,
+        soundTheme: ['wood', 'water', 'wind', 'subtle', 'chimes'][randomInt(rng, 0, 4)],
+        ttsEnabled: rng() < 0.5,
+      };
+
+      const result = CreateBreathingConfigSchema.safeParse(config);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.inhaleTime).toBeGreaterThanOrEqual(1);
+        expect(result.data.exhaleTime).toBeGreaterThanOrEqual(1);
+        expect(result.data.repetitions).toBeGreaterThanOrEqual(1);
+        expect(result.data.targetSets).toBeLessThanOrEqual(20);
+      }
+    }
+  });
+
+  it('fuzzes invalid config bounds and refinements', () => {
+    const rng = createRng(0xbad2026);
+    const invalidVariants: Array<Record<string, unknown>> = [
+      { name: '' },
+      { name: 'x'.repeat(101) },
+      { inhaleTime: 0 },
+      { inhaleTime: 61 },
+      { inhaleHoldTime: -1 },
+      { inhaleHoldTime: 61 },
+      { exhaleTime: 0 },
+      { exhaleTime: 61 },
+      { exhaleHoldTime: -1 },
+      { exhaleHoldTime: 61 },
+      { repetitions: 0 },
+      { repetitions: 101 },
+      { targetSets: -1 },
+      { targetSets: 21 },
+      { restBetweenSetsSeconds: -1 },
+      { restBetweenSetsSeconds: 601 },
+      { soundTheme: 'invalid-theme' },
+      {
+        extendedHoldEnabled: true,
+        extendedHoldMode: 'TIMED',
+        extendedHoldDuration: 0,
+      },
+      {
+        secondExtendedHoldEnabled: true,
+        secondExtendedHoldMode: 'TIMED',
+        secondExtendedHoldDuration: 0,
+      },
+    ];
+
+    for (let i = 0; i < 80; i++) {
+      const invalidConfig = {
+        ...DEFAULT_BREATHING_CONFIG,
+        name: `Invalid Fuzz ${i}`,
+        ...invalidVariants[randomInt(rng, 0, invalidVariants.length - 1)],
+      };
+
+      expect(CreateBreathingConfigSchema.safeParse(invalidConfig).success).toBe(false);
+    }
+  });
 });
 
 describe('DEFAULT_BREATHING_CONFIG', () => {
@@ -99,6 +245,7 @@ describe('DEFAULT_BREATHING_CONFIG', () => {
     expect(DEFAULT_BREATHING_CONFIG.exhaleTime).toBe(4);
     expect(DEFAULT_BREATHING_CONFIG.repetitions).toBe(4);
     expect(DEFAULT_BREATHING_CONFIG.extendedHoldEnabled).toBe(false);
+    expect(DEFAULT_BREATHING_CONFIG.restBetweenSetsSeconds).toBe(0);
   });
 });
 

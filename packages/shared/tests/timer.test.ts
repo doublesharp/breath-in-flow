@@ -5,8 +5,21 @@ import {
   formatTimeSimple,
   calculateTotalCycleTime,
   calculateSetTime,
+  calculateSessionTime,
 } from '../src/timer';
 import { BreathingConfig, DEFAULT_BREATHING_CONFIG } from '../src/schemas';
+
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rng: () => number, min: number, max: number): number {
+  return Math.floor(rng() * (max - min + 1)) + min;
+}
 
 describe('BreathingTimer', () => {
   let timer: BreathingTimer;
@@ -274,6 +287,17 @@ describe('BreathingTimer', () => {
 
       expect(timer.getState().phase).toBe('EXTENDED_INHALE_HOLD');
     });
+
+    it('should ignore endExtendedHold outside an extended hold phase', () => {
+      const onExtendedHoldEnd = vi.fn();
+      timer = new BreathingTimer(config, { onExtendedHoldEnd });
+
+      timer.start();
+      timer.endExtendedHold();
+
+      expect(onExtendedHoldEnd).not.toHaveBeenCalled();
+      expect(timer.getState().phase).toBe('INHALE');
+    });
   });
 
   describe('second extended hold', () => {
@@ -336,6 +360,84 @@ describe('BreathingTimer', () => {
       expect(onSessionComplete).toHaveBeenCalled();
       expect(timer.getState().phase).toBe('SESSION_COMPLETE');
     });
+
+    it('should ignore nextSet unless a set is complete', () => {
+      timer.start();
+      timer.nextSet();
+
+      const state = timer.getState();
+      expect(state.phase).toBe('INHALE');
+      expect(state.currentSet).toBe(1);
+    });
+
+    it('counts down configured rest and starts the next set automatically', () => {
+      config = {
+        ...DEFAULT_BREATHING_CONFIG,
+        inhaleTime: 1,
+        exhaleTime: 1,
+        repetitions: 1,
+        targetSets: 2,
+        restBetweenSetsSeconds: 3,
+      };
+      timer = new BreathingTimer(config);
+
+      timer.start();
+      vi.advanceTimersByTime(2200);
+
+      expect(timer.getState()).toMatchObject({
+        phase: 'SET_REST',
+        currentSet: 1,
+        totalPhaseTime: 3,
+      });
+
+      vi.advanceTimersByTime(3100);
+
+      expect(timer.getState()).toMatchObject({
+        phase: 'INHALE',
+        currentSet: 2,
+        currentRepetition: 1,
+      });
+    });
+
+    it('allows starting the next set early during timed rest', () => {
+      config = {
+        ...DEFAULT_BREATHING_CONFIG,
+        inhaleTime: 1,
+        exhaleTime: 1,
+        repetitions: 1,
+        targetSets: 2,
+        restBetweenSetsSeconds: 30,
+      };
+      timer = new BreathingTimer(config);
+
+      timer.start();
+      vi.advanceTimersByTime(2200);
+      expect(timer.getState().phase).toBe('SET_REST');
+
+      timer.nextSet();
+
+      expect(timer.getState()).toMatchObject({
+        phase: 'INHALE',
+        currentSet: 2,
+      });
+    });
+
+    it('does not rest after the final target set', () => {
+      config = {
+        ...DEFAULT_BREATHING_CONFIG,
+        inhaleTime: 1,
+        exhaleTime: 1,
+        repetitions: 1,
+        targetSets: 1,
+        restBetweenSetsSeconds: 30,
+      };
+      timer = new BreathingTimer(config);
+
+      timer.start();
+      vi.advanceTimersByTime(2200);
+
+      expect(timer.getState().phase).toBe('SESSION_COMPLETE');
+    });
   });
 
   describe('skipPhase()', () => {
@@ -353,6 +455,106 @@ describe('BreathingTimer', () => {
 
       expect(timer.getState().phase).toBe('PAUSED');
     });
+  });
+
+  describe('fuzzed timer invariants', () => {
+    it('walks generated valid configs to set or session completion', () => {
+      const rng = createRng(0x710e2026);
+
+      for (let i = 0; i < 60; i++) {
+        timer.destroy();
+
+        const extendedHoldEnabled = rng() < 0.6;
+        config = {
+          ...DEFAULT_BREATHING_CONFIG,
+          name: `Timer Fuzz ${i}`,
+          inhaleTime: randomInt(rng, 1, 3),
+          inhaleHoldTime: randomInt(rng, 0, 2),
+          exhaleTime: randomInt(rng, 1, 3),
+          exhaleHoldTime: randomInt(rng, 0, 2),
+          repetitions: randomInt(rng, 1, 4),
+          targetSets: randomInt(rng, 0, 3),
+          extendedHoldEnabled,
+          extendedHoldType: rng() < 0.5 ? 'INHALE' : 'EXHALE',
+          extendedHoldMode: rng() < 0.5 ? 'TIMED' : 'TOLERANCE',
+          extendedHoldDuration: randomInt(rng, 1, 4),
+          secondExtendedHoldEnabled: extendedHoldEnabled && rng() < 0.35,
+          secondExtendedHoldType: rng() < 0.5 ? 'INHALE' : 'EXHALE',
+          secondExtendedHoldMode: 'TIMED',
+          secondExtendedHoldDuration: randomInt(rng, 1, 4),
+        };
+        timer = new BreathingTimer(config);
+        timer.start();
+
+        let steps = 0;
+        for (; steps < 500; steps++) {
+          const state = timer.getState();
+
+          expect(Number.isFinite(state.currentTime)).toBe(true);
+          expect(Number.isFinite(state.totalPhaseTime)).toBe(true);
+          expect(Number.isFinite(state.extendedHoldElapsed)).toBe(true);
+          expect(state.currentTime).toBeGreaterThanOrEqual(0);
+          expect(state.totalPhaseTime).toBeGreaterThanOrEqual(0);
+          expect(state.currentRepetition).toBeGreaterThanOrEqual(0);
+          expect(state.currentRepetition).toBeLessThanOrEqual(config.repetitions);
+          expect(state.currentSet).toBeGreaterThanOrEqual(1);
+          if (config.targetSets > 0) {
+            expect(state.currentSet).toBeLessThanOrEqual(config.targetSets);
+          }
+
+          if (
+            (state.phase === 'EXTENDED_INHALE_HOLD' || state.phase === 'EXTENDED_EXHALE_HOLD') &&
+            config.extendedHoldMode === 'TOLERANCE'
+          ) {
+            timer.endExtendedHold();
+            continue;
+          }
+
+          if (state.phase === 'SET_COMPLETE') {
+            if (config.targetSets > 0 && state.currentSet < config.targetSets) {
+              timer.nextSet();
+              continue;
+            }
+            break;
+          }
+
+          if (state.phase === 'SESSION_COMPLETE') {
+            break;
+          }
+
+          timer.skipPhase();
+        }
+
+        expect(steps).toBeLessThan(500);
+
+        const finalState = timer.getState();
+        expect(finalState.phase).toBe(config.targetSets > 0 ? 'SESSION_COMPLETE' : 'SET_COMPLETE');
+        expect(finalState.currentTime).toBe(0);
+        if (config.targetSets > 0) {
+          expect(finalState.isRunning).toBe(false);
+          expect(finalState.currentSet).toBe(config.targetSets);
+        }
+      }
+    });
+  });
+});
+
+describe('calculateSessionTime', () => {
+  it('includes rest only between finite target sets', () => {
+    const config: BreathingConfig = {
+      ...DEFAULT_BREATHING_CONFIG,
+      inhaleTime: 3,
+      inhaleHoldTime: 1,
+      exhaleTime: 4,
+      exhaleHoldTime: 1,
+      repetitions: 10,
+      targetSets: 2,
+      restBetweenSetsSeconds: 60,
+    };
+
+    expect(calculateSetTime(config)).toBe(90);
+    expect(calculateSessionTime(config)).toBe(240);
+    expect(calculateSessionTime({ ...config, targetSets: 0 })).toBe(90);
   });
 });
 

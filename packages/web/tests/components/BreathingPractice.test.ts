@@ -5,7 +5,11 @@ import BreathingPractice from '@/components/BreathingPractice.vue';
 
 const startMock = vi.fn();
 const pauseMock = vi.fn();
+const nextSetMock = vi.fn();
 const isRunning = ref(false);
+const timerPhase = ref('IDLE');
+const timerCurrentTime = ref(0);
+const timerTotalPhaseTime = ref(0);
 
 const createSessionMock = vi.fn();
 const addSetMock = vi.fn();
@@ -57,9 +61,9 @@ vi.mock('@/composables/useBreathingTimer', () => {
       lastTimerOptions = options;
       return {
         // component expects refs like `phase.value` etc.
-        phase: ref('IDLE'),
-        currentTime: ref(0),
-        totalPhaseTime: ref(0),
+        phase: timerPhase,
+        currentTime: timerCurrentTime,
+        totalPhaseTime: timerTotalPhaseTime,
         isRunning,
         breathingScale: ref(1.0),
         currentRepetition: ref(1),
@@ -68,6 +72,7 @@ vi.mock('@/composables/useBreathingTimer', () => {
         isFirstExtendedHold: ref(true),
         start: startMock,
         pause: pauseMock,
+        nextSet: nextSetMock,
         stop: vi.fn(),
         isPaused: ref(false),
       };
@@ -111,6 +116,10 @@ describe('BreathingPractice.vue', () => {
     setTtsEnabledMock = vi.fn();
     hasNativeSupportMock = vi.fn().mockReturnValue(false);
     lastTimerOptions = undefined;
+    isRunning.value = false;
+    timerPhase.value = 'IDLE';
+    timerCurrentTime.value = 0;
+    timerTotalPhaseTime.value = 0;
   });
 
   afterEach(() => {
@@ -270,6 +279,48 @@ describe('BreathingPractice.vue', () => {
 
       expect((vm as { timer: { nextSet?: () => void } }).timer.nextSet).toHaveBeenCalled();
     }
+  });
+
+  it('shows configured rest countdown with an early next-set action', async () => {
+    const wrapper = mount(BreathingPractice, {
+      attachTo: document.body,
+      global: { stubs: ['BreathingVisualizer'] },
+    });
+    timerPhase.value = 'SET_REST';
+    timerCurrentTime.value = 42;
+    timerTotalPhaseTime.value = 60;
+    isRunning.value = true;
+
+    await nextTick();
+
+    expect(document.body.textContent).toContain('Rest between sets');
+    expect(document.body.textContent).toContain('42');
+    const nextButton = Array.from(document.body.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Start next set now')
+    );
+    expect(nextButton).toBeDefined();
+    nextButton!.click();
+    await nextTick();
+    expect(nextSetMock).toHaveBeenCalledOnce();
+    isRunning.value = false;
+    wrapper.unmount();
+  });
+
+  it('exposes a bounded rest-between-sets configuration field', async () => {
+    const wrapper = mount(BreathingPractice, { attachTo: document.body });
+    const vm = wrapper.vm as unknown as { showConfigModal: boolean };
+    vm.showConfigModal = true;
+    await nextTick();
+
+    const input = document.body.querySelector(
+      'input[name="restBetweenSetsSeconds"]'
+    ) as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    expect(input?.min).toBe('0');
+    expect(input?.max).toBe('600');
+    expect(document.body.textContent).toContain('0 waits for you to start the next set');
+
+    wrapper.unmount();
   });
 
   it('Save Preset flow warns when name present', async () => {
@@ -474,8 +525,7 @@ describe('BreathingPractice.vue', () => {
       await nextTick();
 
       const onPhaseChange = lastTimerOptions?.onPhaseChange as
-        | ((phase: string, state: unknown) => void)
-        | undefined;
+        ((phase: string, state: unknown) => void) | undefined;
       expect(onPhaseChange).toBeDefined();
       onPhaseChange?.('INHALE', { totalPhaseTime: 4 });
       expect(speakMock).toHaveBeenCalledWith('Full Breath In', { targetDurationSeconds: 4 });

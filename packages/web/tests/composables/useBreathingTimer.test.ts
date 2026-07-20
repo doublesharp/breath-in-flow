@@ -174,10 +174,8 @@ describe('useBreathingTimer', () => {
       expect(timer.phase.value).toBe('INHALE');
 
       timer.skipPhase();
-      // Trigger next tick to process transition
-      vi.advanceTimersByTime(16);
-      // After skip, phase should advance past INHALE
-      expect(timer.phase.value).not.toBe('IDLE');
+      expect(timer.phase.value).toBe('INHALE_HOLD');
+      expect(timer.currentTime.value).toBe(config.inhaleHoldTime);
     });
 
     it('should handle nextSet correctly', () => {
@@ -192,6 +190,50 @@ describe('useBreathingTimer', () => {
       expect(timer.phase.value).toBe('INHALE');
       expect(timer.currentSet.value).toBe(2);
       expect(timer.currentRepetition.value).toBe(1);
+    });
+
+    it('counts down configured rest and starts the next set automatically', () => {
+      const timer = useBreathingTimer({
+        ...DEFAULT_BREATHING_CONFIG,
+        inhaleTime: 1,
+        exhaleTime: 1,
+        repetitions: 1,
+        targetSets: 2,
+        restBetweenSetsSeconds: 3,
+      });
+
+      timer.start();
+      vi.advanceTimersByTime(2300);
+
+      expect(timer.phase.value).toBe('SET_REST');
+      expect(timer.currentSet.value).toBe(1);
+      expect(timer.totalPhaseTime.value).toBe(3);
+
+      vi.advanceTimersByTime(3200);
+
+      expect(timer.phase.value).toBe('INHALE');
+      expect(timer.currentSet.value).toBe(2);
+      expect(timer.currentRepetition.value).toBe(1);
+    });
+
+    it('starts the next set early when nextSet is called during rest', () => {
+      const timer = useBreathingTimer({
+        ...DEFAULT_BREATHING_CONFIG,
+        inhaleTime: 1,
+        exhaleTime: 1,
+        repetitions: 1,
+        targetSets: 2,
+        restBetweenSetsSeconds: 30,
+      });
+
+      timer.start();
+      vi.advanceTimersByTime(2300);
+      expect(timer.phase.value).toBe('SET_REST');
+
+      timer.nextSet();
+
+      expect(timer.phase.value).toBe('INHALE');
+      expect(timer.currentSet.value).toBe(2);
     });
   });
 
@@ -277,6 +319,28 @@ describe('useBreathingTimer', () => {
 
       // Should be SET_COMPLETE (since no second hold)
       expect(timer.phase.value).toBe('SET_COMPLETE');
+    });
+
+    it('reports elapsed duration when a timed extended hold completes', () => {
+      const onExtendedHoldEnd = vi.fn();
+      config.extendedHoldEnabled = true;
+      config.extendedHoldMode = 'TIMED';
+      config.extendedHoldDuration = 5;
+      config.repetitions = 1;
+
+      const timer = useBreathingTimer(config, { onExtendedHoldEnd });
+      timer.start();
+
+      vi.advanceTimersByTime(6500);
+      expect(timer.phase.value).toBe('EXTENDED_EXHALE_HOLD');
+
+      vi.advanceTimersByTime(5100);
+
+      expect(onExtendedHoldEnd).toHaveBeenCalled();
+      const [duration, type] = onExtendedHoldEnd.mock.calls[0];
+      expect(duration).toBeCloseTo(5, 1);
+      expect(type).toBe('EXHALE');
+      expect(timer.extendedHoldElapsed.value).toBeCloseTo(5, 1);
     });
 
     it('starts recovery inhale before first EXTENDED_INHALE_HOLD', () => {
@@ -394,6 +458,7 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldType: 'INHALE',
         secondExtendedHoldDuration: 15,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
         soundTheme: 'wood',
         ttsEnabled: false,
@@ -430,6 +495,7 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldType: 'EXHALE',
         secondExtendedHoldDuration: 15,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
         soundTheme: 'wood',
         ttsEnabled: false,
@@ -465,6 +531,7 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldMode: 'TIMED',
         secondExtendedHoldDuration: 15,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
         soundTheme: 'wood',
         ttsEnabled: false,
@@ -625,6 +692,7 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldType: 'INHALE',
         secondExtendedHoldDuration: 15,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
         soundTheme: 'wood',
         ttsEnabled: false,
@@ -757,6 +825,7 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldType: 'INHALE',
         secondExtendedHoldDuration: 15,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
         soundTheme: 'wood',
         ttsEnabled: false,
@@ -875,6 +944,7 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldType: 'INHALE',
         secondExtendedHoldDuration: 15,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
         soundTheme: 'wood',
         ttsEnabled: false,
@@ -903,6 +973,7 @@ describe('useBreathingTimer', () => {
         repetitions: 1,
         extendedHoldEnabled: false,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
       };
 
@@ -945,6 +1016,7 @@ describe('useBreathingTimer', () => {
         repetitions: 1,
         extendedHoldEnabled: false,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
       };
 
@@ -1011,6 +1083,7 @@ describe('useBreathingTimer', () => {
         repetitions: 1,
         extendedHoldEnabled: false,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
       };
 
@@ -1021,10 +1094,9 @@ describe('useBreathingTimer', () => {
 
       // Skip the current phase
       timer.skipPhase();
-      vi.advanceTimersByTime(16);
 
-      // After skip, phase should advance (may not immediately be EXHALE with new timing logic)
-      expect(timer.phase.value).not.toBe('IDLE');
+      expect(timer.phase.value).toBe('EXHALE');
+      expect(timer.currentTime.value).toBe(skipConfig.exhaleTime);
     });
 
     it('skipPhase during INHALE triggers transition to EXHALE', () => {
@@ -1044,6 +1116,7 @@ describe('useBreathingTimer', () => {
         secondExtendedHoldType: 'INHALE',
         secondExtendedHoldDuration: 15,
         targetSets: 0,
+        restBetweenSetsSeconds: 0,
         soundEnabled: false,
         soundTheme: 'wood',
         ttsEnabled: false,

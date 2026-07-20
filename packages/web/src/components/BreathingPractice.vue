@@ -210,7 +210,13 @@
                 <p class="text-5xl font-mono font-bold text-indigo-400 animate-pulse-glow">
                   {{ formatTime(isToleranceExtendedHold ? timer.extendedHoldElapsed.value : timer.currentTime.value) }}
                 </p>
-                <button @click="endExtendedHold" @keydown.space.prevent="endExtendedHold" @keydown.enter.prevent="endExtendedHold" class="mt-6 btn-warning btn-action" aria-label="Release hold (Press Space or Enter)">
+                <button
+                  @click="endExtendedHold"
+                  @keydown.space.prevent="endExtendedHold"
+                  @keydown.enter.prevent="endExtendedHold"
+                  class="mt-6 btn-warning btn-action"
+                  aria-label="Release hold (Press Space or Enter)"
+                >
                   <span class="flex items-center gap-2 justify-center">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -230,6 +236,22 @@
                   </span>
                   <span class="text-xs text-slate-400 mt-2 block">Press Space or Enter</span>
                 </button>
+              </div>
+
+              <!-- Set Complete Controls -->
+              <div
+                v-if="timer.phase.value === 'SET_REST'"
+                class="mt-8 text-center p-8 glass rounded-2xl animate-scale-in"
+              >
+                <p class="text-xl font-semibold text-white">Rest between sets</p>
+                <p class="mt-2 text-5xl font-mono font-bold text-teal-300 tabular-nums">
+                  {{ formatTime(timer.currentTime.value) }}
+                </p>
+                <p class="mt-2 text-sm text-slate-400">The next set starts automatically.</p>
+                <div class="mt-6 flex flex-col sm:flex-row justify-center gap-4">
+                  <button @click="startNextSet" class="btn-success btn-action">Start next set now</button>
+                  <button @click="finishSession" class="btn-secondary btn-action">Finish session</button>
+                </div>
               </div>
 
               <!-- Set Complete Controls -->
@@ -346,7 +368,11 @@
 
               <!-- Main Controls -->
               <div
-                v-if="timer.phase.value !== 'SESSION_COMPLETE' && timer.phase.value !== 'SET_COMPLETE'"
+                v-if="
+                  timer.phase.value !== 'SESSION_COMPLETE' &&
+                  timer.phase.value !== 'SET_COMPLETE' &&
+                  timer.phase.value !== 'SET_REST'
+                "
                 class="mt-4 sm:mt-8 flex flex-col sm:flex-row justify-center gap-4"
               >
                 <template v-if="!timer.isPaused.value">
@@ -435,7 +461,9 @@
         class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
         @click.self="showConfigModal = false"
       >
-        <div class="card-solid max-w-4xl w-full my-4 sm:my-8 animate-scale-in max-h-[95vh] sm:max-h-[90vh] overflow-y-auto !p-4 sm:!p-6">
+        <div
+          class="card-solid max-w-4xl w-full my-4 sm:my-8 animate-scale-in max-h-[95vh] sm:max-h-[90vh] overflow-y-auto !p-4 sm:!p-6"
+        >
           <!-- Modal Header -->
           <div
             class="sticky top-0 bg-slate-800/95 backdrop-blur-sm -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 py-3 sm:py-4 mb-4 sm:mb-6 border-b border-slate-700/50 flex items-center justify-between z-10"
@@ -642,9 +670,22 @@
                   </svg>
                   Sets
                 </h3>
-                <div>
+                <div class="space-y-4">
                   <label class="form-label">Target Sets (0 = unlimited)</label>
                   <input v-model.number="config.targetSets" type="number" min="0" max="20" class="form-input" />
+                  <div>
+                    <label class="form-label" for="rest-between-sets">Rest between sets (seconds)</label>
+                    <input
+                      id="rest-between-sets"
+                      v-model.number="config.restBetweenSetsSeconds"
+                      name="restBetweenSetsSeconds"
+                      type="number"
+                      min="0"
+                      max="600"
+                      class="form-input"
+                    />
+                    <p class="mt-1 text-xs text-slate-400">0 waits for you to start the next set.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -711,9 +752,25 @@
                       </option>
                     </select>
                     <div v-if="loadingVoices" class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <svg class="animate-spin h-4 w-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      <svg
+                        class="animate-spin h-4 w-4 text-slate-400"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          class="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          stroke-width="4"
+                        ></circle>
+                        <path
+                          class="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
                       </svg>
                     </div>
                   </div>
@@ -727,6 +784,14 @@
 
           <!-- Action Buttons -->
           <div class="mt-8 pt-6 border-t border-slate-700/50">
+            <div
+              v-if="configValidationError"
+              data-testid="config-validation-error"
+              class="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+            >
+              {{ configValidationError }}
+            </div>
+
             <!-- Save Preset Section -->
             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
               <div class="flex-1">
@@ -737,7 +802,7 @@
                   class="form-input"
                 />
               </div>
-              <button @click="saveConfig" class="btn-secondary whitespace-nowrap">
+              <button @click="saveConfig" class="btn-secondary whitespace-nowrap" :disabled="!canUseConfig">
                 <span class="flex items-center gap-2 justify-center">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -756,7 +821,7 @@
                   Save Preset
                 </span>
               </button>
-              <button @click="applyConfigAndClose" class="btn-primary whitespace-nowrap">
+              <button @click="applyConfigAndClose" class="btn-primary whitespace-nowrap" :disabled="!canUseConfig">
                 <span class="flex items-center gap-2 justify-center">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -835,6 +900,13 @@
               </svg>
             </button>
           </div>
+          <p
+            v-if="configValidationError"
+            data-testid="quick-config-validation-error"
+            class="mx-auto mt-3 max-w-xl rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200"
+          >
+            {{ configValidationError }}
+          </p>
         </div>
 
         <!-- Progress Stats (when running) -->
@@ -844,7 +916,7 @@
 
         <!-- Main Controls - Prominently at Top -->
         <div v-if="!isRunning" class="mt-4 sm:mt-8 flex flex-col sm:flex-row justify-center gap-4">
-          <button @click="startExercise" class="btn-success btn-action">
+          <button @click="startExercise" class="btn-success btn-action" :disabled="!canUseConfig">
             <span class="flex items-center gap-2 justify-center">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -873,12 +945,24 @@
       </div>
 
       <!-- Lab CTA — compact, bottom placement -->
-      <div v-if="showLabCta && !labCtaDismissed" class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-        <button @click="$emit('switch-tab', 'lab')" class="text-xs text-white/40 hover:text-emerald-400 transition-colors">
+      <div
+        v-if="showLabCta && !labCtaDismissed"
+        class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+      >
+        <button
+          @click="$emit('switch-tab', 'lab')"
+          class="text-xs text-white/40 hover:text-emerald-400 transition-colors"
+        >
           Find your resonance frequency in the <span class="font-medium text-white/60">Lab</span> →
         </button>
         <button @click="dismissLabCta" class="text-white/20 hover:text-white/50 ml-3 shrink-0" aria-label="Dismiss">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -954,7 +1038,7 @@ const loadingVoices = ref(false);
 const showLabCta = ref(false);
 const labCtaDismissed = ref(localStorage.getItem('lab-cta-dismissed') === 'true');
 
-const emit = defineEmits<{
+defineEmits<{
   'switch-tab': [tab: string];
 }>();
 
@@ -970,6 +1054,42 @@ const config = reactive<BreathingConfig>({
   name: 'Quick Practice',
 });
 const configName = ref('');
+const configFieldLabels: Record<string, string> = {
+  inhaleTime: 'Inhale time',
+  inhaleHoldTime: 'Inhale hold time',
+  exhaleTime: 'Exhale time',
+  exhaleHoldTime: 'Exhale hold time',
+  repetitions: 'Repetitions',
+  extendedHoldDuration: 'Extended hold duration',
+  secondExtendedHoldDuration: 'Second extended hold duration',
+  targetSets: 'Target sets',
+  restBetweenSetsSeconds: 'Rest between sets',
+};
+
+function parseCurrentConfig() {
+  return BreathingConfigSchema.safeParse({
+    ...DEFAULT_BREATHING_CONFIG,
+    ...config,
+  });
+}
+
+const configValidationError = computed(() => {
+  const result = parseCurrentConfig();
+  if (result.success) return '';
+
+  const issue = result.error.issues[0];
+  const field = String(issue?.path[0] ?? '');
+  const label = configFieldLabels[field] ?? 'Practice settings';
+  return `${label}: ${issue?.message ?? 'Please check this value'}`;
+});
+
+const canUseConfig = computed(() => configValidationError.value === '');
+
+function getValidatedConfig(): BreathingConfig | null {
+  const result = parseCurrentConfig();
+  return result.success ? result.data : null;
+}
+
 const ttsVoices = ref<SpeechSynthesisVoice[]>([]);
 const isTtsAvailable = computed(() => ttsVoices.value.length > 0 || ttsService.hasNativeSupport());
 const userLang = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : 'en';
@@ -1074,6 +1194,19 @@ ttsWatchStopHandles.push(
 // Timer
 const timer = useBreathingTimer(config, {
   onPhaseChange: (phase, state) => {
+    if (
+      phase === 'INHALE' &&
+      state.currentRepetition === 1 &&
+      currentSession.value &&
+      currentSetData.value?.setNumber !== state.currentSet
+    ) {
+      currentSetData.value = {
+        setNumber: state.currentSet,
+        completedRepetitions: 0,
+        extendedHolds: [],
+        startedAt: new Date(),
+      };
+    }
     announcePhase(phase, state);
   },
   onRepetitionComplete: (rep, _state) => {
@@ -1208,8 +1341,12 @@ watch(
 );
 
 function startExercise() {
+  const validatedConfig = getValidatedConfig();
+  if (!validatedConfig) return;
+  Object.assign(config, validatedConfig);
+
   // Create new session
-  currentSession.value = storage.createSession(config);
+  currentSession.value = storage.createSession(validatedConfig);
 
   sessionNotes.value = '';
 
@@ -1307,10 +1444,16 @@ function resetExercise() {
 }
 
 function applyConfigAndClose() {
+  const validatedConfig = getValidatedConfig();
+  if (!validatedConfig) return;
+  Object.assign(config, validatedConfig);
   showConfigModal.value = false;
 }
 
 function saveConfig() {
+  const validatedConfig = getValidatedConfig();
+  if (!validatedConfig) return;
+
   if (!configName.value.trim()) {
     successMessage.value = 'Please enter a configuration name';
     showSuccessNotification.value = true;
@@ -1329,7 +1472,7 @@ function saveConfig() {
 
   // Save the new config
   storage.createConfig({
-    ...config,
+    ...validatedConfig,
     name: configName.value.trim(),
   });
 
@@ -1339,6 +1482,9 @@ function saveConfig() {
 
 function confirmOverwrite() {
   showOverwriteConfirmation.value = false;
+
+  const validatedConfig = getValidatedConfig();
+  if (!validatedConfig) return;
 
   // Guard against undefined configName
   if (!configName.value) {
@@ -1355,7 +1501,7 @@ function confirmOverwrite() {
 
   // Save the new config
   storage.createConfig({
-    ...config,
+    ...validatedConfig,
     name: configName.value.trim(),
   });
 

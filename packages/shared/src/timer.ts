@@ -100,9 +100,9 @@ export class BreathingTimer {
     this.tick();
   }
 
-  // Advance to next set manually
+  // Advance to next set manually or skip a configured rest period
   nextSet(): void {
-    if (this.state.phase !== 'SET_COMPLETE') return;
+    if (this.state.phase !== 'SET_COMPLETE' && this.state.phase !== 'SET_REST') return;
     this.startNextSet();
   }
 
@@ -181,6 +181,10 @@ export class BreathingTimer {
 
       case 'SET_COMPLETE':
         // Wait for user to start next set or auto-continue
+        break;
+
+      case 'SET_REST':
+        this.startNextSet();
         break;
 
       default:
@@ -263,8 +267,12 @@ export class BreathingTimer {
       return;
     }
 
-    this.setPhase('SET_COMPLETE', 0);
-    this.stopInterval();
+    if (this.config.restBetweenSetsSeconds > 0) {
+      this.setPhase('SET_REST', this.config.restBetweenSetsSeconds);
+    } else {
+      this.setPhase('SET_COMPLETE', 0);
+      this.stopInterval();
+    }
   }
 
   private startNextSet(): void {
@@ -335,4 +343,12 @@ export function calculateSetTime(config: BreathingConfig): number {
   }
 
   return totalTime;
+}
+
+export function calculateSessionTime(config: BreathingConfig): number {
+  const setTime = calculateSetTime(config);
+  const setCount = config.targetSets > 0 ? config.targetSets : 1;
+  const restCount = Math.max(0, setCount - 1);
+
+  return setTime * setCount + config.restBetweenSetsSeconds * restCount;
 }

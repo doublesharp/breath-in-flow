@@ -125,6 +125,7 @@ describe('BreathingVisualizer', () => {
       'EXHALE_HOLD',
       'EXTENDED_INHALE_HOLD',
       'EXTENDED_EXHALE_HOLD',
+      'SET_REST',
       'SET_COMPLETE',
       'SESSION_COMPLETE',
       'PAUSED',
