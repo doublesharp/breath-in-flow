@@ -216,6 +216,61 @@ describe('ResonanceAssessment', () => {
     expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(false);
   });
 
+  it.each([
+    { label: 'camera', mode: 'camera', selection: null },
+    { label: 'dual', mode: 'dual', selection: 'Camera + Chest' },
+  ])('starts $label permission preflight from the Start gesture', async ({ mode, selection }) => {
+    let resolvePermission!: (permissions: { camera: 'granted'; motion: 'granted' }) => void;
+    requestSensorPermissions.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePermission = resolve;
+      })
+    );
+    const wrapper = mount(ResonanceAssessment);
+    if (selection) {
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text().includes(selection))!
+        .trigger('click');
+    }
+
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+
+    expect(requestSensorPermissions).toHaveBeenCalledWith(mode);
+    expect(wrapper.text()).toContain('Start Assessment');
+    expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(false);
+
+    resolvePermission({ camera: 'granted', motion: 'granted' });
+    await flushPromises();
+    expect(wrapper.text()).toContain('Warmup');
+  });
+
+  it.each([
+    { label: 'camera', mode: 'camera', selection: null },
+    { label: 'dual', mode: 'dual', selection: 'Camera + Chest' },
+  ])('keeps $label denial in setup with actionable guidance', async ({ selection }) => {
+    requestSensorPermissions.mockResolvedValueOnce({ camera: 'denied', motion: 'granted' });
+    getPermissionDeniedMessage.mockReturnValueOnce(
+      'Camera permission denied. Please allow access in your browser settings and reload.'
+    );
+    const wrapper = mount(ResonanceAssessment);
+    if (selection) {
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text().includes(selection))!
+        .trigger('click');
+    }
+
+    await wrapper.find('[data-testid="start-btn"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Start Assessment');
+    expect(wrapper.text()).toContain('Camera permission denied');
+    expect(wrapper.text()).not.toContain('Continue with manual scoring for this trial.');
+    expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(false);
+    expect(ppgService.start).not.toHaveBeenCalled();
+  });
+
   it('shows cancel confirmation during active phases', async () => {
     const wrapper = mount(ResonanceAssessment);
     await wrapper.find('[data-testid="start-btn"]').trigger('click');

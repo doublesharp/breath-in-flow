@@ -38,43 +38,55 @@ describe('permissionService', () => {
     mockCameraPermissionState('prompt');
   });
 
-  it('leaves a camera prompt for sensor startup without opening a temporary stream', async () => {
+  it('requests camera permission immediately and releases the preflight stream', async () => {
     const stop = vi.fn();
-    const getUserMedia = vi.fn(() =>
-      Promise.resolve({ getTracks: () => [{ stop }] } as unknown as MediaStream)
+    let resolveStream!: (stream: MediaStream) => void;
+    const getUserMedia = vi.fn(
+      () =>
+        new Promise<MediaStream>((resolve) => {
+          resolveStream = resolve;
+        })
     );
     mockMediaDevices(getUserMedia);
 
-    const result = await requestSensorPermissions('camera');
+    const resultPromise = requestSensorPermissions('camera');
 
-    expect(result).toEqual({ camera: 'prompt', motion: 'unknown' });
-    expect(getUserMedia).not.toHaveBeenCalled();
-    expect(stop).not.toHaveBeenCalled();
+    expect(getUserMedia).toHaveBeenCalledWith({ video: true, audio: false });
+    resolveStream({ getTracks: () => [{ stop }] } as unknown as MediaStream);
+
+    await expect(resultPromise).resolves.toEqual({ camera: 'granted', motion: 'unknown' });
+    expect(stop).toHaveBeenCalledOnce();
   });
 
-  it('uses granted camera permission state without opening a stream', async () => {
+  it('releases every track acquired during camera preflight', async () => {
     mockCameraPermissionState('granted');
-    const getUserMedia = vi.fn();
+    const stopVideo = vi.fn();
+    const stopAudio = vi.fn();
+    const getUserMedia = vi.fn().mockResolvedValue({
+      getTracks: () => [{ stop: stopVideo }, { stop: stopAudio }],
+    } as unknown as MediaStream);
     mockMediaDevices(getUserMedia);
 
     const result = await requestSensorPermissions('camera');
 
     expect(result).toEqual({ camera: 'granted', motion: 'unknown' });
-    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(stopVideo).toHaveBeenCalledOnce();
+    expect(stopAudio).toHaveBeenCalledOnce();
   });
 
-  it('marks camera permission denied when the permission API reports denial', async () => {
+  it('marks camera permission denied when acquisition is rejected by the user', async () => {
     mockCameraPermissionState('denied');
-    const getUserMedia = vi.fn();
+    const error = Object.assign(new Error('camera permission denied'), { name: 'NotAllowedError' });
+    const getUserMedia = vi.fn().mockRejectedValue(error);
     mockMediaDevices(getUserMedia);
 
     const result = await requestSensorPermissions('camera');
 
     expect(result).toEqual({ camera: 'denied', motion: 'unknown' });
-    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(getUserMedia).toHaveBeenCalledOnce();
   });
 
-  it('does not probe camera hardware while checking permission state', async () => {
+  it('keeps non-permission camera startup errors distinct from denial', async () => {
     const error = Object.assign(new Error('camera busy'), { name: 'NotReadableError' });
     const getUserMedia = vi.fn(() => Promise.reject(error));
     mockMediaDevices(getUserMedia);
@@ -82,8 +94,8 @@ describe('permissionService', () => {
 
     const result = await requestSensorPermissions('camera');
 
-    expect(result).toEqual({ camera: 'prompt', motion: 'unknown' });
-    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(result).toEqual({ camera: 'unknown', motion: 'unknown' });
+    expect(getUserMedia).toHaveBeenCalledOnce();
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -121,24 +133,23 @@ describe('permissionService', () => {
       value: { requestPermission },
       configurable: true,
     });
-    let resolveCameraPermission!: (value: { state: PermissionState }) => void;
-    Object.defineProperty(navigator, 'permissions', {
-      value: {
-        query: vi.fn(
-          () =>
-            new Promise<{ state: PermissionState }>((resolve) => {
-              resolveCameraPermission = resolve;
-            })
-        ),
-      },
-      configurable: true,
-    });
+    const stop = vi.fn();
+    let resolveCameraStream!: (stream: MediaStream) => void;
+    const getUserMedia = vi.fn(
+      () =>
+        new Promise<MediaStream>((resolve) => {
+          resolveCameraStream = resolve;
+        })
+    );
+    mockMediaDevices(getUserMedia);
 
     const resultPromise = requestSensorPermissions('dual');
 
     expect(requestPermission).toHaveBeenCalledOnce();
-    resolveCameraPermission({ state: 'granted' });
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    resolveCameraStream({ getTracks: () => [{ stop }] } as unknown as MediaStream);
     await expect(resultPromise).resolves.toEqual({ camera: 'granted', motion: 'granted' });
+    expect(stop).toHaveBeenCalledOnce();
 
     Object.defineProperty(globalThis, 'DeviceMotionEvent', {
       value: originalDeviceMotionEvent,

@@ -5,6 +5,7 @@ import HrvTrends from '@/components/HrvTrends.vue';
 import LabInsights from '@/components/LabInsights.vue';
 import { ppgService } from '@/services/ppgService';
 import { sensorFusionService } from '@/services/sensorFusion';
+import { requestSensorPermissions } from '@/services/permissionService';
 import type { HrvMeasurement } from '@/composables/useHrvStorage';
 import type { HRVAnalysis, IBISample, PoincareUnavailableReason } from '@breath-in-flow/shared';
 
@@ -713,6 +714,70 @@ describe('LabTab.vue', () => {
     expect(vm.permissionError).toContain('interrupted');
     expect(wrapper.text()).toContain('Retry');
 
+    wrapper.unmount();
+  });
+
+  it('invalidates a pending permission preflight when the app becomes inactive', async () => {
+    let resolvePermissions!: (permissions: { camera: 'granted'; motion: 'granted' }) => void;
+    vi.mocked(requestSensorPermissions).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePermissions = resolve;
+      })
+    );
+    const wrapper = mount(LabTab, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          HrTachogram: true,
+          SignalQualityIndicator: true,
+          HrvMetricsDashboard: true,
+          FrequencySpectrum: true,
+          PoincarePlot: true,
+          ResonanceAssessment: true,
+        },
+      },
+    });
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Freeform')!
+      .trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
+    await flushPromises();
+    const startButton = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Start'
+    )!;
+    startButton.click();
+    await Promise.resolve();
+
+    expect(requestSensorPermissions).toHaveBeenCalledOnce();
+    expect(ppgService.start).not.toHaveBeenCalled();
+
+    await lastLifecycleOptions?.onInactive();
+    await lastLifecycleOptions?.onActive();
+    resolvePermissions({ camera: 'granted', motion: 'granted' });
+    await flushPromises();
+
+    const interruptedVm = wrapper.vm as unknown as {
+      isMeasuring: boolean;
+      showPrep: boolean;
+      permissionError: string;
+    };
+    expect(ppgService.start).not.toHaveBeenCalled();
+    expect(interruptedVm.isMeasuring).toBe(false);
+    expect(interruptedVm.showPrep).toBe(true);
+    expect(interruptedVm.permissionError).toContain('interrupted');
+
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Start')!
+      .click();
+    await flushPromises();
+
+    expect(ppgService.start).toHaveBeenCalledOnce();
+    expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
     wrapper.unmount();
   });
 });

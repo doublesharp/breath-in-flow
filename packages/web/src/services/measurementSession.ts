@@ -109,31 +109,27 @@ export class MeasurementSession {
       [MeasurementSensorSource, MeasurementSensorAdapter]
     >;
     const outcomes = await Promise.all(
-      entries.map(async ([source, adapter]) => ({
-        source,
-        adapter,
-        result: await adapter.start(),
-      }))
+      entries.map(async ([source, adapter]) => {
+        const result = await adapter.start();
+        if (result.ok) {
+          if (this.isInterrupted()) {
+            adapter.stop();
+          } else {
+            this.activeSensors.set(source, adapter);
+          }
+        }
+        return { source, result };
+      })
     );
 
     if (this.isInterrupted()) {
-      for (const outcome of outcomes) {
-        if (outcome.result.ok) {
-          outcome.adapter.stop();
-          if (!this.acquisitionSources.includes(outcome.source)) {
-            this.acquisitionSources.push(outcome.source);
-          }
-        }
-      }
       return { ok: false, message: this.errorMessage };
     }
 
     const failedSources: MeasurementSensorSource[] = [];
     const failureMessages: string[] = [];
     for (const outcome of outcomes) {
-      if (outcome.result.ok) {
-        this.activeSensors.set(outcome.source, outcome.adapter);
-      } else {
+      if (!outcome.result.ok) {
         failedSources.push(outcome.source);
         failureMessages.push(outcome.result.message);
       }

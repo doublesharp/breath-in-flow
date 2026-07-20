@@ -13,19 +13,22 @@ export type PermissionStatus = 'granted' | 'denied' | 'prompt' | 'unknown';
  * Returns 'granted' if permission is available.
  */
 async function requestCameraPermission(): Promise<PermissionStatus> {
-  // Inspect permission state without opening a throwaway camera stream. The
-  // actual PPG startup owns the single getUserMedia request and its cleanup.
+  if (!navigator.mediaDevices?.getUserMedia) return 'unknown';
+
   try {
-    if (navigator.permissions) {
-      const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      if (result.state === 'granted') return 'granted';
-      if (result.state === 'denied') return 'denied';
-      return 'prompt';
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    for (const track of stream.getTracks()) {
+      try {
+        track.stop();
+      } catch {
+        // Permission was acquired; track teardown remains best effort.
+      }
     }
-  } catch {
-    // permissions.query is not consistently supported for camera.
+    return 'granted';
+  } catch (error) {
+    const name = error instanceof Error ? error.name : '';
+    return name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'unknown';
   }
-  return 'unknown';
 }
 
 /**

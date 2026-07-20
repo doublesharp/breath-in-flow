@@ -907,6 +907,9 @@ watch(isMeasuring, (measuring) => {
 // Measurement control
 const permissionError = ref<string | null>(null);
 const measurementNotice = ref<string | null>(null);
+let appIsActive = true;
+let startGeneration = 0;
+let pendingStartGeneration: number | null = null;
 
 async function showPrepScreen(protocol: Protocol | null) {
   prepProtocol.value = protocol;
@@ -922,15 +925,39 @@ async function showPrepScreen(protocol: Protocol | null) {
 }
 
 async function confirmStart() {
-  if (!(await checkPermissions())) return;
-  showPrep.value = false;
+  const generation = ++startGeneration;
+  pendingStartGeneration = generation;
+  const protocol = prepProtocol.value;
 
-  if (prepProtocol.value) {
-    await startProtocol(prepProtocol.value);
-  } else {
-    await startFreeform();
+  try {
+    const hasPermissions = await checkPermissions();
+    if (generation !== startGeneration || !appIsActive) {
+      permissionError.value = MEASUREMENT_INTERRUPTION_MESSAGE;
+      showRecoveryActions.value = false;
+      showPrep.value = true;
+      return;
+    }
+    if (!hasPermissions) return;
+
+    showPrep.value = false;
+    if (protocol) {
+      await startProtocol(protocol);
+    } else {
+      await startFreeform();
+    }
+
+    if (generation !== startGeneration || !appIsActive) {
+      permissionError.value = MEASUREMENT_INTERRUPTION_MESSAGE;
+      showPrep.value = true;
+      prepProtocol.value = protocol;
+      return;
+    }
+    prepProtocol.value = null;
+  } finally {
+    if (pendingStartGeneration === generation) {
+      pendingStartGeneration = null;
+    }
   }
-  prepProtocol.value = null;
 }
 
 async function checkPermissions(): Promise<boolean> {
@@ -1079,8 +1106,7 @@ const MEASUREMENT_INTERRUPTION_MESSAGE =
 
 function interruptMeasurement() {
   const sessionState = measurementSession?.getResult().state;
-  const hasActiveSession =
-    sessionState === 'starting' || sessionState === 'acquiring' || sessionState === 'measuring';
+  const hasActiveSession = sessionState === 'starting' || sessionState === 'acquiring' || sessionState === 'measuring';
   if (!hasActiveSession && !isMeasuring.value) return;
 
   void disableKeepAwake();
@@ -1223,8 +1249,19 @@ function formatType(type: string): string {
 
 // Lifecycle
 useAppLifecycle({
-  onInactive: interruptMeasurement,
-  onActive: () => {},
+  onInactive: () => {
+    appIsActive = false;
+    startGeneration += 1;
+    if (pendingStartGeneration !== null) {
+      permissionError.value = MEASUREMENT_INTERRUPTION_MESSAGE;
+      showRecoveryActions.value = false;
+      showPrep.value = true;
+    }
+    interruptMeasurement();
+  },
+  onActive: () => {
+    appIsActive = true;
+  },
 });
 
 onMounted(async () => {
@@ -1233,6 +1270,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  appIsActive = false;
+  startGeneration += 1;
   if (measurementSession) {
     if (selectedSensor.value === 'dual') sensorFusionService.reset();
     measurementSession.interrupt('Measurement closed before completion.');

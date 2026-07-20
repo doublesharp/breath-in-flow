@@ -229,6 +229,40 @@ describe('MeasurementSession', () => {
     expect(camera.stop).toHaveBeenCalledOnce();
   });
 
+  it('stops an already-started adapter immediately while a sibling is still pending', async () => {
+    const camera = sensor({ ok: true });
+    let finishMotionStart!: (result: { ok: true }) => void;
+    const motion = {
+      start: vi.fn(
+        () =>
+          new Promise<{ ok: true }>((resolve) => {
+            finishMotionStart = resolve;
+          })
+      ),
+      stop: vi.fn(),
+    };
+    const session = new MeasurementSession({ protocol: 'morning-readiness', now: () => nowMs });
+
+    const startOutcome = session.start({ ppg: camera, scg: motion });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const interrupted = session.interrupt('Measurement interrupted during dual startup.');
+
+    expect(camera.stop).toHaveBeenCalledOnce();
+    expect(motion.stop).not.toHaveBeenCalled();
+    expect(interrupted.activeSources).toEqual(['ppg']);
+
+    finishMotionStart({ ok: true });
+
+    expect(await startOutcome).toEqual({
+      ok: false,
+      message: 'Measurement interrupted during dual startup.',
+    });
+    expect(motion.stop).toHaveBeenCalledOnce();
+    expect(session.getResult().activeSources).toEqual(['ppg']);
+  });
+
   it('removes frequency outputs when the selected protocol does not allow them', () => {
     const samples = Array.from({ length: 70 }, (_, index) => detectedSample(index * 1_000));
     const analysis = analyzeHRV(samples);
