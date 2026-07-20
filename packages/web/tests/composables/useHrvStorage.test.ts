@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useHrvStorage, type HrvMeasurement } from '../../src/composables/useHrvStorage';
 import type { AssessmentResult } from '@breath-in-flow/shared';
 
@@ -78,6 +78,7 @@ function makeAssessment(overrides: Partial<AssessmentResult> = {}): AssessmentRe
 }
 
 beforeEach(async () => {
+  localStorage.clear();
   // Delete database between tests for isolation
   await new Promise<void>((resolve, reject) => {
     const req = indexedDB.deleteDatabase('breath-in-flow-hrv');
@@ -417,6 +418,57 @@ describe('useHrvStorage', () => {
 
       const results = await getAssessments();
       expect(results).toHaveLength(0);
+    });
+
+    it('initializes an idempotent authoritative assessment migration without duplicating partial imports', async () => {
+      const { initialize, saveAssessment, getAssessments } = useHrvStorage();
+      const alreadyImported = makeAssessment();
+      const legacyOnly = makeAssessment();
+      await saveAssessment(alreadyImported);
+      localStorage.setItem(
+        'breath-in-flow-assessments',
+        JSON.stringify([alreadyImported, legacyOnly])
+      );
+
+      await initialize();
+      await initialize();
+
+      const results = await getAssessments();
+      expect(results.map((assessment) => assessment.id).sort()).toEqual(
+        [alreadyImported.id, legacyOnly.id].sort()
+      );
+      expect(results.every((assessment) => assessment.completedAt instanceof Date)).toBe(true);
+      expect(localStorage.getItem('breath-in-flow-assessments')).toBeNull();
+      expect(localStorage.getItem('breath-in-flow-assessments-migration-v1')).toBe('complete');
+    });
+
+    it('preserves legacy source and migration marker when the IndexedDB transaction fails', async () => {
+      const { migrateLegacyAssessments } = useHrvStorage();
+      const legacyAssessment = makeAssessment();
+      const legacySource = JSON.stringify([legacyAssessment]);
+      localStorage.setItem('breath-in-flow-assessments', legacySource);
+      const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(() => {
+        throw new Error('simulated IndexedDB write failure');
+      });
+
+      await migrateLegacyAssessments();
+
+      expect(localStorage.getItem('breath-in-flow-assessments')).toBe(legacySource);
+      expect(localStorage.getItem('breath-in-flow-assessments-migration-v1')).toBeNull();
+      put.mockRestore();
+    });
+
+    it('skips corrupt legacy records while migrating valid siblings', async () => {
+      const { migrateLegacyAssessments, getAssessments } = useHrvStorage();
+      const valid = makeAssessment();
+      localStorage.setItem(
+        'breath-in-flow-assessments',
+        JSON.stringify([valid, { id: 'not-a-uuid', completedAt: 'not-a-date' }])
+      );
+
+      await migrateLegacyAssessments();
+
+      expect(await getAssessments()).toEqual([expect.objectContaining({ id: valid.id })]);
     });
   });
 

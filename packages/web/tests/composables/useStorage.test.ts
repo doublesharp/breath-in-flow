@@ -622,11 +622,12 @@ describe('useStorage', () => {
       vi.resetModules();
 
       const now = new Date();
+      const configId = crypto.randomUUID();
       const storedSessions = [
         {
-          id: 's1',
-          configId: 'c1',
-          configSnapshot: { id: 'c1', name: 'C' },
+          id: crypto.randomUUID(),
+          configId,
+          configSnapshot: { id: configId, name: 'C' },
           status: 'COMPLETED',
           sets: [],
           targetSets: 1,
@@ -697,6 +698,68 @@ describe('useStorage', () => {
       expect(configs[0].ttsEnabled).toBe(DEFAULT_BREATHING_CONFIG.ttsEnabled);
       expect(configs[0].createdAt).toBeInstanceOf(Date);
       expect(configs[0].updatedAt).toBeInstanceOf(Date);
+    });
+
+    it('loads valid storage siblings while skipping malformed configs and sessions', async () => {
+      vi.resetModules();
+
+      const now = new Date().toISOString();
+      const configId = crypto.randomUUID();
+      const sessionId = crypto.randomUUID();
+      const mockLS = {
+        getItem: vi.fn((key: string) => {
+          if (key === 'breath-in-flow-configs') {
+            return JSON.stringify([
+              { id: configId, name: 'Legacy config', createdAt: now, updatedAt: now },
+              { id: 42, name: 'Corrupt config' },
+            ]);
+          }
+          if (key === 'breath-in-flow-sessions') {
+            return JSON.stringify([
+              {
+                id: sessionId,
+                configId,
+                configSnapshot: { id: configId, ...DEFAULT_BREATHING_CONFIG },
+                status: 'COMPLETED',
+                sets: [],
+                targetSets: 0,
+                completedSets: 0,
+                startedAt: now,
+                completedAt: now,
+              },
+              {
+                id: crypto.randomUUID(),
+                configSnapshot: { ...DEFAULT_BREATHING_CONFIG },
+                status: 'COMPLETED',
+                sets: [],
+                targetSets: 0,
+                completedSets: 0,
+                startedAt: 'not-a-date',
+                completedAt: now,
+              },
+            ]);
+          }
+          return null;
+        }),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+
+      Object.defineProperty(globalThis, 'localStorage', { value: mockLS });
+
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+
+      expect(storage.getAllConfigs()).toEqual([
+        expect.objectContaining({
+          id: configId,
+          exhaleTime: DEFAULT_BREATHING_CONFIG.exhaleTime,
+          ttsEnabled: DEFAULT_BREATHING_CONFIG.ttsEnabled,
+        }),
+      ]);
+      expect(storage.getAllSessions()).toHaveLength(1);
+      expect(storage.getAllSessions()[0].id).toBe(sessionId);
     });
 
     it('handles localStorage.getItem throwing (load failure) without throwing', async () => {
@@ -966,7 +1029,7 @@ describe('useStorage', () => {
       expect(result?.sets[0].extendedHolds.length).toBe(1);
     });
 
-    it('handles loading sessions with null date fields from localStorage', async () => {
+    it('skips sessions with null required date fields from localStorage', async () => {
       vi.resetModules();
 
       const mockLS = {
@@ -1003,10 +1066,7 @@ describe('useStorage', () => {
       const storage = mod.useStorage();
       const sessions = storage.getAllSessions();
 
-      // Should load without error despite null date field
-      expect(sessions.length).toBeGreaterThan(0);
-      // The null completedAt should remain null, not become a Date
-      expect(sessions[0].completedAt).toBeNull();
+      expect(sessions).toEqual([]);
     });
   });
 

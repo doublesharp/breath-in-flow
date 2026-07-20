@@ -5,7 +5,8 @@ import type {
   MeasurementEligibility,
   SensorSource,
 } from '@breath-in-flow/shared';
-import { parseJsonWithDateFields } from '@/utils/storageSerialization';
+import { AssessmentResultSchema } from '@breath-in-flow/shared';
+import { validateStoredArray } from '@/utils/storedRecordValidation';
 
 export interface HrvMeasurement {
   id: string;
@@ -45,7 +46,58 @@ interface MeasurementStats {
 
 const DB_NAME = 'breath-in-flow-hrv';
 const DB_VERSION = 1;
-const HRV_DATE_FIELDS = ['startedAt', 'completedAt'] as const;
+const LEGACY_ASSESSMENTS_KEY = 'breath-in-flow-assessments';
+const ASSESSMENTS_MIGRATION_KEY = 'breath-in-flow-assessments-migration-v1';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function restoreDate(value: unknown): unknown {
+  if (value instanceof Date) return value;
+  return typeof value === 'string' ? new Date(value) : value;
+}
+
+function normalizeAssessment(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  return { ...value, completedAt: restoreDate(value.completedAt) };
+}
+
+function validateAssessment(value: unknown): AssessmentResult | null {
+  const parsed = AssessmentResultSchema.safeParse(normalizeAssessment(value));
+  return parsed.success ? parsed.data : null;
+}
+
+function validateMeasurement(value: unknown): HrvMeasurement | null {
+  if (!isRecord(value) || !isRecord(value.analysis)) return null;
+
+  const startedAt = restoreDate(value.startedAt);
+  const completedAt = restoreDate(value.completedAt);
+  const measurementTypes: HrvMeasurement['type'][] = [
+    'quick-check',
+    'full-analysis',
+    'morning-readiness',
+    'freeform',
+    'assessment-trial',
+  ];
+  const sensorModes: HrvMeasurement['sensorMode'][] = ['none', 'camera', 'accelerometer', 'dual'];
+
+  if (
+    typeof value.id !== 'string' ||
+    !measurementTypes.includes(value.type as HrvMeasurement['type']) ||
+    !sensorModes.includes(value.sensorMode as HrvMeasurement['sensorMode']) ||
+    typeof value.durationSeconds !== 'number' ||
+    !Number.isFinite(value.durationSeconds) ||
+    !(startedAt instanceof Date) ||
+    Number.isNaN(+startedAt) ||
+    !(completedAt instanceof Date) ||
+    Number.isNaN(+completedAt)
+  ) {
+    return null;
+  }
+
+  return { ...value, startedAt, completedAt } as HrvMeasurement;
+}
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -112,10 +164,10 @@ async function getMeasurements(query?: MeasurementQuery): Promise<HrvMeasurement
         return;
       }
 
-      const measurement = cursor.value as HrvMeasurement;
+      const measurement = validateMeasurement(cursor.value);
 
       // Apply type filter in JavaScript
-      if (!query?.type || measurement.type === query.type) {
+      if (measurement && (!query?.type || measurement.type === query.type)) {
         results.push(measurement);
         if (query?.limit && results.length >= query.limit) {
           resolve();
@@ -142,7 +194,7 @@ async function getMeasurementById(id: string): Promise<HrvMeasurement | null> {
     const request = store.get(id);
     request.onsuccess = () => {
       db.close();
-      resolve(request.result ?? null);
+      resolve(validateMeasurement(request.result));
     };
     request.onerror = () => {
       db.close();
@@ -245,7 +297,12 @@ async function getAssessments(): Promise<AssessmentResult[]> {
         resolve();
         return;
       }
-      results.push(cursor.value as AssessmentResult);
+      const assessment = validateAssessment(cursor.value);
+      if (assessment) {
+        results.push(assessment);
+      } else {
+        console.warn('Skipping invalid IndexedDB resonance assessment record');
+      }
       cursor.continue();
     };
 
@@ -261,29 +318,49 @@ async function getLatestAssessment(): Promise<AssessmentResult | null> {
   return results[0] ?? null;
 }
 
-async function migrateFromLocalStorage(): Promise<void> {
+async function migrateLegacyAssessments(): Promise<void> {
   if (typeof localStorage === 'undefined') return;
 
-  const stored = localStorage.getItem('breath-in-flow-assessments');
+  let stored: string | null;
+  try {
+    if (localStorage.getItem(ASSESSMENTS_MIGRATION_KEY) === 'complete') return;
+    stored = localStorage.getItem(LEGACY_ASSESSMENTS_KEY);
+  } catch (error) {
+    console.warn('Failed to access legacy resonance assessments:', error);
+    return;
+  }
   if (!stored) return;
 
+  let db: IDBDatabase | undefined;
   try {
-    const assessments = parseJsonWithDateFields<AssessmentResult[]>(stored, HRV_DATE_FIELDS);
-    const db = await openDB();
+    const assessments = validateStoredArray({
+      key: LEGACY_ASSESSMENTS_KEY,
+      value: stored,
+      schema: AssessmentResultSchema,
+      normalize: normalizeAssessment,
+    });
+    db = await openDB();
     const tx = db.transaction('assessments', 'readwrite');
     for (const assessment of assessments) {
       tx.objectStore('assessments').put(assessment);
     }
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await waitForTransaction(tx);
     db.close();
-    localStorage.removeItem('breath-in-flow-assessments');
-  } catch (e) {
-    console.warn('Failed to migrate assessments from localStorage:', e);
+    db = undefined;
+    localStorage.removeItem(LEGACY_ASSESSMENTS_KEY);
+    localStorage.setItem(ASSESSMENTS_MIGRATION_KEY, 'complete');
+  } catch (error) {
+    db?.close();
+    console.warn('Failed to migrate assessments from localStorage:', error);
   }
 }
+
+async function initialize(): Promise<void> {
+  await migrateLegacyAssessments();
+}
+
+// Kept for callers from the earlier localStorage-only implementation.
+const migrateFromLocalStorage = migrateLegacyAssessments;
 
 export function useHrvStorage() {
   return {
@@ -302,6 +379,8 @@ export function useHrvStorage() {
     getLatestAssessment,
 
     // Migration
+    initialize,
+    migrateLegacyAssessments,
     migrateFromLocalStorage,
   };
 }

@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import ResonanceAssessment from '../../src/components/ResonanceAssessment.vue';
 
+const { saveAssessment } = vi.hoisted(() => ({ saveAssessment: vi.fn() }));
+
+vi.mock('../../src/composables/useHrvStorage', () => ({
+  useHrvStorage: () => ({ saveAssessment }),
+}));
+
 vi.mock('@capacitor-community/keep-awake', () => ({
   KeepAwake: { keepAwake: vi.fn(), allowSleep: vi.fn() },
 }));
@@ -181,6 +187,22 @@ describe('ResonanceAssessment', () => {
       await wrapper.vm.setPhaseForTesting('RESULT');
       await wrapper.vm.$nextTick();
       expect(wrapper.text()).toContain('Suggested Rate');
+    });
+
+    it('persists completed assessments through the authoritative IndexedDB storage', async () => {
+      saveAssessment.mockResolvedValue(undefined);
+      const wrapper = mount(ResonanceAssessment);
+      await wrapper.vm.setPhaseForTesting('RESULT');
+      await wrapper.vm.$nextTick();
+
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text().includes('Save & Create Preset'))!
+        .trigger('click');
+
+      expect(saveAssessment).toHaveBeenCalledWith(
+        expect.objectContaining({ completedAt: expect.any(Date) })
+      );
     });
   });
 });

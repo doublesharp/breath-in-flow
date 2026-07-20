@@ -434,6 +434,7 @@ import TrialComparison from './hrv/TrialComparison.vue';
 import FrequencySpectrum from './hrv/FrequencySpectrum.vue';
 import SignalQualityIndicator from './hrv/SignalQualityIndicator.vue';
 import { useBreathingTimer } from '../composables/useBreathingTimer';
+import { useHrvStorage } from '../composables/useHrvStorage';
 import { useStorage } from '../composables/useStorage';
 import {
   ASSESSMENT_TRIALS,
@@ -907,6 +908,7 @@ function toggleSymptom(trialIndex: number, symptom: AssessmentSymptom) {
 // ======================== Result & Save ========================
 
 const storage = useStorage();
+const hrvStorage = useHrvStorage();
 const selectedRate = ref<number>(5.5);
 
 function calculateResult() {
@@ -915,7 +917,7 @@ function calculateResult() {
   phase.value = 'RESULT';
 }
 
-function saveResult() {
+async function saveResult() {
   const selected = trials.value.find((t) => t.rate === selectedRate.value)!;
   const presetName = `My Resonance Frequency \u2014 ${selectedRate.value} BPM`;
   const existingConfigs = storage.getAllConfigs();
@@ -954,7 +956,7 @@ function saveResult() {
     completedAt: new Date(),
     config: { ...assessmentConfig },
   };
-  storage.saveAssessment(result);
+  await hrvStorage.saveAssessment(result);
   emit('complete', preset);
 }
 

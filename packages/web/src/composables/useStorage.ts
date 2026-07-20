@@ -9,8 +9,14 @@ import type {
   SoundTheme,
   AssessmentResult,
 } from '@breath-in-flow/shared';
-import { DEFAULT_BREATHING_CONFIG, SoundThemeSchema } from '@breath-in-flow/shared';
-import { parseJsonWithDateFields } from '@/utils/storageSerialization';
+import {
+  AssessmentResultSchema,
+  BreathingConfigSchema,
+  DEFAULT_BREATHING_CONFIG,
+  SessionSchema,
+  SoundThemeSchema,
+} from '@breath-in-flow/shared';
+import { validateStoredArray } from '@/utils/storedRecordValidation';
 
 // Simple in-memory storage for now (can be replaced with IndexedDB or API calls)
 const configs = ref<BreathingConfig[]>([]);
@@ -20,17 +26,7 @@ const assessments = ref<AssessmentResult[]>([]);
 
 const STORAGE_DATE_FIELDS = ['startedAt', 'completedAt', 'createdAt', 'updatedAt'] as const;
 
-function loadJsonFromStorage<T>(key: string): T | undefined {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? parseJsonWithDateFields<T>(stored, STORAGE_DATE_FIELDS) : undefined;
-  } catch (e) {
-    console.error(`Failed to load ${key} from storage:`, e);
-    return undefined;
-  }
-}
-
-function loadStringFromStorage(key: string): string | undefined {
+function loadValueFromStorage(key: string): string | undefined {
   try {
     return localStorage.getItem(key) ?? undefined;
   } catch (e) {
@@ -39,20 +35,39 @@ function loadStringFromStorage(key: string): string | undefined {
   }
 }
 
+function loadStringFromStorage(key: string): string | undefined {
+  return loadValueFromStorage(key);
+}
+
+function restoreDateFields(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(restoreDateFields);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nestedValue]) => [
+      key,
+      STORAGE_DATE_FIELDS.includes(key as (typeof STORAGE_DATE_FIELDS)[number]) && nestedValue
+        ? new Date(nestedValue as string)
+        : restoreDateFields(nestedValue),
+    ])
+  );
+}
+
 // Load from localStorage on init
 function loadFromStorage() {
-  const storedConfigs = loadJsonFromStorage<BreathingConfig[]>('breath-in-flow-configs');
-  if (storedConfigs) {
-    configs.value = storedConfigs.map((c) => ({
-      ...DEFAULT_BREATHING_CONFIG,
-      ...c,
-    }));
-  }
+  configs.value = validateStoredArray({
+    key: 'breath-in-flow-configs',
+    value: loadValueFromStorage('breath-in-flow-configs'),
+    schema: BreathingConfigSchema,
+    normalize: restoreDateFields,
+  });
 
-  const storedSessions = loadJsonFromStorage<Session[]>('breath-in-flow-sessions');
-  if (storedSessions) {
-    sessions.value = storedSessions;
-  }
+  sessions.value = validateStoredArray({
+    key: 'breath-in-flow-sessions',
+    value: loadValueFromStorage('breath-in-flow-sessions'),
+    schema: SessionSchema,
+    normalize: restoreDateFields,
+  });
 
   const storedTheme = loadStringFromStorage('breath-in-flow-sound-theme');
   if (storedTheme) {
@@ -60,10 +75,12 @@ function loadFromStorage() {
     soundTheme.value = parsedTheme.success ? parsedTheme.data : 'wood';
   }
 
-  const storedAssessments = loadJsonFromStorage<AssessmentResult[]>('breath-in-flow-assessments');
-  if (storedAssessments) {
-    assessments.value = storedAssessments;
-  }
+  assessments.value = validateStoredArray({
+    key: 'breath-in-flow-assessments',
+    value: loadValueFromStorage('breath-in-flow-assessments'),
+    schema: AssessmentResultSchema,
+    normalize: restoreDateFields,
+  });
 }
 
 function saveToStorage() {
