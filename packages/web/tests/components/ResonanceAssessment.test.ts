@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import ResonanceAssessment, {
   buildAssessmentTrials,
   RESONANCE_TRIAL_DURATION_SECONDS,
 } from '../../src/components/ResonanceAssessment.vue';
 import { ASSESSMENT_TRIALS } from '@breath-in-flow/shared';
 import { ppgService } from '../../src/services/ppgService';
+
+enableAutoUnmount(afterEach);
 
 const { saveAssessment, requestSensorPermissions, getPermissionDeniedMessage } = vi.hoisted(() => ({
   saveAssessment: vi.fn(),

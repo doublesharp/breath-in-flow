@@ -77,6 +77,8 @@ export function useModalIsolation(
     if (event.key === 'Escape') {
       if (!options.onEscape || options.canEscape?.() === false) return;
       event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       options.onEscape();
       return;
     }

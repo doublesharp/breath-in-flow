@@ -1,7 +1,9 @@
-import { mount } from '@vue/test-utils';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { defineComponent, nextTick, ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useModalIsolation } from '@/composables/useModalIsolation';
+
+enableAutoUnmount(afterEach);
 
 const Harness = defineComponent({
   setup() {
@@ -139,6 +141,26 @@ describe('useModalIsolation', () => {
     await nextTick();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(vm.close).toHaveBeenCalledOnce();
+  });
+
+  it('stops later Escape listeners on the same event target after handling', async () => {
+    const { wrapper } = await openHarness();
+    const laterListener = vi.fn();
+    document.addEventListener('keydown', laterListener);
+    const escape = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    document.dispatchEvent(escape);
+    document.removeEventListener('keydown', laterListener);
+
+    expect(
+      (wrapper.vm as unknown as { close: ReturnType<typeof vi.fn> }).close
+    ).toHaveBeenCalledOnce();
+    expect(escape.defaultPrevented).toBe(true);
+    expect(laterListener).not.toHaveBeenCalled();
   });
 
   it('removes its key listener and restores isolation when unmounted', async () => {

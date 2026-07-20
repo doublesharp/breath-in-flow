@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import HelpSystem from '../../src/components/HelpSystem.vue';
 
@@ -82,5 +82,27 @@ describe('HelpSystem.vue', () => {
     expect(document.body.querySelector('[data-testid="help-dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger.element);
     expect(background.hasAttribute('inert')).toBe(false);
+  });
+
+  it('handles modal Escape without triggering the active background Escape action', async () => {
+    const backgroundEscape = vi.fn();
+    window.addEventListener('keydown', backgroundEscape);
+    const wrapper = mount(HelpSystem, { attachTo: document.body });
+    await wrapper.get('button.help-trigger').trigger('click');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const escape = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(escape);
+    window.removeEventListener('keydown', backgroundEscape);
+    await wrapper.vm.$nextTick();
+
+    expect(document.body.querySelector('[data-testid="help-dialog"]')).toBeNull();
+    expect(escape.defaultPrevented).toBe(true);
+    expect(backgroundEscape).not.toHaveBeenCalled();
   });
 });
