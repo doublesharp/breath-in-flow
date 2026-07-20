@@ -163,6 +163,26 @@ describe('useModalIsolation', () => {
     expect(laterListener).not.toHaveBeenCalled();
   });
 
+  it('runs before an earlier background bubbling listener on document', async () => {
+    const backgroundEscape = vi.fn();
+    document.addEventListener('keydown', backgroundEscape);
+    const { wrapper } = await openHarness();
+    const escape = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    document.dispatchEvent(escape);
+    document.removeEventListener('keydown', backgroundEscape);
+
+    expect(
+      (wrapper.vm as unknown as { close: ReturnType<typeof vi.fn> }).close
+    ).toHaveBeenCalledOnce();
+    expect(escape.defaultPrevented).toBe(true);
+    expect(backgroundEscape).not.toHaveBeenCalled();
+  });
+
   it('removes its key listener and restores isolation when unmounted', async () => {
     const removeListener = vi.spyOn(document, 'removeEventListener');
     const { wrapper } = await openHarness();
@@ -170,7 +190,7 @@ describe('useModalIsolation', () => {
 
     wrapper.unmount();
 
-    expect(removeListener).toHaveBeenCalledWith('keydown', expect.any(Function));
+    expect(removeListener).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     expect(background.hasAttribute('inert')).toBe(false);
     expect(background.hasAttribute('aria-hidden')).toBe(false);
   });

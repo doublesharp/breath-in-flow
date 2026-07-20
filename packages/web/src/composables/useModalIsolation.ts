@@ -105,13 +105,13 @@ export function useModalIsolation(
 
   function listen() {
     if (listening) return;
-    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener('keydown', handleKeydown, true);
     listening = true;
   }
 
   function unlisten() {
     if (!listening) return;
-    document.removeEventListener('keydown', handleKeydown);
+    document.removeEventListener('keydown', handleKeydown, true);
     listening = false;
   }
 
