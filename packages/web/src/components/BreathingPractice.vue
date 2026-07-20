@@ -1289,35 +1289,50 @@ const isToleranceExtendedHold = computed(() => {
 
 const isNativePlatform = Capacitor.isNativePlatform();
 
-// Track keep-awake state to prevent race conditions
-let keepAwakePending = false;
+// Reconcile the latest desired state after each native operation. A lifecycle
+// sleep request can therefore overtake an in-flight keep-awake request safely.
+let keepAwakeDesired = false;
 let keepAwakeActive = false;
+let keepAwakeReconcilePromise: Promise<void> | null = null;
 
-async function enableKeepAwake() {
-  if (!isNativePlatform || keepAwakePending) return;
-  keepAwakePending = true;
-  try {
-    await KeepAwake.keepAwake();
-    keepAwakeActive = true;
-  } catch (error) {
-    // Fail silently; keep-awake is best-effort on native platforms
-    console.warn('KeepAwake.keepAwake failed', error);
-  } finally {
-    keepAwakePending = false;
-  }
+function reconcileKeepAwake(): Promise<void> {
+  if (!isNativePlatform) return Promise.resolve();
+  if (keepAwakeReconcilePromise) return keepAwakeReconcilePromise;
+
+  let failedTarget: boolean | null = null;
+  const reconciliation = (async () => {
+    while (keepAwakeActive !== keepAwakeDesired) {
+      const targetAwake = keepAwakeDesired;
+      try {
+        if (targetAwake) await KeepAwake.keepAwake();
+        else await KeepAwake.allowSleep();
+        keepAwakeActive = targetAwake;
+      } catch (error) {
+        failedTarget = targetAwake;
+        console.warn(targetAwake ? 'KeepAwake.keepAwake failed' : 'KeepAwake.allowSleep failed', error);
+        break;
+      }
+    }
+  })();
+  keepAwakeReconcilePromise = reconciliation;
+  void reconciliation.finally(() => {
+    if (keepAwakeReconcilePromise !== reconciliation) return;
+    keepAwakeReconcilePromise = null;
+    if (keepAwakeActive !== keepAwakeDesired && keepAwakeDesired !== failedTarget) {
+      void reconcileKeepAwake();
+    }
+  });
+  return reconciliation;
 }
 
-async function allowSleep() {
-  if (!isNativePlatform || keepAwakePending || !keepAwakeActive) return;
-  keepAwakePending = true;
-  try {
-    await KeepAwake.allowSleep();
-    keepAwakeActive = false;
-  } catch (error) {
-    console.warn('KeepAwake.allowSleep failed', error);
-  } finally {
-    keepAwakePending = false;
-  }
+function enableKeepAwake(): Promise<void> {
+  keepAwakeDesired = true;
+  return reconcileKeepAwake();
+}
+
+function allowSleep(): Promise<void> {
+  keepAwakeDesired = false;
+  return reconcileKeepAwake();
 }
 
 watch(

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  analyzeHRV,
   evaluateMeasurementEligibility,
   type DetectionMethod,
   type IBISample,
@@ -173,4 +174,39 @@ describe('evaluateMeasurementEligibility', () => {
 
     expect(result.reasons).toContain('sensor-error');
   });
+
+  it.each([
+    ['low signal quality', () => samplesFor(301, { quality: 0.49 }), 'low-signal-quality' as const],
+    [
+      'excess artifacts',
+      () => {
+        const samples = samplesFor(301);
+        for (let index = 5; index < samples.length; index += 7) samples[index].interval = 1_200;
+        return samples;
+      },
+      'too-many-artifacts' as const,
+    ],
+    [
+      'estimated provenance',
+      () => samplesFor(301, { method: 'autocorrelation-estimate' }),
+      'estimated-samples' as const,
+    ],
+  ])(
+    'keeps 300-second %s data from exposing frequency, Poincare, or resonance metrics',
+    (_label, makeSamples, expectedReason) => {
+      const samples = makeSamples();
+      const eligibility = evaluateMeasurementEligibility(samples, 'full-analysis', 300);
+      expect(eligibility.reasons).toContain(expectedReason);
+
+      const analysis = analyzeHRV({
+        samples,
+        analyzedDurationSeconds: 300,
+        eligibility,
+      });
+
+      expect(analysis.frequencyDomain).toEqual({ available: false, reason: expectedReason });
+      expect(analysis.poincare).toEqual({ available: false, reason: expectedReason });
+      expect(analysis.resonance).toEqual({ available: false, reason: expectedReason });
+    }
+  );
 });

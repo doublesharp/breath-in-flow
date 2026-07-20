@@ -237,6 +237,35 @@ describe('LabTab.vue', () => {
     wrapper.unmount();
   });
 
+  it('moves focus to the announced Results heading when the open measurement dialog changes phase', async () => {
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    const vm = wrapper.vm as unknown as {
+      isMeasuring: boolean;
+      showResults: boolean;
+      currentAnalysis: HRVAnalysis | null;
+    };
+    vm.isMeasuring = true;
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(document.activeElement).toBe(
+      document.body.querySelector('[data-testid="measurement-phase-heading"]')
+    );
+    expect(document.activeElement?.textContent).toContain('measurement in progress');
+
+    vm.currentAnalysis = analysisWithPoincareUnavailable('protocol-not-supported');
+    vm.showResults = true;
+    vm.isMeasuring = false;
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(document.activeElement).toBe(
+      document.body.querySelector('[data-testid="measurement-phase-heading"]')
+    );
+    expect(document.activeElement?.textContent).toContain('Results');
+    wrapper.unmount();
+  });
+
   it('labels the duration control and enforces the selected protocol minimum', async () => {
     const wrapper = mount(LabTab, { attachTo: document.body });
     await wrapper.find('[data-testid="protocol-quick-check"]').trigger('click');
@@ -250,6 +279,39 @@ describe('LabTab.vue', () => {
     expect(range.value).toBe('120');
     expect(range.getAttribute('aria-valuetext')).toBe('2 minutes');
 
+    wrapper.unmount();
+  });
+
+  it('keeps the preparation UI busy and noninteractive until sensor startup resolves', async () => {
+    let resolveStart!: (result: { ok: true }) => void;
+    vi.mocked(ppgService.start).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStart = resolve;
+      })
+    );
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    await wrapper.get('[data-testid="protocol-quick-check"]').trigger('click');
+    await flushPromises();
+
+    const startButton = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Start'
+    )!;
+    startButton.click();
+    await flushPromises();
+
+    expect(document.body.querySelector('[data-testid="prep-dialog"]')).not.toBeNull();
+    expect(startButton.disabled).toBe(true);
+    expect(startButton.getAttribute('aria-busy')).toBe('true');
+    expect(document.body.querySelector('[data-testid="prep-content"]')?.hasAttribute('inert')).toBe(
+      true
+    );
+    expect(document.body.querySelector('[data-testid="measurement-dialog"]')).toBeNull();
+
+    resolveStart({ ok: true });
+    await flushPromises();
+
+    expect(document.body.querySelector('[data-testid="prep-dialog"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="measurement-dialog"]')).not.toBeNull();
     wrapper.unmount();
   });
 
@@ -666,6 +728,66 @@ describe('LabTab.vue', () => {
     wrapper.unmount();
   });
 
+  it('persists the successfully acquired source when dual mode degrades to camera only', async () => {
+    vi.mocked(scgService.start).mockResolvedValueOnce({
+      ok: false,
+      reason: 'start-failed',
+      message: 'Chest sensor unavailable.',
+    });
+    const wrapper = mount(LabTab, { attachTo: document.body });
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Freeform')!
+      .trigger('click');
+    await wrapper.get('[data-testid="sensor-dual"]').trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
+    await flushPromises();
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Start')!
+      .click();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('camera only');
+    const vm = wrapper.vm as unknown as {
+      stopMeasurement: () => void;
+      saveResults: () => Promise<void>;
+      currentAnalysis: HRVAnalysis | null;
+      currentEligibility: {
+        eligible: boolean;
+        reasons: never[];
+        warnings: never[];
+        availableMetrics: Array<'average-pulse' | 'rmssd' | 'pnn50'>;
+        artifactPercentage: number;
+        meanQuality: number;
+        detectedBeatCount: number;
+        observedDurationSeconds: number;
+      } | null;
+    };
+    vm.stopMeasurement();
+    vm.currentAnalysis = analysisWithPoincareUnavailable('protocol-not-supported');
+    vm.currentEligibility = {
+      eligible: true,
+      reasons: [],
+      warnings: [],
+      availableMetrics: ['average-pulse', 'rmssd', 'pnn50'],
+      artifactPercentage: 0,
+      meanQuality: 0.9,
+      detectedBeatCount: 60,
+      observedDurationSeconds: 120,
+    };
+
+    await vm.saveResults();
+
+    expect(hrvStorageMock.saveMeasurement).toHaveBeenCalledWith(
+      expect.objectContaining({ sensorMode: 'dual', acquisitionSources: ['ppg'] })
+    );
+    wrapper.unmount();
+  });
+
   it('captures chest-sensor beats and surfaces signal feedback before stopping', async () => {
     const wrapper = mount(LabTab, {
       attachTo: document.body,
@@ -872,14 +994,24 @@ describe('LabTab.vue', () => {
 
     await lastLifecycleOptions?.onInactive();
     await lastLifecycleOptions?.onActive();
-    resolvePermissions({ camera: 'granted', motion: 'granted' });
-    await flushPromises();
-
+    await wrapper.vm.$nextTick();
     const interruptedVm = wrapper.vm as unknown as {
       isMeasuring: boolean;
       showPrep: boolean;
       permissionError: string;
+      isStartPending: boolean;
     };
+    expect(interruptedVm.isStartPending).toBe(true);
+    const pendingStartButton = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Start'
+    ) as HTMLButtonElement;
+    expect(pendingStartButton.disabled).toBe(true);
+    pendingStartButton.click();
+    expect(requestSensorPermissions).toHaveBeenCalledOnce();
+
+    resolvePermissions({ camera: 'granted', motion: 'granted' });
+    await flushPromises();
+
     expect(ppgService.start).not.toHaveBeenCalled();
     expect(interruptedVm.isMeasuring).toBe(false);
     expect(interruptedVm.showPrep).toBe(true);
@@ -895,20 +1027,13 @@ describe('LabTab.vue', () => {
     wrapper.unmount();
   });
 
-  it('ignores an older permission completion after a newer Start becomes active', async () => {
+  it('coalesces repeated Start activation while permission preflight is pending', async () => {
     let resolveFirst!: (permissions: { camera: 'granted'; motion: 'granted' }) => void;
-    let resolveSecond!: (permissions: { camera: 'granted'; motion: 'granted' }) => void;
-    vi.mocked(requestSensorPermissions)
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          resolveFirst = resolve;
-        })
-      )
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          resolveSecond = resolve;
-        })
-      );
+    vi.mocked(requestSensorPermissions).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFirst = resolve;
+      })
+    );
     const wrapper = mount(LabTab, {
       attachTo: document.body,
       global: {
@@ -940,11 +1065,7 @@ describe('LabTab.vue', () => {
     startButton.click();
     await wrapper.vm.$nextTick();
 
-    expect(requestSensorPermissions).toHaveBeenCalledTimes(2);
-
-    resolveSecond({ camera: 'granted', motion: 'granted' });
-    await flushPromises();
-    expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
+    expect(requestSensorPermissions).toHaveBeenCalledOnce();
 
     resolveFirst({ camera: 'granted', motion: 'granted' });
     await flushPromises();
@@ -1022,6 +1143,79 @@ describe('LabTab.vue', () => {
     expect(vm.showPrep).toBe(false);
     expect(vm.prepProtocol).toBeNull();
     expect(vm.isStartPending).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('keeps a reopened prep screen locked until a cancelled sensor start settles', async () => {
+    let resolveSensorStart!: (outcome: { ok: true }) => void;
+    vi.mocked(ppgService.start).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSensorStart = resolve;
+      })
+    );
+    const wrapper = mount(LabTab, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          HrTachogram: true,
+          SignalQualityIndicator: true,
+          HrvMetricsDashboard: true,
+          FrequencySpectrum: true,
+          PoincarePlot: true,
+          ResonanceAssessment: true,
+        },
+      },
+    });
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Freeform')!
+      .trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
+    await flushPromises();
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Start')!
+      .click();
+    await Promise.resolve();
+    expect(ppgService.start).toHaveBeenCalledOnce();
+
+    Array.from(
+      document.body.querySelector('[data-testid="prep-actions"]')!.querySelectorAll('button')
+    )
+      .find((button) => button.textContent?.trim() === 'Cancel')!
+      .click();
+    await wrapper.vm.$nextTick();
+
+    const vm = wrapper.vm as unknown as {
+      isMeasuring: boolean;
+      isStartPending: boolean;
+      showPrep: boolean;
+    };
+    expect(vm.isStartPending).toBe(true);
+    expect(vm.showPrep).toBe(false);
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
+    await flushPromises();
+    const reopenedStart = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Start'
+    ) as HTMLButtonElement;
+    expect(reopenedStart.disabled).toBe(true);
+    reopenedStart.click();
+    expect(ppgService.start).toHaveBeenCalledOnce();
+
+    resolveSensorStart({ ok: true });
+    await flushPromises();
+
+    expect(ppgService.stop).toHaveBeenCalledOnce();
+    expect(vm.isStartPending).toBe(false);
+    expect(vm.isMeasuring).toBe(false);
+    expect(reopenedStart.disabled).toBe(false);
     wrapper.unmount();
   });
 

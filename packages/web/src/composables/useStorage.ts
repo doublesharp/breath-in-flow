@@ -7,10 +7,8 @@ import type {
   SessionSet,
   ExtendedHoldRecord,
   SoundTheme,
-  AssessmentResult,
 } from '@breath-in-flow/shared';
 import {
-  AssessmentResultSchema,
   BreathingConfigSchema,
   DEFAULT_BREATHING_CONFIG,
   SessionSchema,
@@ -22,7 +20,6 @@ import { validateStoredArray } from '@/utils/storedRecordValidation';
 const configs = ref<BreathingConfig[]>([]);
 const sessions = ref<Session[]>([]);
 const soundTheme = ref<SoundTheme>('wood');
-const assessments = ref<AssessmentResult[]>([]);
 
 const STORAGE_DATE_FIELDS = ['startedAt', 'completedAt', 'createdAt', 'updatedAt'] as const;
 
@@ -74,13 +71,6 @@ function loadFromStorage() {
     const parsedTheme = SoundThemeSchema.safeParse(storedTheme);
     soundTheme.value = parsedTheme.success ? parsedTheme.data : 'wood';
   }
-
-  assessments.value = validateStoredArray({
-    key: 'breath-in-flow-assessments',
-    value: loadValueFromStorage('breath-in-flow-assessments'),
-    schema: AssessmentResultSchema,
-    normalize: restoreDateFields,
-  });
 }
 
 function saveToStorage() {
@@ -88,7 +78,6 @@ function saveToStorage() {
     localStorage.setItem('breath-in-flow-configs', JSON.stringify(configs.value));
     localStorage.setItem('breath-in-flow-sessions', JSON.stringify(sessions.value));
     localStorage.setItem('breath-in-flow-sound-theme', soundTheme.value);
-    localStorage.setItem('breath-in-flow-assessments', JSON.stringify(assessments.value));
   } catch (e) {
     console.error('Failed to save to storage:', e);
   }
@@ -102,7 +91,6 @@ export function resetStorageForTesting() {
   configs.value = [];
   sessions.value = [];
   soundTheme.value = 'wood';
-  assessments.value = [];
 }
 
 function cloneConfig(config: BreathingConfig): BreathingConfig {
@@ -280,16 +268,6 @@ export function useStorage() {
     };
   });
 
-  // Assessment operations
-  function getAssessments(): AssessmentResult[] {
-    return assessments.value;
-  }
-
-  function saveAssessment(result: AssessmentResult): void {
-    assessments.value.unshift(result);
-    saveToStorage();
-  }
-
   // Sound theme operations
   function getSoundTheme(): SoundTheme {
     return soundTheme.value;
@@ -326,10 +304,6 @@ export function useStorage() {
     cancelSession,
     deleteSession,
     deleteAllSessions,
-
-    // Assessment operations
-    getAssessments,
-    saveAssessment,
 
     // Sound theme operations
     getSoundTheme,

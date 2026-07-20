@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeHRV } from '../../src/hrv/index.js';
+import { analyzeRawHRV } from '../../src/hrv/index.js';
 import { preprocessIBI } from '../../src/hrv/preprocessing.js';
 
 function makeTimestamps(intervals: number[]): number[] {
@@ -103,7 +103,7 @@ describe('preprocessIBI', () => {
 describe('analyzeHRV input normalization', () => {
   it('sorts IBI samples and drops duplicate or invalid timestamps before metrics', () => {
     const provenance = { source: 'ppg' as const, method: 'peak-detected' as const };
-    const result = analyzeHRV([
+    const result = analyzeRawHRV([
       { timestamp: 3000, interval: 1000, quality: 0.8, provenance },
       { timestamp: 1000, interval: 1000, quality: 0.9, provenance },
       { timestamp: 2000, interval: 1000, quality: 0.7, provenance },
@@ -132,7 +132,7 @@ describe('analyzeHRV input normalization', () => {
     ],
     ['unknown non-peak method', { source: 'ppg' as const, method: 'estimated' as 'peak-detected' }],
   ])('rejects %s at the public analysis boundary', (_label, provenance) => {
-    const result = analyzeHRV(
+    const result = analyzeRawHRV(
       Array.from({ length: 5 }, (_, index) => ({
         timestamp: index * 1_000,
         interval: 1_000 + index,

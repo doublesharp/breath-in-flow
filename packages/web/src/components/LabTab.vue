@@ -110,7 +110,11 @@
         tabindex="-1"
         class="fixed inset-0 z-50 bg-slate-950 flex flex-col safe-area-top safe-area-bottom"
       >
-        <div class="flex-1 flex flex-col justify-center items-center px-6 text-center">
+        <div
+          data-testid="prep-content"
+          :inert="isStartPending || undefined"
+          class="flex-1 flex flex-col justify-center items-center px-6 text-center"
+        >
           <!-- Protocol info -->
           <div class="text-4xl mb-4">{{ prepProtocol?.icon || '📊' }}</div>
           <h2 id="pulse-prep-dialog-title" class="text-xl font-bold text-white mb-1">
@@ -251,9 +255,18 @@
         tabindex="-1"
         class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom"
       >
-        <h2 id="pulse-measurement-dialog-title" class="sr-only">Pulse variability measurement</h2>
         <!-- Measuring view -->
         <div v-if="isMeasuring" class="flex flex-col h-full p-4">
+          <h2
+            id="pulse-measurement-dialog-title"
+            ref="measurementPhaseHeadingRef"
+            data-testid="measurement-phase-heading"
+            class="sr-only"
+            tabindex="-1"
+            aria-live="polite"
+          >
+            Pulse variability measurement in progress
+          </h2>
           <!-- Header -->
           <div class="flex items-center justify-between mb-4">
             <div>
@@ -340,7 +353,16 @@
 
         <!-- Results view -->
         <div v-if="showResults && currentAnalysis" class="p-4 space-y-4">
-          <h2 class="text-lg font-bold text-white">Results</h2>
+          <h2
+            id="pulse-measurement-dialog-title"
+            ref="measurementPhaseHeadingRef"
+            data-testid="measurement-phase-heading"
+            class="text-lg font-bold text-white"
+            tabindex="-1"
+            aria-live="polite"
+          >
+            Pulse variability Results
+          </h2>
           <HrvMetricsDashboard :analysis="currentAnalysis" />
           <FrequencySpectrum
             v-if="currentAnalysis.frequencyDomain.available"
@@ -486,11 +508,7 @@ import type { PPGCallbacks } from '../services/ppgService';
 import { soundService } from '../services/soundService';
 import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
-import {
-  limitAnalysisToEligibility,
-  MeasurementSession,
-  type MeasurementStartOutcome,
-} from '../services/measurementSession';
+import { MeasurementSession, type MeasurementStartOutcome } from '../services/measurementSession';
 import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
 import { analyzeHRV, finalizeMeasurement, MAX_PLAUSIBLE_IBI_MS } from '@breath-in-flow/shared';
 import { useHrvStorage, type HrvMeasurement } from '../composables/useHrvStorage';
@@ -560,6 +578,7 @@ const selectedProtocol = ref<Protocol | null>(null);
 const showPrep = ref(false);
 const prepDialogRef = ref<HTMLElement | null>(null);
 const measurementDialogRef = ref<HTMLElement | null>(null);
+const measurementPhaseHeadingRef = ref<HTMLElement | null>(null);
 const assessmentDialogRef = ref<HTMLElement | null>(null);
 const prepProtocol = ref<Protocol | null>(null);
 const availableCameras = ref<{ deviceId: string; label: string }[]>([]);
@@ -571,6 +590,7 @@ const measurementNotes = ref('');
 const measurementStartTime = ref<Date>(new Date());
 const currentEligibility = ref<MeasurementEligibility | null>(null);
 const currentSampleProvenance = ref<SampleProvenance[]>([]);
+const currentAcquisitionSources = ref<Array<'ppg' | 'scg'>>([]);
 const measurements = ref<HrvMeasurement[]>([]);
 const recentMeasurements = computed(() => measurements.value.slice(0, 5));
 const latestAssessment = ref<AssessmentResult | null>(null);
@@ -591,9 +611,15 @@ const captureDurationSeconds = computed(() =>
 );
 const maxCaptureDurationSeconds = computed(() => captureDurationSeconds.value + (2 * MAX_PLAUSIBLE_IBI_MS) / 1_000);
 const measurementDialogOpen = computed(() => isMeasuring.value || showResults.value);
+const measurementPhaseKey = computed(() =>
+  isMeasuring.value ? 'measuring' : showResults.value ? 'results' : 'closed'
+);
 
 useModalIsolation(prepDialogRef, showPrep, { onEscape: cancelPendingStart });
-useModalIsolation(measurementDialogRef, measurementDialogOpen);
+useModalIsolation(measurementDialogRef, measurementDialogOpen, {
+  focusKey: measurementPhaseKey,
+  initialFocus: () => measurementPhaseHeadingRef.value,
+});
 useModalIsolation(assessmentDialogRef, showAssessment);
 const signalGuidance = computed(() => {
   if (hrDataPoints.value.length === 0 && sensorQuality.value <= 0) return 'Waiting for a pulse';
@@ -965,6 +991,7 @@ async function showPrepScreen(protocol: Protocol | null) {
 }
 
 async function confirmStart() {
+  if (isStartPending.value) return;
   const generation = ++startGeneration;
   const lifecycleAtStart = lifecycleGeneration;
   pendingStartGeneration = generation;
@@ -994,7 +1021,6 @@ async function confirmStart() {
       return;
     }
 
-    showPrep.value = false;
     if (protocol) {
       await startProtocol(protocol);
     } else {
@@ -1008,6 +1034,7 @@ async function confirmStart() {
       prepProtocol.value = protocol;
       return;
     }
+    showPrep.value = false;
     prepProtocol.value = null;
   } finally {
     if (pendingStartGeneration === generation) {
@@ -1019,8 +1046,11 @@ async function confirmStart() {
 
 function cancelPendingStart() {
   startGeneration += 1;
-  pendingStartGeneration = null;
-  isStartPending.value = false;
+  if (measurementSession) {
+    if (selectedSensor.value === 'dual') sensorFusionService.reset();
+    measurementSession.interrupt('Measurement start cancelled.');
+    measurementSession = null;
+  }
   showPrep.value = false;
   prepProtocol.value = null;
 }
@@ -1059,6 +1089,7 @@ async function startProtocol(protocol: Protocol) {
   measurementStartTime.value = new Date();
   currentEligibility.value = null;
   currentSampleProvenance.value = [];
+  currentAcquisitionSources.value = [];
   showRecoveryActions.value = false;
 
   addDebugLine(`Starting ${protocol.name} with ${selectedSensor.value} sensor`);
@@ -1092,6 +1123,7 @@ async function startFreeform() {
   measurementStartTime.value = new Date();
   currentEligibility.value = null;
   currentSampleProvenance.value = [];
+  currentAcquisitionSources.value = [];
   showRecoveryActions.value = false;
 
   const outcome = await startSensor('freeform');
@@ -1123,6 +1155,7 @@ function stopMeasurement() {
   measurementSession = null;
   collectedIBIs.value = sessionResult?.samples ?? [];
   currentEligibility.value = sessionResult?.eligibility ?? null;
+  currentAcquisitionSources.value = sessionResult?.activeSources ?? [];
   currentSampleProvenance.value =
     sessionResult?.samples.flatMap((sample) => (sample.provenance ? [sample.provenance] : [])) ?? [];
   isMeasuring.value = false;
@@ -1135,10 +1168,11 @@ function stopMeasurement() {
     showRecoveryActions.value = true;
     addDebugLine(`Measurement unavailable: ${sessionResult.eligibility.reasons.join(', ')}`);
   } else if (ibis.length >= 10) {
-    const analysis = analyzeHRV(ibis);
-    currentAnalysis.value = sessionResult?.eligibility
-      ? limitAnalysisToEligibility(analysis, sessionResult.eligibility)
-      : analysis;
+    currentAnalysis.value = analyzeHRV({
+      samples: ibis,
+      analyzedDurationSeconds: finalized.analyzedDurationSeconds,
+      eligibility: sessionResult?.eligibility ?? finalized.eligibility,
+    });
     showResults.value = true;
     soundService.playCompletionChime();
   } else {
@@ -1167,6 +1201,7 @@ function interruptMeasurement() {
   collectedIBIs.value = [];
   currentEligibility.value = null;
   currentSampleProvenance.value = [];
+  currentAcquisitionSources.value = [];
   hrDataPoints.value = [];
   rawSignalData.value = [];
   sensorQuality.value = 0;
@@ -1226,6 +1261,7 @@ async function saveResults() {
     completedAt: new Date(),
     durationSeconds: currentEligibility.value?.observedDurationSeconds ?? elapsedSeconds.value,
     sensorMode: selectedSensor.value,
+    acquisitionSources: currentAcquisitionSources.value.length > 0 ? [...currentAcquisitionSources.value] : undefined,
     analysis: currentAnalysis.value,
     algorithmVersion: 2,
     eligibility: currentEligibility.value ?? undefined,
@@ -1305,8 +1341,6 @@ useAppLifecycle({
       permissionError.value = MEASUREMENT_INTERRUPTION_MESSAGE;
       showRecoveryActions.value = false;
       showPrep.value = true;
-      pendingStartGeneration = null;
-      isStartPending.value = false;
     }
     interruptMeasurement();
   },

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { limitAnalysisToEligibility, MeasurementSession } from '@/services/measurementSession';
+import { MeasurementSession } from '@/services/measurementSession';
 import {
   analyzeHRV,
   evaluateMeasurementEligibility,
@@ -329,10 +329,8 @@ describe('MeasurementSession', () => {
 
   it('removes frequency outputs when the selected protocol does not allow them', () => {
     const samples = Array.from({ length: 70 }, (_, index) => detectedSample(index * 1_000));
-    const analysis = analyzeHRV(samples);
     const eligibility = evaluateMeasurementEligibility(samples, 'quick-check', 70);
-
-    const limited = limitAnalysisToEligibility(analysis, eligibility);
+    const limited = analyzeHRV({ samples, analyzedDurationSeconds: 70, eligibility });
 
     expect(limited.frequencyDomain).toEqual({
       available: false,
@@ -353,10 +351,8 @@ describe('MeasurementSession', () => {
       ...detectedSample(index * 1_000),
       interval: 1_000 + Math.sin(index / 2) * 50,
     }));
-    const analysis = analyzeHRV(samples, 6);
     const eligibility = evaluateMeasurementEligibility(samples, 'resonance-trial', 120);
-
-    const limited = limitAnalysisToEligibility(analysis, eligibility);
+    const limited = analyzeHRV({ samples, analyzedDurationSeconds: 120, eligibility }, 6);
 
     expect(limited.frequencyDomain).toEqual({
       available: false,
@@ -367,14 +363,16 @@ describe('MeasurementSession', () => {
 
   it('uses the bounded fallback reason when an ineligible contract has no reasons', () => {
     const samples = Array.from({ length: 70 }, (_, index) => detectedSample(index * 1_000));
-    const analysis = analyzeHRV(samples);
     const eligibility = evaluateMeasurementEligibility(samples, 'quick-check', 70);
-
-    const limited = limitAnalysisToEligibility(analysis, {
-      ...eligibility,
-      eligible: false,
-      reasons: [],
-      availableMetrics: [],
+    const limited = analyzeHRV({
+      samples,
+      analyzedDurationSeconds: 70,
+      eligibility: {
+        ...eligibility,
+        eligible: false,
+        reasons: [],
+        availableMetrics: [],
+      },
     });
 
     expect(limited.frequencyDomain).toEqual({

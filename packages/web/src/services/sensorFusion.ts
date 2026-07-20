@@ -198,7 +198,9 @@ export class SensorFusionService {
   }
 
   private getPairingHorizonMs(): number {
-    return this.getEstimatedOffset() === null ? OFFSET_DISCOVERY_WINDOW_MS : MATCH_WINDOW_MS;
+    const estimatedOffset = this.getEstimatedOffset();
+    if (estimatedOffset === null) return OFFSET_DISCOVERY_WINDOW_MS;
+    return Math.min(Math.abs(estimatedOffset), OFFSET_DISCOVERY_WINDOW_MS) + MATCH_WINDOW_MS;
   }
 
   private emitFallback(sample: IBISample, source: Source): void {

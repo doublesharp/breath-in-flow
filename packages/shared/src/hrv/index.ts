@@ -21,6 +21,7 @@ import { preprocessIBI } from './preprocessing.js';
 import { computeTimeDomainMetrics } from './timeDomain.js';
 import { computeFrequencyDomainMetrics } from './frequencyDomain.js';
 import { computeResonanceMetrics } from './resonanceMetrics.js';
+import type { FinalizedMeasurement } from './finalizeMeasurement.js';
 
 function availableMetric<T, Reason extends string>(value: T): MetricAvailability<T, Reason> {
   return { available: true, value };
@@ -82,12 +83,12 @@ function normalizeIBISamples(samples: IBISample[]): {
 }
 
 /**
- * Full HRV analysis pipeline.
+ * Lower-level mathematical pulse variability analysis.
  *
  * @param samples           - raw IBI samples
  * @param breathingRateBPM  - optional breathing rate for resonance metrics
  */
-export function analyzeHRV(samples: IBISample[], breathingRateBPM?: number): HRVAnalysis {
+export function analyzeRawHRV(samples: IBISample[], breathingRateBPM?: number): HRVAnalysis {
   const normalized = normalizeIBISamples(samples);
   const usableSamples = normalized.samples;
 
@@ -162,5 +163,34 @@ export function analyzeHRV(samples: IBISample[], breathingRateBPM?: number): HRV
       timestamps: cleanedTimestamps,
       instantaneousHR,
     },
+  };
+}
+
+/**
+ * Production analysis boundary. Metric availability is inherited from the
+ * finalized measurement contract so mathematically computable values cannot
+ * bypass protocol, quality, artifact, or provenance eligibility.
+ */
+export function analyzeHRV(
+  measurement: FinalizedMeasurement,
+  breathingRateBPM?: number
+): HRVAnalysis {
+  const analysis = analyzeRawHRV(measurement.samples, breathingRateBPM);
+  const { eligibility } = measurement;
+  const unavailableReason =
+    eligibility.reasons[0] ??
+    (eligibility.eligible ? 'protocol-not-supported' : 'insufficient-data');
+
+  return {
+    ...analysis,
+    frequencyDomain: eligibility.availableMetrics.includes('frequency-domain')
+      ? analysis.frequencyDomain
+      : { available: false, reason: unavailableReason },
+    poincare: eligibility.availableMetrics.includes('poincare')
+      ? analysis.poincare
+      : { available: false, reason: unavailableReason },
+    resonance: eligibility.availableMetrics.includes('resonance-training')
+      ? analysis.resonance
+      : { available: false, reason: unavailableReason },
   };
 }

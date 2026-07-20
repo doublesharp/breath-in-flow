@@ -1,8 +1,9 @@
-import { nextTick, onBeforeUnmount, watch, type Ref } from 'vue';
+import { nextTick, onBeforeUnmount, watch, type Ref, type WatchSource } from 'vue';
 
 interface ModalIsolationOptions {
   backgroundRef?: Ref<HTMLElement | null>;
   initialFocus?: () => HTMLElement | null;
+  focusKey?: WatchSource<unknown>;
   onEscape?: () => void;
   canEscape?: () => boolean;
 }
@@ -128,6 +129,15 @@ export function useModalIsolation(
     focusTarget.focus();
   }
 
+  async function focusChangedPhase() {
+    const currentActivation = activationId;
+    await nextTick();
+    if (currentActivation !== activationId || !openRef.value || !dialogRef.value) return;
+    const dialog = dialogRef.value;
+    const focusTarget = options.initialFocus?.() ?? focusableElements(dialog)[0] ?? dialog;
+    focusTarget.focus();
+  }
+
   function deactivate({ restoreFocus = true } = {}) {
     activationId += 1;
     unlisten();
@@ -141,9 +151,15 @@ export function useModalIsolation(
     if (open) void activate();
     else deactivate();
   });
+  const stopWatchingFocusKey = options.focusKey
+    ? watch(options.focusKey, () => {
+        if (openRef.value) void focusChangedPhase();
+      })
+    : undefined;
 
   onBeforeUnmount(() => {
     stopWatching();
+    stopWatchingFocusKey?.();
     deactivate({ restoreFocus: false });
   });
 

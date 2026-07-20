@@ -148,6 +148,32 @@ describe('measurement trends', () => {
     expect(buildWithinPersonInsights(measurements)).toEqual([]);
   });
 
+  it('compares the actual acquisition signature instead of the selected dual mode', () => {
+    const genuineDual = makeMeasurement('genuine-dual', '2026-07-03T08:00:00Z', {
+      sensorMode: 'dual',
+      acquisitionSources: ['ppg', 'scg'],
+    });
+    const degradedDual = makeMeasurement('degraded-dual', '2026-07-02T08:00:00Z', {
+      sensorMode: 'dual',
+      acquisitionSources: ['ppg'],
+    });
+    const secondGenuineDual = makeMeasurement('second-genuine-dual', '2026-07-01T08:00:00Z', {
+      sensorMode: 'dual',
+      acquisitionSources: ['scg', 'ppg'],
+    });
+    const legacyDual = makeMeasurement('legacy-dual', '2026-06-30T08:00:00Z', {
+      sensorMode: 'dual',
+      acquisitionSources: undefined,
+    });
+
+    expect(
+      getComparableMeasurements(
+        [genuineDual, degradedDual, secondGenuineDual, legacyDual],
+        genuineDual
+      ).map(({ id }) => id)
+    ).toEqual(['second-genuine-dual', 'genuine-dual']);
+  });
+
   it('excludes non-finite RMSSD values even when eligibility lists the metric', () => {
     const invalid = makeMeasurement('invalid', '2026-07-02T08:00:00Z', {
       analysis: {

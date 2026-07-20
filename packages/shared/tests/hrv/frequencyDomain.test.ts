@@ -5,7 +5,7 @@ import {
   linearDetrend,
   hanningWindow,
 } from '../../src/hrv/frequencyDomain.js';
-import { analyzeHRV } from '../../src/hrv/index.js';
+import { analyzeRawHRV } from '../../src/hrv/index.js';
 import { FREQUENCY_BANDS } from '../../src/hrv/types.js';
 
 /**
@@ -212,7 +212,7 @@ describe('computeFrequencyDomainMetrics', () => {
 
   it('makes resonance unavailable when no breathing-rate context was supplied', () => {
     const { rrIntervals, timestamps } = generateSinusoidalRR(1000, 50, 0.1, 150);
-    const analysis = analyzeHRV(
+    const analysis = analyzeRawHRV(
       rrIntervals.map((interval, index) => ({
         interval,
         timestamp: timestamps[index],
@@ -232,7 +232,7 @@ describe('computeFrequencyDomainMetrics', () => {
   });
 
   it('keeps resonance unavailable when a constant trial cannot produce a spectrum', () => {
-    const analysis = analyzeHRV(
+    const analysis = analyzeRawHRV(
       Array.from({ length: 121 }, (_, index) => ({
         interval: 1_000,
         timestamp: index * 1_000,
@@ -254,7 +254,7 @@ describe('computeFrequencyDomainMetrics', () => {
   });
 
   it('keeps resonance unavailable when a detected trial has fewer than two intervals', () => {
-    const analysis = analyzeHRV(
+    const analysis = analyzeRawHRV(
       [
         {
           interval: 1_000,
@@ -271,7 +271,7 @@ describe('computeFrequencyDomainMetrics', () => {
 
   it('makes resonance available when a detected trial produces a valid spectrum', () => {
     const { rrIntervals, timestamps } = generateSinusoidalRR(1_000, 50, 0.1, 121);
-    const analysis = analyzeHRV(
+    const analysis = analyzeRawHRV(
       rrIntervals.map((interval, index) => ({
         interval,
         timestamp: timestamps[index],

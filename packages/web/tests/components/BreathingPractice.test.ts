@@ -1,7 +1,20 @@
-import { enableAutoUnmount, mount, shallowMount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount, shallowMount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { nextTick, ref } from 'vue';
 import BreathingPractice from '@/components/BreathingPractice.vue';
+
+const { keepAwakeMock, allowSleepMock } = vi.hoisted(() => ({
+  keepAwakeMock: vi.fn(),
+  allowSleepMock: vi.fn(),
+}));
+
+vi.mock('@capacitor/core', () => ({
+  Capacitor: { isNativePlatform: () => true },
+}));
+
+vi.mock('@capacitor-community/keep-awake', () => ({
+  KeepAwake: { keepAwake: keepAwakeMock, allowSleep: allowSleepMock },
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -147,6 +160,8 @@ describe('BreathingPractice.vue', () => {
     timerPhase.value = 'IDLE';
     timerCurrentTime.value = 0;
     timerTotalPhaseTime.value = 0;
+    keepAwakeMock.mockResolvedValue(undefined);
+    allowSleepMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -265,6 +280,39 @@ describe('BreathingPractice.vue', () => {
     expect(document.body.textContent).toContain('Resume');
 
     isRunning.value = false;
+    wrapper.unmount();
+  });
+
+  it('reconciles to asleep when backgrounding occurs while keep-awake is still pending', async () => {
+    let resolveKeepAwake!: () => void;
+    keepAwakeMock.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveKeepAwake = resolve;
+      })
+    );
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref(null),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    isRunning.value = true;
+    await nextTick();
+    expect(keepAwakeMock).toHaveBeenCalledOnce();
+
+    await lastLifecycleOptions?.onInactive();
+    await nextTick();
+    expect(timerIsPaused.value).toBe(true);
+    expect(allowSleepMock).not.toHaveBeenCalled();
+
+    resolveKeepAwake();
+    await flushPromises();
+
+    expect(allowSleepMock).toHaveBeenCalledOnce();
     wrapper.unmount();
   });
 

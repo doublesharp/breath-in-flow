@@ -6,6 +6,7 @@ import ResonanceAssessment, {
 } from '../../src/components/ResonanceAssessment.vue';
 import { ASSESSMENT_TRIALS, type HRVAnalysis } from '@breath-in-flow/shared';
 import { ppgService } from '../../src/services/ppgService';
+import type { IBISample } from '@breath-in-flow/shared';
 
 enableAutoUnmount(afterEach);
 
@@ -195,6 +196,20 @@ describe('ResonanceAssessment', () => {
     const wrapper = mount(ResonanceAssessment);
     expect(wrapper.text()).toContain('Resonance Frequency Assessment');
     expect(wrapper.text()).toContain('Start Assessment');
+  });
+
+  it('focuses and politely announces each replaced assessment phase heading', async () => {
+    const wrapper = mount(ResonanceAssessment, { attachTo: document.body });
+
+    await wrapper.vm.setPhaseForTesting('SCORING');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const heading = wrapper.get<HTMLElement>('[data-assessment-phase-heading]');
+    expect(heading.text()).toContain('Rate Your Trials');
+    expect(heading.attributes('aria-live')).toBe('polite');
+    expect(document.activeElement).toBe(heading.element);
+    wrapper.unmount();
   });
 
   it('shows warmup config controls on INTRO', () => {
@@ -566,14 +581,24 @@ describe('ResonanceAssessment', () => {
     });
   });
 
-  it('renders trial and rest guidance and supports pausing either phase', async () => {
+  it('disables pause during sensor trials while retaining manual-trial and rest pause', async () => {
     const wrapper = mount(ResonanceAssessment);
     await wrapper.vm.setPhaseForTesting('TRIAL_BREATHING');
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).toContain('Keep your finger covering the camera lens');
-    const trialPause = wrapper.findAll('button').find((button) => button.text() === 'Pause')!;
-    await trialPause.trigger('click');
+    expect(wrapper.findAll('button').find((button) => button.text() === 'Pause')).toBeUndefined();
+
+    await wrapper.vm.setPhaseForTesting('INTRO');
+    await wrapper.vm.$nextTick();
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Manual Scoring'))!
+      .trigger('click');
+    await wrapper.vm.setPhaseForTesting('TRIAL_BREATHING');
+    await wrapper.vm.$nextTick();
+    const manualPause = wrapper.findAll('button').find((button) => button.text() === 'Pause')!;
+    await manualPause.trigger('click');
     expect(wrapper.text()).toContain('Resume');
     await wrapper
       .findAll('button')
@@ -589,6 +614,110 @@ describe('ResonanceAssessment', () => {
       .find((button) => button.text() === 'Pause')!
       .trigger('click');
     expect(wrapper.text()).toContain('Resume');
+  });
+
+  it.each([
+    { rate: 6, trialIndex: 1, phaseOffset: Math.PI / 3 },
+    { rate: 5, trialIndex: 3, phaseOffset: Math.PI / 2 },
+  ])(
+    'paces the $rate BPM sensor trial until a finalized 120-second detected-beat window is available',
+    async ({ rate, trialIndex, phaseOffset }) => {
+      const wrapper = mount(ResonanceAssessment);
+      const vm = wrapper.vm as unknown as {
+        startTrialForTesting: (index: number) => Promise<void>;
+        getPhaseForTesting: () => string;
+        getTrialAnalysisForTesting: (index: number) => HRVAnalysis | null;
+      };
+      await vm.startTrialForTesting(trialIndex);
+      await flushPromises();
+
+      const callbacks = vi.mocked(ppgService.start).mock.calls.at(-1)![0] as {
+        onIBI: (sample: IBISample) => void;
+      };
+      let beatTimestamp = 10_000;
+      callbacks.onIBI({
+        timestamp: beatTimestamp,
+        interval: 1_000,
+        quality: 0.9,
+        provenance: { source: 'ppg', method: 'peak-detected' },
+      });
+
+      let elapsedSeconds = 0;
+      let sawFinishingState = false;
+      while (elapsedSeconds < 132 && vm.getPhaseForTesting() === 'TRIAL_BREATHING') {
+        elapsedSeconds += 1;
+        await vi.advanceTimersByTimeAsync(1_000);
+        if (vm.getPhaseForTesting() !== 'TRIAL_BREATHING') break;
+        const interval =
+          1_000 + Math.sin(phaseOffset + 2 * Math.PI * (rate / 60) * (beatTimestamp / 1_000)) * 45;
+        beatTimestamp += interval;
+        callbacks.onIBI({
+          timestamp: beatTimestamp,
+          interval,
+          quality: 0.9,
+          provenance: { source: 'ppg', method: 'peak-detected' },
+        });
+        if (elapsedSeconds >= 120) {
+          await wrapper.vm.$nextTick();
+          const finishingState = wrapper.find('[data-testid="finishing-trial-data"]');
+          sawFinishingState ||=
+            finishingState.exists() &&
+            finishingState.text().includes('Finishing clean data collection');
+        }
+      }
+      await flushPromises();
+
+      expect(elapsedSeconds).toBeGreaterThan(120);
+      expect(elapsedSeconds).toBeLessThanOrEqual(132);
+      expect(ppgService.stop).toHaveBeenCalledOnce();
+      const analysis = vm.getTrialAnalysisForTesting(trialIndex);
+      expect(analysis).not.toBeNull();
+      expect(analysis!.raw.timestamps.at(-1)! - analysis!.raw.timestamps[0]).toBeGreaterThanOrEqual(
+        120_000
+      );
+      expect(analysis!.resonance.available).toBe(true);
+      expect(sawFinishingState).toBe(true);
+    }
+  );
+
+  it('stops a sensor trial at the derived hard cap when detected timestamps cannot fill the clean window', async () => {
+    const wrapper = mount(ResonanceAssessment);
+    const vm = wrapper.vm as unknown as {
+      startTrialForTesting: (index: number) => Promise<void>;
+      getPhaseForTesting: () => string;
+      getTrialAnalysisForTesting: (index: number) => HRVAnalysis | null;
+    };
+    await vm.startTrialForTesting(1);
+    await flushPromises();
+    const callbacks = vi.mocked(ppgService.start).mock.calls.at(-1)![0] as {
+      onIBI: (sample: IBISample) => void;
+    };
+    let timestamp = 10_000;
+    callbacks.onIBI({
+      timestamp,
+      interval: 1_000,
+      quality: 0.9,
+      provenance: { source: 'ppg', method: 'peak-detected' },
+    });
+
+    let elapsedSeconds = 0;
+    while (elapsedSeconds < 140 && vm.getPhaseForTesting() === 'TRIAL_BREATHING') {
+      elapsedSeconds += 1;
+      await vi.advanceTimersByTimeAsync(1_000);
+      if (vm.getPhaseForTesting() !== 'TRIAL_BREATHING') break;
+      timestamp += 100;
+      callbacks.onIBI({
+        timestamp,
+        interval: 1_000,
+        quality: 0.9,
+        provenance: { source: 'ppg', method: 'peak-detected' },
+      });
+    }
+    await flushPromises();
+
+    expect(elapsedSeconds).toBe(132);
+    expect(ppgService.stop).toHaveBeenCalledOnce();
+    expect(vm.getTrialAnalysisForTesting(1)).toBeNull();
   });
 
   it('advances a manual assessment through warmup, trial, rest, and the next trial', async () => {
@@ -639,6 +768,32 @@ describe('ResonanceAssessment', () => {
       expect(saveAssessment).toHaveBeenCalledWith(
         expect.objectContaining({ completedAt: expect.any(Date) })
       );
+    });
+
+    it('does not create a practice preset when authoritative assessment persistence fails', async () => {
+      localStorage.removeItem('breath-in-flow-configs');
+      let rejectAssessment!: (error: Error) => void;
+      saveAssessment.mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectAssessment = reject;
+        })
+      );
+      const wrapper = mount(ResonanceAssessment);
+      await wrapper.vm.setPhaseForTesting('RESULT');
+      await wrapper.vm.$nextTick();
+
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text().includes('Save & Create Preset'))!
+        .trigger('click');
+
+      expect(localStorage.getItem('breath-in-flow-configs')).toBeNull();
+      expect(wrapper.emitted('complete')).toBeUndefined();
+
+      rejectAssessment(new Error('IndexedDB unavailable'));
+      await flushPromises();
+      expect(wrapper.text()).toContain('could not be saved');
+      expect(localStorage.getItem('breath-in-flow-configs')).toBeNull();
     });
   });
 });

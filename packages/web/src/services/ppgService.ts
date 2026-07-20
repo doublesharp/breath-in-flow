@@ -52,6 +52,14 @@ export interface PPGStartOptions {
   torchEnabled?: boolean;
 }
 
+interface CandidateCaptureResources {
+  stream: MediaStream | null;
+  video: HTMLVideoElement | null;
+  canvas: HTMLCanvasElement | null;
+  ctx: CanvasRenderingContext2D | null;
+  torchEnabled: boolean;
+}
+
 /**
  * List available video input devices (cameras).
  * Useful for letting the user pick the camera closest to the flash.
@@ -75,6 +83,8 @@ class PPGService {
   private ctx: CanvasRenderingContext2D | null = null;
   private animFrameId: number | null = null;
   private callbacks: PPGCallbacks = {};
+  private startGeneration = 0;
+  private pendingStartPromise: Promise<SensorStartResult> | null = null;
 
   // Signal processing
   private bandpassFilter: SOSFilter;
@@ -145,16 +155,25 @@ class PPGService {
   /**
    * Enable torch using native Capacitor plugin (Android/iOS) or WebView fallback (desktop).
    */
-  private async enableTorch(): Promise<void> {
+  private async enableTorchFor(stream: MediaStream | null, generation?: number): Promise<boolean> {
+    const canContinue = () => generation === undefined || this.ownsStart(generation);
     // Strategy 1: Native Capacitor torch plugin (most reliable on mobile)
     if (Capacitor.isNativePlatform()) {
       try {
         const { available } = await Torch.isAvailable();
+        if (!canContinue()) return false;
         if (available) {
           await Torch.enable();
-          this.torchEnabled = true;
+          if (!canContinue()) {
+            try {
+              await Torch.disable();
+            } catch {
+              // Candidate stream cleanup remains the final fallback.
+            }
+            return false;
+          }
           debugLog('PPG: Torch enabled via native Capacitor plugin');
-          return;
+          return true;
         }
       } catch (e) {
         debugWarn('PPG: Native torch plugin failed:', e);
@@ -162,8 +181,8 @@ class PPGService {
     }
 
     // Strategy 2: WebView MediaStream torch constraint (Chrome desktop, some Android)
-    if (this.stream) {
-      const tracks = this.stream.getVideoTracks();
+    if (stream) {
+      const tracks = stream.getVideoTracks();
       if (tracks.length > 0) {
         const track = tracks[0];
         try {
@@ -172,9 +191,9 @@ class PPGService {
             await track.applyConstraints({
               advanced: [{ torch: true } as MediaTrackConstraintSet],
             });
-            this.torchEnabled = true;
+            if (!canContinue()) return false;
             debugLog('PPG: Torch enabled via MediaStream constraint');
-            return;
+            return true;
           }
         } catch {
           // Fall through
@@ -185,9 +204,9 @@ class PPGService {
           await track.applyConstraints({
             advanced: [{ torch: true } as MediaTrackConstraintSet],
           });
-          this.torchEnabled = true;
+          if (!canContinue()) return false;
           debugLog('PPG: Torch enabled via blind constraint attempt');
-          return;
+          return true;
         } catch {
           // Truly not available
         }
@@ -195,6 +214,11 @@ class PPGService {
     }
 
     debugWarn('PPG: Torch/flashlight not available on this device');
+    return false;
+  }
+
+  public async enableTorch(): Promise<void> {
+    this.torchEnabled = await this.enableTorchFor(this.stream);
   }
 
   /**
@@ -213,11 +237,9 @@ class PPGService {
     this.torchEnabled = false;
   }
 
-  public async start(
-    callbacksOrOptions?: PPGCallbacks | PPGStartOptions
-  ): Promise<SensorStartResult> {
-    // Support both old signature (callbacks only) and new options object
+  public start(callbacksOrOptions?: PPGCallbacks | PPGStartOptions): Promise<SensorStartResult> {
     let options: PPGStartOptions = {};
+    let requestedCallbacks = this.callbacks;
     if (callbacksOrOptions) {
       if (
         'callbacks' in callbacksOrOptions ||
@@ -225,22 +247,44 @@ class PPGService {
         'torchEnabled' in callbacksOrOptions
       ) {
         options = callbacksOrOptions as PPGStartOptions;
-        if (options.callbacks) this.callbacks = options.callbacks;
+        if (options.callbacks) requestedCallbacks = options.callbacks;
       } else {
-        this.callbacks = callbacksOrOptions as PPGCallbacks;
+        requestedCallbacks = callbacksOrOptions as PPGCallbacks;
       }
     }
 
-    const useTorch = options.torchEnabled !== false; // default true
-
-    if (this.status === 'capturing' || this.status === 'initializing') {
-      return { ok: true };
+    if (this.pendingStartPromise) return this.pendingStartPromise;
+    if (this.status === 'capturing') {
+      return Promise.resolve(
+        sensorStartFailure('device-busy', 'Camera capture is already active.')
+      );
     }
 
+    const generation = ++this.startGeneration;
+    this.callbacks = requestedCallbacks;
     this.setStatus('initializing');
+    const pending = this.startCapture(generation, options);
+    this.pendingStartPromise = pending;
+    void pending.finally(() => {
+      if (this.pendingStartPromise === pending) this.pendingStartPromise = null;
+    });
+    return pending;
+  }
+
+  private async startCapture(
+    generation: number,
+    options: PPGStartOptions
+  ): Promise<SensorStartResult> {
+    const candidate: CandidateCaptureResources = {
+      stream: null,
+      video: null,
+      canvas: null,
+      ctx: null,
+      torchEnabled: false,
+    };
+    const useTorch = options.torchEnabled !== false;
 
     try {
-      // Request camera access
       const mediaDevices = navigator.mediaDevices;
       if (!mediaDevices || !mediaDevices.getUserMedia) {
         throw new Error('Camera not available on this device. Please use a device with a camera.');
@@ -258,51 +302,24 @@ class PPGService {
         videoConstraints.facingMode = 'environment';
       }
 
-      this.stream = await mediaDevices.getUserMedia({ video: videoConstraints });
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      let message = error.message;
+      candidate.stream = await mediaDevices.getUserMedia({ video: videoConstraints });
+      if (!this.ownsStart(generation)) return await this.cancelCandidate(candidate);
 
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        message = 'Camera permission denied. Please allow camera access and try again.';
-      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-        message = 'No camera found on this device. A rear camera is required for PPG capture.';
-      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-        message =
-          'Camera is in use by another application. Please close other apps using the camera.';
-      }
-
-      this.setStatus('error');
-      this.callbacks.onError?.(new Error(message));
-
-      let reason: SensorStartFailureReason = 'start-failed';
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        reason = 'permission-denied';
-      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-        reason = 'unavailable';
-      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-        reason = 'device-busy';
-      }
-      return sensorStartFailure(reason, message);
-    }
-
-    try {
-      // Create video element — must be added to DOM for Android WebView compatibility
-      this.video = document.createElement('video');
-      this.video.srcObject = this.stream;
-      this.video.playsInline = true;
-      this.video.muted = true;
-      this.video.setAttribute('autoplay', '');
-      this.video.setAttribute('playsinline', '');
-      this.video.setAttribute('webkit-playsinline', '');
+      candidate.video = document.createElement('video');
+      candidate.video.srcObject = candidate.stream;
+      candidate.video.playsInline = true;
+      candidate.video.muted = true;
+      candidate.video.setAttribute('autoplay', '');
+      candidate.video.setAttribute('playsinline', '');
+      candidate.video.setAttribute('webkit-playsinline', '');
       // Hide but keep in DOM — some Android WebViews require this for frame capture
-      this.video.style.position = 'fixed';
-      this.video.style.top = '-9999px';
-      this.video.style.left = '-9999px';
-      this.video.style.width = '1px';
-      this.video.style.height = '1px';
-      this.video.style.opacity = '0.01';
-      document.body.appendChild(this.video);
+      candidate.video.style.position = 'fixed';
+      candidate.video.style.top = '-9999px';
+      candidate.video.style.left = '-9999px';
+      candidate.video.style.width = '1px';
+      candidate.video.style.height = '1px';
+      candidate.video.style.opacity = '0.01';
+      document.body.appendChild(candidate.video);
 
       // Reset processing state
       this.rawBuffer = [];
@@ -319,18 +336,20 @@ class PPGService {
       this.peakDetector.reset();
 
       // Start video playback — must happen before torch and canvas setup
-      await this.video.play();
-      debugLog('PPG: Video playing, readyState:', this.video.readyState);
+      await candidate.video.play();
+      if (!this.ownsStart(generation)) return await this.cancelCandidate(candidate);
+      debugLog('PPG: Video playing, readyState:', candidate.video.readyState);
 
-      // Wait for video to be ready with actual dimensions (timeout after 5s)
       await new Promise<void>((resolve) => {
         let attempts = 0;
         const checkReady = () => {
           attempts++;
-          if (!this.video || this.status !== 'initializing') {
+          if (!this.ownsStart(generation)) {
             resolve();
-          } else if (this.video.videoWidth > 0 && this.video.videoHeight > 0) {
-            debugLog(`PPG: Video ready — ${this.video.videoWidth}x${this.video.videoHeight}`);
+          } else if (candidate.video!.videoWidth > 0 && candidate.video!.videoHeight > 0) {
+            debugLog(
+              `PPG: Video ready — ${candidate.video!.videoWidth}x${candidate.video!.videoHeight}`
+            );
             resolve();
           } else if (attempts > 150) {
             // Timeout after ~5 seconds, use defaults
@@ -342,70 +361,94 @@ class PPGService {
         };
         checkReady();
       });
+      if (!this.ownsStart(generation)) return await this.cancelCandidate(candidate);
 
-      if (!this.video || this.getStatus() !== 'initializing') {
-        return sensorStartFailure('start-failed', 'Camera startup was cancelled.');
-      }
-
-      // Create canvas matching actual video dimensions (not hardcoded)
-      const vw = this.video.videoWidth || 320;
-      const vh = this.video.videoHeight || 240;
+      const vw = candidate.video.videoWidth || 320;
+      const vh = candidate.video.videoHeight || 240;
       debugLog(`PPG: Canvas size ${vw}x${vh}`);
-      this.canvas = document.createElement('canvas');
-      this.canvas.width = vw;
-      this.canvas.height = vh;
-      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+      candidate.canvas = document.createElement('canvas');
+      candidate.canvas.width = vw;
+      candidate.canvas.height = vh;
+      candidate.ctx = candidate.canvas.getContext('2d', { willReadFrequently: true });
 
-      // Enable torch/flashlight for PPG illumination (unless user disabled it)
       if (useTorch) {
-        await this.enableTorch();
+        candidate.torchEnabled = await this.enableTorchFor(candidate.stream, generation);
+        if (!this.ownsStart(generation)) return await this.cancelCandidate(candidate);
       } else {
         debugLog('PPG: Torch disabled by user');
       }
 
+      this.stream = candidate.stream;
+      this.video = candidate.video;
+      this.canvas = candidate.canvas;
+      this.ctx = candidate.ctx;
+      this.torchEnabled = candidate.torchEnabled;
       this.setStatus('capturing');
       this.scheduleNextFrame();
       return { ok: true };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-
-      await this.cleanupCaptureResources();
-
-      this.setStatus('error');
-      const message = `Unable to start camera preview. ${error.message}`;
-      this.callbacks.onError?.(new Error(message));
-      return sensorStartFailure('start-failed', message);
-    }
-  }
-
-  private async cleanupCaptureResources(): Promise<void> {
-    if (this.animFrameId !== null) {
-      cancelAnimationFrame(this.animFrameId);
-      this.animFrameId = null;
-    }
-
-    await this.disableTorch();
-
-    if (this.stream) {
-      this.stream.getTracks().forEach((track) => track.stop());
-      this.stream = null;
-    }
-
-    if (this.video) {
-      this.video.srcObject = null;
-      if (this.video.parentNode) {
-        this.video.parentNode.removeChild(this.video);
+      const hadCandidateStream = candidate.stream !== null;
+      await this.cleanupCandidateResources(candidate);
+      if (!this.ownsStart(generation)) {
+        return sensorStartFailure('start-failed', 'Camera startup was cancelled.');
       }
-      this.video = null;
-    }
 
-    this.canvas = null;
-    this.ctx = null;
+      let message = error.message;
+      let reason: SensorStartFailureReason = 'start-failed';
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        message = 'Camera permission denied. Please allow camera access and try again.';
+        reason = 'permission-denied';
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        message = 'No camera found on this device. A rear camera is required for PPG capture.';
+        reason = 'unavailable';
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        message =
+          'Camera is in use by another application. Please close other apps using the camera.';
+        reason = 'device-busy';
+      }
+      this.setStatus('error');
+      const reportedMessage =
+        reason === 'start-failed' && hadCandidateStream
+          ? `Unable to start camera preview. ${message}`
+          : message;
+      this.callbacks.onError?.(new Error(reportedMessage));
+      return sensorStartFailure(reason, reportedMessage);
+    }
   }
 
-  private scheduleNextFrame(): void {
+  private ownsStart(generation: number): boolean {
+    return generation === this.startGeneration && this.status === 'initializing';
+  }
+
+  private async cancelCandidate(candidate: CandidateCaptureResources): Promise<SensorStartResult> {
+    await this.cleanupCandidateResources(candidate);
+    return sensorStartFailure('start-failed', 'Camera startup was cancelled.');
+  }
+
+  private async cleanupCandidateResources(candidate: CandidateCaptureResources): Promise<void> {
+    if (candidate.torchEnabled && Capacitor.isNativePlatform()) {
+      try {
+        await Torch.disable();
+      } catch {
+        // Stopping the candidate stream below still releases the camera torch.
+      }
+    }
+    candidate.torchEnabled = false;
+    candidate.stream?.getTracks().forEach((track) => track.stop());
+    candidate.stream = null;
+    if (candidate.video) {
+      candidate.video.srcObject = null;
+      candidate.video.parentNode?.removeChild(candidate.video);
+      candidate.video = null;
+    }
+    candidate.canvas = null;
+    candidate.ctx = null;
+  }
+
+  private scheduleNextFrame(generation = this.startGeneration): void {
     this.animFrameId = requestAnimationFrame((timestamp) => {
-      this.captureFrame(timestamp);
+      this.captureFrame(timestamp, generation);
     });
   }
 
@@ -631,19 +674,19 @@ class PPGService {
     }
   }
 
-  private captureFrame(timestamp: number): void {
-    if (this.status !== 'capturing') return;
+  private captureFrame(timestamp: number, generation = this.startGeneration): void {
+    if (this.status !== 'capturing' || generation !== this.startGeneration) return;
 
     // Throttle to ~30fps
     const delta = timestamp - this.lastFrameTime;
     if (delta < this.FRAME_INTERVAL_MS * 0.8) {
-      this.scheduleNextFrame();
+      this.scheduleNextFrame(generation);
       return;
     }
     this.lastFrameTime = timestamp;
 
     if (!this.video || !this.canvas || !this.ctx || this.video.readyState < 2) {
-      this.scheduleNextFrame();
+      this.scheduleNextFrame(generation);
       return;
     }
 
@@ -706,7 +749,7 @@ class PPGService {
       this.estimateHRFromAutocorrelation();
     }
 
-    this.scheduleNextFrame();
+    this.scheduleNextFrame(generation);
   }
 
   private updateSignalQuality(): void {
@@ -727,7 +770,8 @@ class PPGService {
   }
 
   public stop(): void {
-    if (this.status === 'idle') return;
+    if (this.status === 'idle' && this.pendingStartPromise === null) return;
+    this.startGeneration += 1;
 
     // Cancel animation frame loop
     if (this.animFrameId !== null) {
@@ -735,7 +779,6 @@ class PPGService {
       this.animFrameId = null;
     }
 
-    // Disable torch before releasing camera
     void this.disableTorch();
 
     // Stop all media tracks (releases camera and torch)

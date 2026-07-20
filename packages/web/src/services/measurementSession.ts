@@ -1,7 +1,6 @@
 import {
   evaluateMeasurementEligibility,
   type HeartRateEstimate,
-  type HRVAnalysis,
   type IBISample,
   type MeasurementEligibility,
   type MeasurementProtocol,
@@ -39,28 +38,6 @@ export interface MeasurementStartOutcome {
   ok: boolean;
   degradedSources?: MeasurementSensorSource[];
   message?: string;
-}
-
-export function limitAnalysisToEligibility(
-  analysis: HRVAnalysis,
-  eligibility: MeasurementEligibility
-): HRVAnalysis {
-  const unavailableReason = eligibility.eligible
-    ? ('protocol-not-supported' as const)
-    : (eligibility.reasons[0] ?? ('insufficient-data' as const));
-
-  return {
-    ...analysis,
-    frequencyDomain: eligibility.availableMetrics.includes('frequency-domain')
-      ? analysis.frequencyDomain
-      : { available: false, reason: unavailableReason },
-    poincare: eligibility.availableMetrics.includes('poincare')
-      ? analysis.poincare
-      : { available: false, reason: unavailableReason },
-    resonance: eligibility.availableMetrics.includes('resonance-training')
-      ? analysis.resonance
-      : { available: false, reason: unavailableReason },
-  };
 }
 
 interface MeasurementSessionOptions {

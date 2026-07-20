@@ -222,7 +222,7 @@ export const MeasurementRecordMetadataSchema = z.object({
   sampleProvenance: z
     .object({
       sources: z.array(z.enum(['ppg', 'scg', 'fused'])),
-      detectionMethods: z.array(z.enum(['peak-detected', 'autocorrelation-estimate'])),
+      detectionMethods: z.array(z.literal('peak-detected')),
     })
     .optional(),
 });
@@ -426,13 +426,15 @@ export const WaveformSmoothnessSchema = z.enum(['jagged', 'somewhatSmooth', 'ver
 export type WaveformSmoothness = z.infer<typeof WaveformSmoothnessSchema>;
 
 export const AssessmentTrialSchema = z.object({
-  rate: z.number(),
-  inhaleTime: z.number(),
-  exhaleTime: z.number(),
-  repetitions: z.number(),
+  rate: z.number().finite().positive(),
+  inhaleTime: z.number().finite().positive(),
+  inhaleHoldTime: z.number().finite().nonnegative().optional(),
+  exhaleTime: z.number().finite().positive(),
+  exhaleHoldTime: z.number().finite().nonnegative().optional(),
+  repetitions: z.number().int().positive(),
 
   // Scoring (filled after all trials)
-  comfortRating: z.number().min(1).max(5).optional(),
+  comfortRating: z.number().finite().min(1).max(5).optional(),
   symptoms: z.array(AssessmentSymptomSchema).default([]),
   hrAmplitude: HrAmplitudeSchema.optional(),
   waveformSmoothness: WaveformSmoothnessSchema.optional(),
@@ -441,18 +443,31 @@ export const AssessmentTrialSchema = z.object({
 export type AssessmentTrial = z.infer<typeof AssessmentTrialSchema>;
 
 export const AssessmentConfigSchema = z.object({
-  warmupDurationSeconds: z.number().min(60).max(300).default(120),
-  warmupRate: z.number().min(4.5).max(7.0).default(6.0),
-  restDurationSeconds: z.number().default(120), // fixed at 120, not user-configurable
+  warmupDurationSeconds: z.number().finite().min(60).max(300).default(120),
+  warmupRate: z.number().finite().min(4.5).max(7.0).default(6.0),
+  restDurationSeconds: z.number().finite().positive().default(120), // fixed at 120, not user-configurable
 });
 export type AssessmentConfig = z.infer<typeof AssessmentConfigSchema>;
 
-export const AssessmentResultSchema = z.object({
-  id: z.string().uuid(),
-  trials: z.array(AssessmentTrialSchema),
-  selectedRate: z.number(),
-  createdPresetId: z.string().uuid().optional(),
-  completedAt: z.date(),
-  config: AssessmentConfigSchema,
-});
+export const AssessmentResultSchema = z
+  .object({
+    id: z.string().uuid(),
+    trials: z.array(AssessmentTrialSchema).min(1),
+    selectedRate: z.number().finite().positive(),
+    createdPresetId: z.string().uuid().optional(),
+    completedAt: z.date(),
+    config: AssessmentConfigSchema,
+  })
+  .superRefine((result, context) => {
+    const selectedTrialIsComplete = result.trials.some(
+      (trial) => trial.rate === result.selectedRate && trial.comfortRating !== undefined
+    );
+    if (!selectedTrialIsComplete) {
+      context.addIssue({
+        code: 'custom',
+        path: ['selectedRate'],
+        message: 'Selected rate must match a completed assessment trial.',
+      });
+    }
+  });
 export type AssessmentResult = z.infer<typeof AssessmentResultSchema>;

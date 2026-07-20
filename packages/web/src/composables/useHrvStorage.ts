@@ -6,6 +6,7 @@ import type {
   SensorSource,
 } from '@breath-in-flow/shared';
 import { AssessmentResultSchema } from '@breath-in-flow/shared';
+import { isProxy, toRaw } from 'vue';
 import { isHrvAnalysis, normalizeLegacyHrvAnalysis } from '@/utils/hrvAnalysisValidation';
 import {
   createStoredRecordWarningLogger,
@@ -19,6 +20,7 @@ export interface HrvMeasurement {
   completedAt: Date;
   durationSeconds: number;
   sensorMode: 'none' | 'camera' | 'accelerometer' | 'dual';
+  acquisitionSources?: Array<'ppg' | 'scg'>;
   analysis: HRVAnalysis;
   breathingRateBPM?: number;
   assessmentId?: string;
@@ -57,6 +59,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function toStructuredCloneSafe(value: unknown): unknown {
+  const unwrapped = isProxy(value) ? toRaw(value) : value;
+  if (unwrapped instanceof Date) return new Date(unwrapped.getTime());
+  if (Array.isArray(unwrapped)) return unwrapped.map(toStructuredCloneSafe);
+  if (!isRecord(unwrapped)) return unwrapped;
+
+  return Object.fromEntries(
+    Object.entries(unwrapped).map(([key, nestedValue]) => [key, toStructuredCloneSafe(nestedValue)])
+  );
+}
+
 function restoreDate(value: unknown): unknown {
   if (value instanceof Date) return value;
   return typeof value === 'string' ? new Date(value) : value;
@@ -70,6 +83,71 @@ function normalizeAssessment(value: unknown): unknown {
 function validateAssessment(value: unknown): AssessmentResult | null {
   const parsed = AssessmentResultSchema.safeParse(normalizeAssessment(value));
   return parsed.success ? parsed.data : null;
+}
+
+function sanitizeAnalysis(analysis: HRVAnalysis): HRVAnalysis {
+  return {
+    timeDomain: {
+      meanRR: analysis.timeDomain.meanRR,
+      sdnn: analysis.timeDomain.sdnn,
+      rmssd: analysis.timeDomain.rmssd,
+      pnn50: analysis.timeDomain.pnn50,
+      meanHR: analysis.timeDomain.meanHR,
+      minHR: analysis.timeDomain.minHR,
+      maxHR: analysis.timeDomain.maxHR,
+      hrRange: analysis.timeDomain.hrRange,
+    },
+    frequencyDomain: analysis.frequencyDomain.available
+      ? {
+          available: true,
+          value: {
+            lfPowerNorm: analysis.frequencyDomain.value.lfPowerNorm,
+            hfPowerNorm: analysis.frequencyDomain.value.hfPowerNorm,
+            lfHfRatio: analysis.frequencyDomain.value.lfHfRatio,
+            lfPeak: analysis.frequencyDomain.value.lfPeak,
+            hfPeak: analysis.frequencyDomain.value.hfPeak,
+            spectrum: analysis.frequencyDomain.value.spectrum.map((point) => ({
+              frequency: point.frequency,
+              power: point.power,
+            })),
+          },
+        }
+      : { available: false, reason: analysis.frequencyDomain.reason },
+    poincare: analysis.poincare.available
+      ? {
+          available: true,
+          value: {
+            points: analysis.poincare.value.points.map((point) => ({
+              previousInterval: point.previousInterval,
+              nextInterval: point.nextInterval,
+            })),
+          },
+        }
+      : { available: false, reason: analysis.poincare.reason },
+    resonance: analysis.resonance.available
+      ? {
+          available: true,
+          value: {
+            peakToTroughAmplitude: analysis.resonance.value.peakToTroughAmplitude,
+            waveformSmoothness: analysis.resonance.value.waveformSmoothness,
+            phaseSynchrony: analysis.resonance.value.phaseSynchrony,
+            lfPeakCount: analysis.resonance.value.lfPeakCount,
+            lfPeakAmplitude: analysis.resonance.value.lfPeakAmplitude,
+          },
+        }
+      : { available: false, reason: analysis.resonance.reason },
+    quality: {
+      totalSamples: analysis.quality.totalSamples,
+      artifactsDetected: analysis.quality.artifactsDetected,
+      artifactPercentage: analysis.quality.artifactPercentage,
+      meanSignalQuality: analysis.quality.meanSignalQuality,
+    },
+    raw: {
+      rrIntervals: [...analysis.raw.rrIntervals],
+      timestamps: [...analysis.raw.timestamps],
+      instantaneousHR: [...analysis.raw.instantaneousHR],
+    },
+  };
 }
 
 function validateMeasurement(value: unknown): HrvMeasurement | null {
@@ -90,6 +168,13 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
     'assessment-trial',
   ];
   const sensorModes: HrvMeasurement['sensorMode'][] = ['none', 'camera', 'accelerometer', 'dual'];
+  const acquisitionSources = value.acquisitionSources;
+  const acquisitionSourcesAreValid =
+    acquisitionSources === undefined ||
+    (Array.isArray(acquisitionSources) &&
+      acquisitionSources.length > 0 &&
+      acquisitionSources.every((source) => source === 'ppg' || source === 'scg') &&
+      new Set(acquisitionSources).size === acquisitionSources.length);
   const eligibilityReasons = [
     'duration-too-short',
     'insufficient-beats',
@@ -137,14 +222,13 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
       Array.isArray(provenance.sources) &&
       provenance.sources.every((source) => ['ppg', 'scg', 'fused'].includes(source)) &&
       Array.isArray(provenance.detectionMethods) &&
-      provenance.detectionMethods.every((method) =>
-        ['peak-detected', 'autocorrelation-estimate'].includes(method)
-      ));
+      provenance.detectionMethods.every((method) => method === 'peak-detected'));
 
   if (
     typeof value.id !== 'string' ||
     !measurementTypes.includes(value.type as HrvMeasurement['type']) ||
     !sensorModes.includes(value.sensorMode as HrvMeasurement['sensorMode']) ||
+    !acquisitionSourcesAreValid ||
     typeof value.durationSeconds !== 'number' ||
     !Number.isFinite(value.durationSeconds) ||
     !(startedAt instanceof Date) ||
@@ -167,7 +251,52 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
     return null;
   }
 
-  return { ...value, analysis, startedAt, completedAt } as HrvMeasurement;
+  const measurement: HrvMeasurement = {
+    id: value.id,
+    type: value.type as HrvMeasurement['type'],
+    startedAt,
+    completedAt,
+    durationSeconds: value.durationSeconds,
+    sensorMode: value.sensorMode as HrvMeasurement['sensorMode'],
+    analysis: sanitizeAnalysis(analysis),
+  };
+
+  if (Array.isArray(acquisitionSources)) {
+    measurement.acquisitionSources = [
+      ...acquisitionSources,
+    ] as HrvMeasurement['acquisitionSources'];
+  }
+  if (typeof value.breathingRateBPM === 'number') {
+    measurement.breathingRateBPM = value.breathingRateBPM;
+  }
+  if (typeof value.assessmentId === 'string') measurement.assessmentId = value.assessmentId;
+  if (typeof value.notes === 'string') measurement.notes = value.notes;
+  if (Array.isArray(value.tags)) measurement.tags = [...value.tags] as string[];
+  if (typeof value.algorithmVersion === 'number') {
+    measurement.algorithmVersion = value.algorithmVersion;
+  }
+  if (isRecord(eligibility)) {
+    measurement.eligibility = {
+      eligible: eligibility.eligible as boolean,
+      reasons: [...(eligibility.reasons as MeasurementEligibility['reasons'])],
+      warnings: [...(eligibility.warnings as MeasurementEligibility['warnings'])],
+      availableMetrics: [
+        ...(eligibility.availableMetrics as MeasurementEligibility['availableMetrics']),
+      ],
+      artifactPercentage: eligibility.artifactPercentage as number,
+      meanQuality: eligibility.meanQuality as number,
+      detectedBeatCount: eligibility.detectedBeatCount as number,
+      observedDurationSeconds: eligibility.observedDurationSeconds as number,
+    };
+  }
+  if (isRecord(provenance)) {
+    measurement.sampleProvenance = {
+      sources: [...(provenance.sources as SensorSource[])],
+      detectionMethods: [...(provenance.detectionMethods as DetectionMethod[])],
+    };
+  }
+
+  return measurement;
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -200,101 +329,110 @@ function waitForTransaction(tx: IDBTransaction): Promise<void> {
 }
 
 async function saveMeasurement(measurement: HrvMeasurement): Promise<void> {
+  const dto = validateMeasurement(toStructuredCloneSafe(measurement));
+  if (!dto) throw new TypeError('Cannot save an invalid pulse variability measurement.');
+
   const db = await openDB();
-  const tx = db.transaction('measurements', 'readwrite');
-  tx.objectStore('measurements').put(measurement);
-  await waitForTransaction(tx);
-  db.close();
+  try {
+    const tx = db.transaction('measurements', 'readwrite');
+    tx.objectStore('measurements').put(dto);
+    await waitForTransaction(tx);
+  } finally {
+    db.close();
+  }
 }
 
 async function getMeasurements(query?: MeasurementQuery): Promise<HrvMeasurement[]> {
   const db = await openDB();
-  const tx = db.transaction('measurements', 'readonly');
-  const store = tx.objectStore('measurements');
-  const index = store.index('completedAt');
+  try {
+    const tx = db.transaction('measurements', 'readonly');
+    const store = tx.objectStore('measurements');
+    const index = store.index('completedAt');
 
-  const results: HrvMeasurement[] = [];
-  const warnings = createStoredRecordWarningLogger('IndexedDB pulse variability measurements');
-  let recordIndex = 0;
+    const results: HrvMeasurement[] = [];
+    const warnings = createStoredRecordWarningLogger('IndexedDB pulse variability measurements');
+    let recordIndex = 0;
 
-  await new Promise<void>((resolve, reject) => {
-    // Use IDBKeyRange for date filtering if provided
-    let keyRange: IDBKeyRange | null = null;
-    if (query?.after && query?.before) {
-      keyRange = IDBKeyRange.bound(query.after, query.before);
-    } else if (query?.after) {
-      keyRange = IDBKeyRange.lowerBound(query.after);
-    } else if (query?.before) {
-      keyRange = IDBKeyRange.upperBound(query.before);
-    }
-
-    const request = index.openCursor(keyRange, 'prev'); // descending by completedAt
-
-    request.onsuccess = (event) => {
-      const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
-      if (!cursor) {
-        warnings.summarize();
-        resolve();
-        return;
+    await new Promise<void>((resolve, reject) => {
+      let keyRange: IDBKeyRange | null = null;
+      if (query?.after && query?.before) {
+        keyRange = IDBKeyRange.bound(query.after, query.before);
+      } else if (query?.after) {
+        keyRange = IDBKeyRange.lowerBound(query.after);
+      } else if (query?.before) {
+        keyRange = IDBKeyRange.upperBound(query.before);
       }
 
-      const measurement = validateMeasurement(cursor.value);
+      const request = index.openCursor(keyRange, 'prev');
 
-      // Apply type filter in JavaScript
-      if (measurement && (!query?.type || measurement.type === query.type)) {
-        results.push(measurement);
-        if (query?.limit && results.length >= query.limit) {
+      request.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+        if (!cursor) {
           warnings.summarize();
           resolve();
           return;
         }
-      } else if (!measurement) {
-        warnings.warn(recordIndex);
-      }
 
-      recordIndex += 1;
-      cursor.continue();
-    };
+        const measurement = validateMeasurement(cursor.value);
+        if (measurement && (!query?.type || measurement.type === query.type)) {
+          results.push(measurement);
+          if (query?.limit && results.length >= query.limit) {
+            warnings.summarize();
+            resolve();
+            return;
+          }
+        } else if (!measurement) {
+          warnings.warn(recordIndex);
+        }
 
-    request.onerror = () => reject(request.error);
-  });
+        recordIndex += 1;
+        cursor.continue();
+      };
 
-  db.close();
-  return results;
+      request.onerror = () => reject(request.error);
+    });
+
+    return results;
+  } finally {
+    db.close();
+  }
 }
 
 async function getMeasurementById(id: string): Promise<HrvMeasurement | null> {
   const db = await openDB();
-  const tx = db.transaction('measurements', 'readonly');
-  const store = tx.objectStore('measurements');
+  try {
+    const tx = db.transaction('measurements', 'readonly');
+    const store = tx.objectStore('measurements');
 
-  return new Promise((resolve, reject) => {
-    const request = store.get(id);
-    request.onsuccess = () => {
-      db.close();
-      const measurement = validateMeasurement(request.result);
-      if (!measurement && request.result !== undefined) {
-        const warnings = createStoredRecordWarningLogger(
-          'IndexedDB pulse variability measurements'
-        );
-        warnings.warn(0);
-        warnings.summarize();
-      }
-      resolve(measurement);
-    };
-    request.onerror = () => {
-      db.close();
-      reject(request.error);
-    };
-  });
+    return await new Promise((resolve, reject) => {
+      const request = store.get(id);
+      request.onsuccess = () => {
+        const measurement = validateMeasurement(request.result);
+        if (!measurement && request.result !== undefined) {
+          const warnings = createStoredRecordWarningLogger(
+            'IndexedDB pulse variability measurements'
+          );
+          warnings.warn(0);
+          warnings.summarize();
+        }
+        resolve(measurement);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    db.close();
+  }
 }
 
 async function deleteMeasurement(id: string): Promise<void> {
   const db = await openDB();
-  const tx = db.transaction('measurements', 'readwrite');
-  tx.objectStore('measurements').delete(id);
-  await waitForTransaction(tx);
-  db.close();
+  try {
+    const tx = db.transaction('measurements', 'readwrite');
+    tx.objectStore('measurements').delete(id);
+    await waitForTransaction(tx);
+  } finally {
+    db.close();
+  }
 }
 
 async function getLatestMeasurement(): Promise<HrvMeasurement | null> {
@@ -345,48 +483,57 @@ async function hasAnyMeasurements(): Promise<boolean> {
 }
 
 async function saveAssessment(result: AssessmentResult): Promise<void> {
+  const dto = validateAssessment(toStructuredCloneSafe(result));
+  if (!dto) throw new TypeError('Cannot save an invalid resonance assessment.');
+
   const db = await openDB();
-  const tx = db.transaction('assessments', 'readwrite');
-  tx.objectStore('assessments').put(result);
-  await waitForTransaction(tx);
-  db.close();
+  try {
+    const tx = db.transaction('assessments', 'readwrite');
+    tx.objectStore('assessments').put(dto);
+    await waitForTransaction(tx);
+  } finally {
+    db.close();
+  }
 }
 
 async function getAssessments(): Promise<AssessmentResult[]> {
   const db = await openDB();
-  const tx = db.transaction('assessments', 'readonly');
-  const store = tx.objectStore('assessments');
-  const index = store.index('completedAt');
+  try {
+    const tx = db.transaction('assessments', 'readonly');
+    const store = tx.objectStore('assessments');
+    const index = store.index('completedAt');
 
-  const results: AssessmentResult[] = [];
-  const warnings = createStoredRecordWarningLogger('IndexedDB resonance assessments');
-  let recordIndex = 0;
+    const results: AssessmentResult[] = [];
+    const warnings = createStoredRecordWarningLogger('IndexedDB resonance assessments');
+    let recordIndex = 0;
 
-  await new Promise<void>((resolve, reject) => {
-    const request = index.openCursor(null, 'prev'); // descending by completedAt
+    await new Promise<void>((resolve, reject) => {
+      const request = index.openCursor(null, 'prev');
 
-    request.onsuccess = (event) => {
-      const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
-      if (!cursor) {
-        warnings.summarize();
-        resolve();
-        return;
-      }
-      const assessment = validateAssessment(cursor.value);
-      if (assessment) {
-        results.push(assessment);
-      } else {
-        warnings.warn(recordIndex);
-      }
-      recordIndex += 1;
-      cursor.continue();
-    };
+      request.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+        if (!cursor) {
+          warnings.summarize();
+          resolve();
+          return;
+        }
+        const assessment = validateAssessment(cursor.value);
+        if (assessment) {
+          results.push(assessment);
+        } else {
+          warnings.warn(recordIndex);
+        }
+        recordIndex += 1;
+        cursor.continue();
+      };
 
-    request.onerror = () => reject(request.error);
-  });
+      request.onerror = () => reject(request.error);
+    });
 
-  db.close();
-  return results;
+    return results;
+  } finally {
+    db.close();
+  }
 }
 
 async function getLatestAssessment(): Promise<AssessmentResult | null> {
@@ -416,13 +563,16 @@ async function migrateLegacyAssessments(): Promise<void> {
       normalize: normalizeAssessment,
     });
     db = await openDB();
-    const tx = db.transaction('assessments', 'readwrite');
-    for (const assessment of assessments) {
-      tx.objectStore('assessments').put(assessment);
+    try {
+      const tx = db.transaction('assessments', 'readwrite');
+      for (const assessment of assessments) {
+        tx.objectStore('assessments').put(assessment);
+      }
+      await waitForTransaction(tx);
+    } finally {
+      db.close();
+      db = undefined;
     }
-    await waitForTransaction(tx);
-    db.close();
-    db = undefined;
     localStorage.removeItem(LEGACY_ASSESSMENTS_KEY);
     localStorage.setItem(ASSESSMENTS_MIGRATION_KEY, 'complete');
   } catch (error) {

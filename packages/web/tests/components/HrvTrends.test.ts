@@ -158,6 +158,78 @@ describe('HrvTrends', () => {
     expect(wrapper.find('[data-testid="hr-canvas"]').exists()).toBe(true);
   });
 
+  it('provides screen-reader-accessible date, value, and metric data for every trend canvas', () => {
+    const fullAnalysis = makeMeasurement({
+      id: 'full-analysis',
+      type: 'full-analysis',
+      startedAt: new Date('2026-07-18T11:55:00.000Z'),
+      completedAt: new Date('2026-07-18T12:00:00.000Z'),
+      eligibility: {
+        ...makeMeasurement().eligibility!,
+        availableMetrics: [
+          'average-pulse',
+          'rmssd',
+          'pnn50',
+          'sdnn',
+          'frequency-domain',
+          'poincare',
+        ],
+      },
+    });
+    const morningReadiness = makeMeasurement({
+      id: 'morning-readiness',
+      type: 'morning-readiness',
+      startedAt: new Date('2026-07-19T11:55:00.000Z'),
+      completedAt: new Date('2026-07-19T12:00:00.000Z'),
+    });
+    const wrapper = mount(HrvTrends, {
+      props: { measurements: [fullAnalysis, morningReadiness], days: 0 },
+    });
+
+    const alternatives = [
+      {
+        canvasTestId: 'rmssd-canvas',
+        tableId: 'rmssd-trend-data',
+        metric: 'RMSSD (ms)',
+        date: '2026-07-19',
+        value: '35 ms',
+      },
+      {
+        canvasTestId: 'lf-power-canvas',
+        tableId: 'lf-power-trend-data',
+        metric: 'Normalized LF power (%)',
+        date: '2026-07-18',
+        value: '60.0%',
+      },
+      {
+        canvasTestId: 'hr-canvas',
+        tableId: 'hr-trend-data',
+        metric: 'Resting heart rate (BPM)',
+        date: '2026-07-19',
+        value: '67 BPM',
+      },
+      {
+        canvasTestId: 'readiness-canvas',
+        tableId: 'readiness-trend-data',
+        metric: 'Morning protocol RMSSD (ms)',
+        date: '2026-07-19',
+        value: '35 ms',
+      },
+    ];
+
+    for (const alternative of alternatives) {
+      expect(
+        wrapper.get(`[data-testid="${alternative.canvasTestId}"]`).attributes('aria-describedby')
+      ).toBe(alternative.tableId);
+      const table = wrapper.get(`#${alternative.tableId}`);
+      expect(table.element.tagName).toBe('TABLE');
+      expect(table.classes()).toContain('sr-only');
+      expect(table.get('thead').text()).toContain(alternative.metric);
+      expect(table.get('tbody').text()).toContain(alternative.date);
+      expect(table.get('tbody').text()).toContain(alternative.value);
+    }
+  });
+
   it('shows "no data" message when filtered range has no measurements', () => {
     // Measurements from 60 days ago — won't appear in default 30-day view
     const measurements = [makeMeasurement({ daysAgo: 60 })];

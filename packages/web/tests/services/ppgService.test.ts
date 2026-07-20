@@ -87,6 +87,8 @@ function resetService() {
   (ppgService as unknown as Record<string, unknown>).ctx = null;
   (ppgService as unknown as Record<string, unknown>).animFrameId = null;
   (ppgService as unknown as Record<string, unknown>).callbacks = {};
+  (ppgService as unknown as Record<string, unknown>).startGeneration = 0;
+  (ppgService as unknown as Record<string, unknown>).pendingStartPromise = null;
   (ppgService as unknown as Record<string, unknown>).rawBuffer = [];
   (ppgService as unknown as Record<string, unknown>).normBuffer = [];
   (ppgService as unknown as Record<string, unknown>).lastPeakTimestamp = null;
@@ -177,6 +179,42 @@ describe('ppgService', () => {
   // -------------------------------------------------------------------------
 
   describe('status transitions', () => {
+    it('invalidates a deferred camera start without leaking ownership or replacing callbacks', async () => {
+      let resolveStream!: (stream: MediaStream) => void;
+      const track = makeMockTrack({ torchSupported: true });
+      const stream = makeMockStream(track);
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          getUserMedia: vi.fn(
+            () => new Promise<MediaStream>((resolve) => (resolveStream = resolve))
+          ),
+        },
+      });
+      const ownerCallbacks = { onRawSignal: vi.fn() };
+      const competingCallbacks = { onRawSignal: vi.fn() };
+
+      const pending = ppgService.start({ callbacks: ownerCallbacks });
+      const concurrent = ppgService.start({ callbacks: competingCallbacks });
+
+      expect(concurrent).toBe(pending);
+      expect(ppgService.getStatus()).toBe('initializing');
+      ppgService.stop();
+      resolveStream(stream);
+
+      await expect(pending).resolves.toMatchObject({ ok: false, reason: 'start-failed' });
+      expect(track.stop).toHaveBeenCalledOnce();
+      expect(document.body.querySelector('video')).toBeNull();
+      expect(ppgService.getStatus()).toBe('idle');
+      expect((ppgService as unknown as { torchEnabled: boolean }).torchEnabled).toBe(false);
+      expect((ppgService as unknown as { callbacks: typeof ownerCallbacks }).callbacks).toBe(
+        ownerCallbacks
+      );
+      ppgService.processSignalSample(100, 0);
+      expect(ownerCallbacks.onRawSignal).toHaveBeenCalledOnce();
+      expect(competingCallbacks.onRawSignal).not.toHaveBeenCalled();
+    });
+
     it('transitions idle → initializing → capturing on successful start', async () => {
       const statuses: PPGStatus[] = [];
       const track = makeMockTrack({ torchSupported: true });
@@ -307,7 +345,7 @@ describe('ppgService', () => {
       expect(result).toMatchObject({ ok: false, reason: 'start-failed' });
     });
 
-    it('does not re-enter start() if already capturing', async () => {
+    it('reports an active capture as busy without re-entering start()', async () => {
       const track = makeMockTrack();
       const stream = makeMockStream(track);
       mockGetUserMediaSuccess(stream);
@@ -343,27 +381,40 @@ describe('ppgService', () => {
       await ppgService.start();
       expect(ppgService.getStatus()).toBe('capturing');
 
-      // Second call should be a no-op (status stays capturing)
       const getUserMedia = navigator.mediaDevices.getUserMedia as ReturnType<typeof vi.fn>;
       const callsBefore = getUserMedia.mock.calls.length;
-      await ppgService.start();
+      await expect(ppgService.start()).resolves.toMatchObject({
+        ok: false,
+        reason: 'device-busy',
+      });
       expect(getUserMedia.mock.calls.length).toBe(callsBefore);
     });
 
-    it('accepts explicit start options without re-entering an active capture', async () => {
+    it('does not replace callbacks when explicit starts compete with an active capture', async () => {
       const callbacks = { onStatusChange: vi.fn() };
+      const ownerCallbacks = { onStatusChange: vi.fn() };
       (ppgService as unknown as { status: PPGStatus }).status = 'capturing';
+      (ppgService as unknown as { callbacks: typeof ownerCallbacks }).callbacks = ownerCallbacks;
 
       await expect(
         ppgService.start({ cameraDeviceId: 'rear-camera', torchEnabled: false, callbacks })
-      ).resolves.toEqual({ ok: true });
-      await expect(ppgService.start({ callbacks })).resolves.toEqual({ ok: true });
-      await expect(ppgService.start({ torchEnabled: false })).resolves.toEqual({ ok: true });
-      await expect(ppgService.start(callbacks)).resolves.toEqual({ ok: true });
+      ).resolves.toMatchObject({ ok: false, reason: 'device-busy' });
+      await expect(ppgService.start({ callbacks })).resolves.toMatchObject({
+        ok: false,
+        reason: 'device-busy',
+      });
+      await expect(ppgService.start({ torchEnabled: false })).resolves.toMatchObject({
+        ok: false,
+        reason: 'device-busy',
+      });
+      await expect(ppgService.start(callbacks)).resolves.toMatchObject({
+        ok: false,
+        reason: 'device-busy',
+      });
 
-      expect(
-        (ppgService as unknown as { callbacks: typeof callbacks }).callbacks.onStatusChange
-      ).toBe(callbacks.onStatusChange);
+      expect((ppgService as unknown as { callbacks: typeof ownerCallbacks }).callbacks).toBe(
+        ownerCallbacks
+      );
     });
 
     it('uses a requested camera and leaves torch disabled', async () => {

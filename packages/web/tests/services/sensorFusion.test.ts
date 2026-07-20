@@ -327,24 +327,39 @@ describe('SensorFusionService', () => {
     expect(emitted[4].confidence).toBeCloseTo(0.96, 5);
   });
 
-  it('uses the 100ms fallback horizon after the offset is locked', () => {
-    const service = createSensorFusionService();
-    const emitted: FusedIBISample[] = [];
-    service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+  it.each([140, -120])(
+    'waits through the learned %ims sensor offset before falling back',
+    (learnedOffset) => {
+      const service = createSensorFusionService();
+      const emitted: FusedIBISample[] = [];
+      service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
 
-    for (let index = 0; index < 3; index++) {
-      const scgTimestamp = 1_000 + index * 1_000;
-      service.addSCGSample(makeSample(scgTimestamp, 800, 0.8, 'scg'));
-      service.addPPGSample(makeSample(scgTimestamp + 140, 805, 0.8, 'ppg'));
+      for (let index = 0; index < 3; index++) {
+        const scgTimestamp = 1_000 + index * 1_000;
+        service.addSCGSample(makeSample(scgTimestamp, 800, 0.8, 'scg'));
+        service.addPPGSample(makeSample(scgTimestamp + learnedOffset, 805, 0.8, 'ppg'));
+      }
+      emitted.length = 0;
+
+      service.addPPGSample(makeSample(5_000, 800, 0.8, 'ppg'));
+      const pairingHorizon = Math.abs(learnedOffset) + 100;
+      vi.advanceTimersByTime(pairingHorizon - 1);
+
+      expect(emitted).toHaveLength(0);
+
+      service.addSCGSample(makeSample(5_000 - learnedOffset, 805, 0.8, 'scg'));
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0].source).toBe('fused');
+
+      emitted.length = 0;
+      service.addPPGSample(makeSample(7_000, 800, 0.8, 'ppg'));
+      vi.advanceTimersByTime(pairingHorizon + 1);
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0].source).toBe('ppg');
     }
-    emitted.length = 0;
-
-    service.addPPGSample(makeSample(5_000, 800, 0.8, 'ppg'));
-    vi.advanceTimersByTime(101);
-
-    expect(emitted).toHaveLength(1);
-    expect(emitted[0].source).toBe('ppg');
-  });
+  );
 
   it('resets consecutive matches on disagreement', () => {
     const emitted: FusedIBISample[] = [];

@@ -5,6 +5,7 @@ import {
   TimerStateSchema,
   INITIAL_TIMER_STATE,
   MeasurementRecordMetadataSchema,
+  AssessmentResultSchema,
 } from '../src/schemas';
 
 function createRng(seed: number): () => number {
@@ -320,5 +321,95 @@ describe('MeasurementRecordMetadataSchema', () => {
         detectionMethods: ['peak-detected'],
       },
     });
+  });
+
+  it('rejects stored provenance that explicitly contains a non-peak detection method', () => {
+    expect(
+      MeasurementRecordMetadataSchema.safeParse({
+        algorithmVersion: 2,
+        sampleProvenance: {
+          sources: ['ppg'],
+          detectionMethods: ['autocorrelation-estimate'],
+        },
+      }).success
+    ).toBe(false);
+    expect(MeasurementRecordMetadataSchema.safeParse({ algorithmVersion: 1 }).success).toBe(true);
+  });
+});
+
+describe('AssessmentResultSchema', () => {
+  function validAssessment() {
+    return {
+      id: crypto.randomUUID(),
+      trials: [
+        {
+          rate: 6,
+          inhaleTime: 4,
+          inhaleHoldTime: 0,
+          exhaleTime: 6,
+          exhaleHoldTime: 0,
+          repetitions: 12,
+          comfortRating: 4,
+          symptoms: [],
+        },
+      ],
+      selectedRate: 6,
+      completedAt: new Date(),
+      config: {
+        warmupDurationSeconds: 120,
+        warmupRate: 6,
+        restDurationSeconds: 120,
+      },
+    };
+  }
+
+  it('accepts a finite completed assessment with a selected completed trial', () => {
+    expect(AssessmentResultSchema.safeParse(validAssessment()).success).toBe(true);
+  });
+
+  it.each([
+    ['empty trials', (value: ReturnType<typeof validAssessment>) => (value.trials = [])],
+    [
+      'non-finite rate',
+      (value: ReturnType<typeof validAssessment>) => (value.trials[0].rate = Number.NaN),
+    ],
+    [
+      'zero inhale',
+      (value: ReturnType<typeof validAssessment>) => (value.trials[0].inhaleTime = 0),
+    ],
+    [
+      'non-finite exhale',
+      (value: ReturnType<typeof validAssessment>) => (value.trials[0].exhaleTime = Infinity),
+    ],
+    [
+      'negative inhale hold',
+      (value: ReturnType<typeof validAssessment>) => (value.trials[0].inhaleHoldTime = -1),
+    ],
+    [
+      'non-integer repetitions',
+      (value: ReturnType<typeof validAssessment>) => (value.trials[0].repetitions = 12.5),
+    ],
+    [
+      'zero repetitions',
+      (value: ReturnType<typeof validAssessment>) => (value.trials[0].repetitions = 0),
+    ],
+    [
+      'uncompleted selected trial',
+      (value: ReturnType<typeof validAssessment>) => {
+        delete value.trials[0].comfortRating;
+      },
+    ],
+    [
+      'unmatched selected rate',
+      (value: ReturnType<typeof validAssessment>) => (value.selectedRate = 5.5),
+    ],
+    [
+      'invalid rest duration',
+      (value: ReturnType<typeof validAssessment>) => (value.config.restDurationSeconds = -1),
+    ],
+  ])('rejects %s', (_label, mutate) => {
+    const value = validAssessment();
+    mutate(value);
+    expect(AssessmentResultSchema.safeParse(value).success).toBe(false);
   });
 });

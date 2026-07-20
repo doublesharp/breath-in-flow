@@ -27,7 +27,16 @@ function hasComparableDuration(measurement: HrvMeasurement, anchor: HrvMeasureme
 }
 
 function hasComparableContext(measurement: HrvMeasurement, anchor: HrvMeasurement): boolean {
-  if (measurement.sensorMode !== anchor.sensorMode) return false;
+  if (measurement.acquisitionSources || anchor.acquisitionSources) {
+    if (!measurement.acquisitionSources || !anchor.acquisitionSources) return false;
+    const measurementSignature = [...measurement.acquisitionSources].sort().join('+');
+    const anchorSignature = [...anchor.acquisitionSources].sort().join('+');
+    if (measurementSignature !== anchorSignature) return false;
+  } else if (measurement.sensorMode !== anchor.sensorMode) {
+    // Legacy records predate acquisition signatures, so selected mode is the
+    // best conservative comparison available only when both records are legacy.
+    return false;
+  }
   if (measurement.breathingRateBPM === undefined && anchor.breathingRateBPM === undefined)
     return true;
   return measurement.breathingRateBPM === anchor.breathingRateBPM;

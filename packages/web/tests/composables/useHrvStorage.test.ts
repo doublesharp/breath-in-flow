@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { reactive } from 'vue';
 import { useHrvStorage, type HrvMeasurement } from '../../src/composables/useHrvStorage';
-import type { AssessmentResult } from '@breath-in-flow/shared';
+import type { AssessmentResult, MeasurementEligibility } from '@breath-in-flow/shared';
 
 function makeMeasurement(overrides: Partial<HrvMeasurement> = {}): HrvMeasurement {
   return {
@@ -109,6 +110,7 @@ function makeAssessment(overrides: Partial<AssessmentResult> = {}): AssessmentRe
         inhaleTime: 5,
         exhaleTime: 5,
         repetitions: 5,
+        comfortRating: 4,
         symptoms: [],
       },
     ],
@@ -166,6 +168,54 @@ describe('useHrvStorage', () => {
       const { getMeasurementById } = useHrvStorage();
       const result = await getMeasurementById('nonexistent-id');
       expect(result).toBeNull();
+    });
+
+    it('deeply unwraps Vue-reactive measurement DTOs before writing to IndexedDB', async () => {
+      const { saveMeasurement, getMeasurementById } = useHrvStorage();
+      const base = makeMeasurement();
+      const measurement: HrvMeasurement = {
+        ...base,
+        acquisitionSources: ['ppg'],
+        analysis: reactive(base.analysis),
+        eligibility: reactive<MeasurementEligibility>({
+          eligible: true,
+          reasons: [],
+          warnings: ['short-recording-sdnn'],
+          availableMetrics: ['average-pulse', 'rmssd', 'pnn50', 'sdnn-short-recording'],
+          artifactPercentage: 1,
+          meanQuality: 0.9,
+          detectedBeatCount: 120,
+          observedDurationSeconds: 120,
+        }),
+        sampleProvenance: reactive<NonNullable<HrvMeasurement['sampleProvenance']>>({
+          sources: ['ppg'],
+          detectionMethods: ['peak-detected'],
+        }),
+      };
+
+      await expect(saveMeasurement(measurement)).resolves.toBeUndefined();
+
+      const stored = await getMeasurementById(measurement.id);
+      expect(stored).toMatchObject({
+        id: measurement.id,
+        acquisitionSources: ['ppg'],
+        eligibility: { eligible: true, detectedBeatCount: 120 },
+        sampleProvenance: { sources: ['ppg'], detectionMethods: ['peak-detected'] },
+      });
+      expect(stored?.analysis).toEqual(measurement.analysis);
+    });
+
+    it('persists only validated measurement fields so transient values cannot reach IndexedDB', async () => {
+      const { saveMeasurement, getMeasurementById } = useHrvStorage();
+      const measurement = {
+        ...makeMeasurement(),
+        transientCallback: () => undefined,
+      };
+
+      await expect(saveMeasurement(measurement)).resolves.toBeUndefined();
+
+      const stored = await getMeasurementById(measurement.id);
+      expect(stored).not.toHaveProperty('transientCallback');
     });
   });
 
@@ -258,6 +308,13 @@ describe('useHrvStorage', () => {
             detectionMethods: ['peak-detected'],
           },
         },
+        {
+          sampleProvenance: {
+            sources: ['ppg'],
+            detectionMethods: ['autocorrelation-estimate'],
+          },
+        },
+        { acquisitionSources: [] },
       ];
       await saveMeasurement(valid);
       for (const [index, override] of invalidOverrides.entries()) {
@@ -272,7 +329,7 @@ describe('useHrvStorage', () => {
 
       expect((await getMeasurements()).map((measurement) => measurement.id)).toEqual([valid.id]);
       expect(warn).toHaveBeenCalledTimes(4);
-      expect(warn.mock.calls.at(-1)?.[0]).toContain('Skipped 8 invalid records');
+      expect(warn.mock.calls.at(-1)?.[0]).toContain('Skipped 10 invalid records');
       warn.mockRestore();
     });
 
@@ -594,6 +651,37 @@ describe('useHrvStorage', () => {
   });
 
   describe('saveAssessment and getAssessments round-trip', () => {
+    it('deeply unwraps Vue-reactive assessment trials before writing to IndexedDB', async () => {
+      const { saveAssessment, getLatestAssessment } = useHrvStorage();
+      const assessment = makeAssessment({
+        trials: reactive([
+          {
+            rate: 6,
+            inhaleTime: 5,
+            exhaleTime: 5,
+            repetitions: 12,
+            comfortRating: 4,
+            symptoms: ['airHunger'],
+            notes: 'Kept the breath light.',
+          },
+        ]) as AssessmentResult['trials'],
+      });
+
+      await expect(saveAssessment(assessment)).resolves.toBeUndefined();
+
+      expect(await getLatestAssessment()).toMatchObject({
+        id: assessment.id,
+        trials: [
+          {
+            rate: 6,
+            comfortRating: 4,
+            symptoms: ['airHunger'],
+            notes: 'Kept the breath light.',
+          },
+        ],
+      });
+    });
+
     it('saves and retrieves assessments sorted by completedAt descending', async () => {
       const { saveAssessment, getAssessments } = useHrvStorage();
 
@@ -718,6 +806,25 @@ describe('useHrvStorage', () => {
       await migrateLegacyAssessments();
 
       expect(await getAssessments()).toEqual([expect.objectContaining({ id: valid.id })]);
+    });
+
+    it('bounds warnings while individually skipping scientifically invalid legacy assessments', async () => {
+      const { migrateLegacyAssessments, getAssessments } = useHrvStorage();
+      const valid = makeAssessment();
+      const invalid = Array.from({ length: 5 }, (_, index) => ({
+        ...makeAssessment(),
+        id: crypto.randomUUID(),
+        selectedRate: 4.5 + index * 0.1,
+      }));
+      localStorage.setItem('breath-in-flow-assessments', JSON.stringify([valid, ...invalid]));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      await migrateLegacyAssessments();
+
+      expect(await getAssessments()).toEqual([expect.objectContaining({ id: valid.id })]);
+      expect(warn).toHaveBeenCalledTimes(4);
+      expect(warn.mock.calls.at(-1)?.[0]).toContain('Skipped 5 invalid records');
+      warn.mockRestore();
     });
   });
 

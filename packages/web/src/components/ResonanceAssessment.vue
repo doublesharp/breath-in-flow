@@ -4,7 +4,15 @@
       <!-- ======================== INTRO PHASE ======================== -->
       <template v-if="phase === 'INTRO'">
         <div class="card-solid animate-scale-in">
-          <h1 class="text-2xl sm:text-3xl font-bold text-white mb-4">Resonance Frequency Assessment</h1>
+          <h1
+            ref="phaseHeadingRef"
+            data-assessment-phase-heading
+            class="text-2xl sm:text-3xl font-bold text-white mb-4"
+            tabindex="-1"
+            aria-live="polite"
+          >
+            Resonance Frequency Assessment
+          </h1>
 
           <!-- Safety Notice -->
           <div
@@ -82,7 +90,6 @@
           >
             {{ sensorStatusMessage }}
           </div>
-
           <!-- Action Buttons -->
           <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
             <button data-testid="cancel-btn" @click="requestCancel" class="btn-secondary">Back</button>
@@ -103,7 +110,13 @@
       <template v-if="phase === 'WARMUP' || phase === 'TRIAL_BREATHING'">
         <div class="card-solid animate-scale-in">
           <!-- Phase Header -->
-          <h2 class="text-xl sm:text-2xl font-bold text-white text-center mb-4">
+          <h2
+            ref="phaseHeadingRef"
+            data-assessment-phase-heading
+            class="text-xl sm:text-2xl font-bold text-white text-center mb-4"
+            tabindex="-1"
+            aria-live="polite"
+          >
             {{ phaseHeaderText }}
           </h2>
           <div
@@ -112,6 +125,15 @@
             role="status"
           >
             {{ sensorStatusMessage }}
+          </div>
+          <div
+            v-if="isFinishingTrialData && phase === 'TRIAL_BREATHING'"
+            data-testid="finishing-trial-data"
+            class="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-center text-sm text-emerald-200"
+            role="status"
+            aria-live="polite"
+          >
+            Finishing clean data collection while pacing continues…
           </div>
 
           <!-- Sensor-active trial view (replaces BreathingVisualizer) -->
@@ -157,7 +179,12 @@
 
           <!-- Controls -->
           <div class="mt-6 flex flex-col sm:flex-row justify-center gap-3">
-            <button @click="togglePause" :class="isPaused ? 'btn-primary' : 'btn-warning'" class="btn-action">
+            <button
+              v-if="canPause"
+              @click="togglePause"
+              :class="isPaused ? 'btn-primary' : 'btn-warning'"
+              class="btn-action"
+            >
               {{ isPaused ? 'Resume' : 'Pause' }}
             </button>
             <button data-testid="cancel-btn" @click="requestCancel" class="btn-danger">Cancel</button>
@@ -168,7 +195,15 @@
       <!-- ======================== TRIAL_REST PHASE ======================== -->
       <template v-if="phase === 'TRIAL_REST'">
         <div class="card-solid animate-scale-in text-center">
-          <h2 class="text-2xl sm:text-3xl font-bold text-white mb-4">Rest Quietly</h2>
+          <h2
+            ref="phaseHeadingRef"
+            data-assessment-phase-heading
+            class="text-2xl sm:text-3xl font-bold text-white mb-4"
+            tabindex="-1"
+            aria-live="polite"
+          >
+            Rest Quietly
+          </h2>
 
           <p class="text-5xl font-mono font-bold text-amber-400 mb-4 tabular-nums">
             {{ formatTime(restTimeRemaining) }}
@@ -190,7 +225,15 @@
       <template v-if="phase === 'SCORING'">
         <div class="animate-scale-in space-y-6">
           <div class="card-solid">
-            <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Rate Your Trials</h2>
+            <h2
+              ref="phaseHeadingRef"
+              data-assessment-phase-heading
+              class="text-2xl sm:text-3xl font-bold text-white mb-2"
+              tabindex="-1"
+              aria-live="polite"
+            >
+              Rate Your Trials
+            </h2>
             <p class="text-sm text-slate-400 leading-relaxed">
               If you used a heart rate monitor, rate the following based on what you observed. Skip these if you didn't
               use one.
@@ -350,7 +393,15 @@
       <template v-if="phase === 'RESULT'">
         <div class="animate-scale-in space-y-6">
           <div class="card-solid text-center">
-            <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Suggested Rate</h2>
+            <h2
+              ref="phaseHeadingRef"
+              data-assessment-phase-heading
+              class="text-2xl sm:text-3xl font-bold text-white mb-2"
+              tabindex="-1"
+              aria-live="polite"
+            >
+              Suggested Rate
+            </h2>
             <p class="text-5xl font-bold text-emerald-400 mb-1">{{ selectedRate }} BPM</p>
             <p class="text-sm text-slate-400">
               Score: {{ trialScores.find((s) => s.rate === selectedRate)?.score ?? 0 }}
@@ -382,6 +433,9 @@
 
           <!-- Save Button -->
           <div class="text-center pb-4">
+            <p v-if="sensorStatusMessage" class="mb-3 text-sm text-amber-300" role="alert">
+              {{ sensorStatusMessage }}
+            </p>
             <button @click="saveResult" class="btn-success btn-action">Save &amp; Create Preset</button>
           </div>
         </div>
@@ -459,7 +513,7 @@ export function buildAssessmentTrials(
 </script>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onUnmounted } from 'vue';
+import { ref, reactive, computed, nextTick, onUnmounted, watch } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
@@ -475,6 +529,8 @@ import {
   DEFAULT_BREATHING_CONFIG,
   formatTime,
   analyzeHRV,
+  finalizeMeasurement,
+  MAX_PLAUSIBLE_IBI_MS,
   type BreathingConfig,
   type AssessmentTrial,
   type AssessmentConfig,
@@ -492,11 +548,7 @@ import { ppgService } from '../services/ppgService';
 import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
 import type { FusedIBISample } from '../services/sensorFusion';
-import {
-  limitAnalysisToEligibility,
-  MeasurementSession,
-  type MeasurementStartOutcome,
-} from '../services/measurementSession';
+import { MeasurementSession, type MeasurementStartOutcome } from '../services/measurementSession';
 import { getPermissionDeniedMessage, requestSensorPermissions } from '../services/permissionService';
 import { ttsService } from '../services/ttsService';
 import { scoreTrial, findSuggestedRate } from '../utils/assessmentScoring';
@@ -576,8 +628,14 @@ const currentTrialIndex = ref(0);
 const isPaused = ref(false);
 const showCancelConfirm = ref(false);
 const assessmentContentRef = ref<HTMLElement | null>(null);
+const phaseHeadingRef = ref<HTMLElement | null>(null);
 const cancelDialogRef = ref<HTMLElement | null>(null);
 const cancelSafeActionRef = ref<HTMLElement | null>(null);
+
+watch(phase, async () => {
+  await nextTick();
+  phaseHeadingRef.value?.focus();
+});
 
 useModalIsolation(cancelDialogRef, showCancelConfirm, {
   backgroundRef: assessmentContentRef,
@@ -625,7 +683,18 @@ const currentTrialIBIs = ref<IBISample[]>([]);
 const trialAnalyses = ref<(HRVAnalysis | null)[]>([null, null, null, null, null]);
 const sensorQuality = ref(0);
 const sensorStatusMessage = ref('');
+const isFinishingTrialData = ref(false);
 let measurementSession: MeasurementSession | null = null;
+let sensorTrialCompletionStarted = false;
+let finishingDataTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+const RESONANCE_SETTLING_SECONDS = 5;
+const RESONANCE_ENDING_SECONDS = 3;
+const RESONANCE_CAPTURE_HARD_CAP_SECONDS =
+  RESONANCE_TRIAL_DURATION_SECONDS +
+  RESONANCE_SETTLING_SECONDS +
+  RESONANCE_ENDING_SECONDS +
+  (2 * MAX_PLAUSIBLE_IBI_MS) / 1_000;
 
 // Expanded HRV panels in SCORING phase
 const expandedTrialHrv = reactive<boolean[]>([false, false, false, false, false]);
@@ -635,6 +704,7 @@ const expandedTrialHrv = reactive<boolean[]>([false, false, false, false, false]
 const currentTrial = computed(() => trials.value[currentTrialIndex.value]);
 
 const isBreathingPhase = computed(() => phase.value === 'WARMUP' || phase.value === 'TRIAL_BREATHING');
+const canPause = computed(() => phase.value !== 'TRIAL_BREATHING' || selectedSensorMode.value === 'none');
 
 const phaseHeaderText = computed(() => {
   if (phase.value === 'WARMUP') return `Warmup \u2014 ${assessmentConfig.warmupRate} BPM`;
@@ -713,6 +783,26 @@ async function startSensor(): Promise<MeasurementStartOutcome> {
   sensorStatusMessage.value = '';
   measurementSession = new MeasurementSession({
     protocol: 'resonance-trial',
+    onElapsed: (elapsedSeconds) => {
+      if (phase.value !== 'TRIAL_BREATHING' || selectedSensorMode.value === 'none') return;
+      const finalized = finalizeMeasurement(measurementSession?.getResult().samples ?? [], 'resonance-trial', {
+        settlingSeconds: RESONANCE_SETTLING_SECONDS,
+        endingSeconds: RESONANCE_ENDING_SECONDS,
+      });
+      if (
+        elapsedSeconds >= RESONANCE_TRIAL_DURATION_SECONDS ||
+        finalized.analyzedDurationSeconds >=
+          RESONANCE_TRIAL_DURATION_SECONDS - RESONANCE_SETTLING_SECONDS - RESONANCE_ENDING_SECONDS
+      ) {
+        isFinishingTrialData.value = true;
+      }
+      if (
+        finalized.analyzedDurationSeconds >= RESONANCE_TRIAL_DURATION_SECONDS ||
+        elapsedSeconds >= RESONANCE_CAPTURE_HARD_CAP_SECONDS
+      ) {
+        completeCurrentTrial();
+      }
+    },
     onStateChange: (state) => {
       if (state === 'no-data') {
         sensorStatusMessage.value =
@@ -784,15 +874,25 @@ function stopSensorAndAnalyze() {
   if (selectedSensorMode.value === 'none') return;
 
   if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
-  const sessionResult = measurementSession?.stop();
+  const finalized = finalizeMeasurement(measurementSession?.getResult().samples ?? [], 'resonance-trial', {
+    settlingSeconds: RESONANCE_SETTLING_SECONDS,
+    endingSeconds: RESONANCE_ENDING_SECONDS,
+  });
+  const sessionResult = measurementSession?.stop(finalized.samples);
   measurementSession = null;
   currentTrialIBIs.value = sessionResult?.samples ?? [];
 
   // Analyze collected IBI data
   if (sessionResult?.eligibility?.eligible && currentTrialIBIs.value.length >= 10) {
     const trial = trials.value[currentTrialIndex.value];
-    const analysis = analyzeHRV(currentTrialIBIs.value, trial.rate);
-    trialAnalyses.value[currentTrialIndex.value] = limitAnalysisToEligibility(analysis, sessionResult.eligibility);
+    trialAnalyses.value[currentTrialIndex.value] = analyzeHRV(
+      {
+        samples: currentTrialIBIs.value,
+        analyzedDurationSeconds: finalized.analyzedDurationSeconds,
+        eligibility: sessionResult.eligibility,
+      },
+      trial.rate
+    );
   } else if (sessionResult?.eligibility && !sessionResult.eligibility.eligible) {
     sensorStatusMessage.value =
       'This trial did not produce enough clean detected beats for automatic pulse-variability scoring. Use the comfort and waveform questions to score it manually.';
@@ -880,25 +980,39 @@ function handlePhaseComplete() {
   if (phase.value === 'WARMUP') {
     startTrial(0);
   } else if (phase.value === 'TRIAL_BREATHING') {
-    // Stop sensor and analyze IBI data
-    stopSensorAndAnalyze();
+    completeCurrentTrial();
+  }
+}
 
-    if (currentTrialIndex.value < 4) {
-      startRest();
-    } else {
-      disableKeepAwake();
-      autoPopulateScoring();
-      phase.value = 'SCORING';
-    }
+function completeCurrentTrial() {
+  if (phase.value !== 'TRIAL_BREATHING' || sensorTrialCompletionStarted) return;
+  sensorTrialCompletionStarted = true;
+  clearFinishingDataTimeout();
+  timer.stop();
+  stopSensorAndAnalyze();
+  isFinishingTrialData.value = false;
+
+  if (currentTrialIndex.value < 4) {
+    startRest();
+  } else {
+    void disableKeepAwake();
+    autoPopulateScoring();
+    phase.value = 'SCORING';
   }
 }
 
 async function startTrial(index: number) {
   currentTrialIndex.value = index;
   const trial = trials.value[index];
+  sensorTrialCompletionStarted = false;
+  isFinishingTrialData.value = false;
+  isPaused.value = false;
   timerConfig.inhaleTime = trial.inhaleTime;
   timerConfig.exhaleTime = trial.exhaleTime;
-  timerConfig.repetitions = trial.repetitions;
+  timerConfig.repetitions =
+    selectedSensorMode.value === 'none'
+      ? trial.repetitions
+      : Math.ceil(RESONANCE_CAPTURE_HARD_CAP_SECONDS / (trial.inhaleTime + trial.exhaleTime));
   phase.value = 'TRIAL_BREATHING';
   ttsService.speak(`Trial ${index + 1} starting at ${trial.rate} breaths per minute`);
 
@@ -910,6 +1024,13 @@ async function startTrial(index: number) {
     sensorStatusMessage.value = `${outcome.message ?? 'The sensor could not start.'} Continue with manual scoring for this trial.`;
   } else if (outcome.degradedSources?.length) {
     sensorStatusMessage.value = `Continuing with one sensor; ${outcome.degradedSources.join(' and ')} is unavailable.`;
+  }
+
+  clearFinishingDataTimeout();
+  if (selectedSensorMode.value !== 'none') {
+    finishingDataTimeoutId = setTimeout(() => {
+      if (phase.value === 'TRIAL_BREATHING') isFinishingTrialData.value = true;
+    }, RESONANCE_TRIAL_DURATION_SECONDS * 1_000);
   }
 
   timer.start();
@@ -936,9 +1057,17 @@ function clearRestInterval() {
   }
 }
 
+function clearFinishingDataTimeout() {
+  if (finishingDataTimeoutId !== null) {
+    clearTimeout(finishingDataTimeoutId);
+    finishingDataTimeoutId = null;
+  }
+}
+
 // ======================== Pause / Cancel ========================
 
 function togglePause() {
+  if (!canPause.value) return;
   if (isPaused.value) {
     isPaused.value = false;
     if (isBreathingPhase.value) timer.resume();
@@ -959,6 +1088,7 @@ function requestCancel() {
 function confirmCancel() {
   timer.stop();
   clearRestInterval();
+  clearFinishingDataTimeout();
   disableKeepAwake();
   if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
   measurementSession?.interrupt('Assessment cancelled before completion.');
@@ -974,6 +1104,7 @@ function interruptAssessment() {
 
   timer.stop();
   clearRestInterval();
+  clearFinishingDataTimeout();
   void disableKeepAwake();
   if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
   measurementSession?.interrupt(ASSESSMENT_INTERRUPTION_MESSAGE);
@@ -1030,9 +1161,6 @@ function calculateResult() {
 async function saveResult() {
   const selected = trials.value.find((t) => t.rate === selectedRate.value)!;
   const presetName = `My Resonance Frequency \u2014 ${selectedRate.value} BPM`;
-  const existingConfigs = storage.getAllConfigs();
-  const existing = existingConfigs.find((c) => c.name.startsWith('My Resonance Frequency'));
-
   const presetInput = {
     ...DEFAULT_BREATHING_CONFIG,
     name: presetName,
@@ -1050,6 +1178,23 @@ async function saveResult() {
     ttsVoice: props.ttsVoice,
   };
 
+  const result: AssessmentResult = {
+    id: uuidv4(),
+    trials: trials.value,
+    selectedRate: selectedRate.value,
+    completedAt: new Date(),
+    config: { ...assessmentConfig },
+  };
+
+  try {
+    await hrvStorage.saveAssessment(result);
+  } catch {
+    sensorStatusMessage.value = 'Your assessment could not be saved. No practice preset was created; please try again.';
+    return;
+  }
+
+  const existingConfigs = storage.getAllConfigs();
+  const existing = existingConfigs.find((c) => c.name.startsWith('My Resonance Frequency'));
   let preset;
   if (existing?.id) {
     storage.updateConfig(existing.id, presetInput);
@@ -1057,16 +1202,6 @@ async function saveResult() {
   } else {
     preset = storage.createConfig(presetInput);
   }
-
-  const result: AssessmentResult = {
-    id: uuidv4(),
-    trials: trials.value,
-    selectedRate: selectedRate.value,
-    createdPresetId: preset.id,
-    completedAt: new Date(),
-    config: { ...assessmentConfig },
-  };
-  await hrvStorage.saveAssessment(result);
   emit('complete', preset);
 }
 
@@ -1080,7 +1215,25 @@ function setTrialAnalysisForTesting(index: number, analysis: HRVAnalysis) {
   trialAnalyses.value[index] = analysis;
 }
 
-defineExpose({ setPhaseForTesting, setTrialAnalysisForTesting });
+function startTrialForTesting(index: number) {
+  return startTrial(index);
+}
+
+function getPhaseForTesting() {
+  return phase.value;
+}
+
+function getTrialAnalysisForTesting(index: number) {
+  return trialAnalyses.value[index];
+}
+
+defineExpose({
+  setPhaseForTesting,
+  setTrialAnalysisForTesting,
+  startTrialForTesting,
+  getPhaseForTesting,
+  getTrialAnalysisForTesting,
+});
 
 // ======================== Cleanup ========================
 
@@ -1091,6 +1244,7 @@ onUnmounted(() => {
   assessmentStartGeneration += 1;
   timer.stop();
   clearRestInterval();
+  clearFinishingDataTimeout();
   disableKeepAwake();
   if (selectedSensorMode.value === 'dual') sensorFusionService.reset();
   measurementSession?.interrupt('Assessment closed before completion.');

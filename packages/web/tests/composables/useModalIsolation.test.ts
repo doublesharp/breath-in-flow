@@ -10,6 +10,7 @@ const Harness = defineComponent({
     const open = ref(false);
     const escapeSafe = ref(true);
     const showActions = ref(true);
+    const phase = ref<'first' | 'second'>('first');
     const dialogRef = ref<HTMLElement | null>(null);
     const backgroundRef = ref<HTMLElement | null>(null);
     const close = vi.fn(() => {
@@ -19,12 +20,13 @@ const Harness = defineComponent({
     useModalIsolation(dialogRef, open, {
       backgroundRef,
       initialFocus: () =>
-        dialogRef.value?.querySelector<HTMLElement>('[data-testid="initial"]') ?? null,
+        dialogRef.value?.querySelector<HTMLElement>(`[data-focus-phase="${phase.value}"]`) ?? null,
+      focusKey: phase,
       onEscape: close,
       canEscape: () => escapeSafe.value,
     });
 
-    return { open, escapeSafe, showActions, dialogRef, backgroundRef, close };
+    return { open, escapeSafe, showActions, phase, dialogRef, backgroundRef, close };
   },
   template: `
     <div>
@@ -33,7 +35,8 @@ const Harness = defineComponent({
       </main>
       <div v-if="open" ref="dialogRef" role="dialog">
         <template v-if="showActions">
-          <button data-testid="initial">First</button>
+          <button data-testid="initial" data-focus-phase="first">First</button>
+          <button v-if="phase === 'second'" data-testid="phase-second" data-focus-phase="second">Second phase</button>
           <button data-testid="last">Last</button>
         </template>
       </div>
@@ -64,6 +67,16 @@ describe('useModalIsolation', () => {
     expect(document.activeElement).toBe(wrapper.get('[data-testid="initial"]').element);
     expect(background.attributes('inert')).toBe('');
     expect(background.attributes('aria-hidden')).toBe('true');
+  });
+
+  it('moves focus to replaced phase content while the dialog remains open', async () => {
+    const { wrapper } = await openHarness();
+
+    (wrapper.vm as unknown as { phase: 'first' | 'second' }).phase = 'second';
+    await nextTick();
+    await nextTick();
+
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="phase-second"]').element);
   });
 
   it('wraps Tab and Shift+Tab within the dialog', async () => {

@@ -31,7 +31,12 @@
           <span class="text-xs text-slate-500">{{ rmssdMeasurements.length }} comparable readings</span>
         </div>
         <div class="relative" style="height: 160px">
-          <canvas ref="rmssdCanvas" class="w-full h-full" data-testid="rmssd-canvas" />
+          <canvas
+            ref="rmssdCanvas"
+            class="w-full h-full"
+            data-testid="rmssd-canvas"
+            aria-describedby="rmssd-trend-data"
+          />
           <div
             v-if="rmssdMeasurements.length === 0"
             class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
@@ -39,6 +44,25 @@
             No data in selected range
           </div>
         </div>
+        <table id="rmssd-trend-data" class="sr-only">
+          <caption>
+            RMSSD trend plotted data
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">RMSSD (ms)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="point in rmssdTrendData" :key="point.id">
+              <td>
+                <time :datetime="point.date.toISOString()">{{ formatTrendDate(point.date) }}</time>
+              </td>
+              <td>{{ formatRoundedMetric(point.value, 'ms') }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <!-- Normalized LF Power Trend -->
@@ -50,7 +74,12 @@
           </span>
         </div>
         <div class="relative" style="height: 160px">
-          <canvas ref="lfPowerCanvas" class="w-full h-full" data-testid="lf-power-canvas" />
+          <canvas
+            ref="lfPowerCanvas"
+            class="w-full h-full"
+            data-testid="lf-power-canvas"
+            aria-describedby="lf-power-trend-data"
+          />
           <div
             v-if="lfPowerMeasurements.length === 0"
             class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
@@ -58,6 +87,25 @@
             No data in selected range
           </div>
         </div>
+        <table id="lf-power-trend-data" class="sr-only">
+          <caption>
+            Normalized LF power trend plotted data
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Normalized LF power (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="point in lfPowerTrendData" :key="point.id">
+              <td>
+                <time :datetime="point.date.toISOString()">{{ formatTrendDate(point.date) }}</time>
+              </td>
+              <td>{{ formatLfPower(point.value) }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <!-- Resting Heart Rate Trend -->
@@ -67,7 +115,7 @@
           <span class="text-xs text-slate-500">{{ pulseMeasurements.length }} comparable readings</span>
         </div>
         <div class="relative" style="height: 160px">
-          <canvas ref="hrCanvas" class="w-full h-full" data-testid="hr-canvas" />
+          <canvas ref="hrCanvas" class="w-full h-full" data-testid="hr-canvas" aria-describedby="hr-trend-data" />
           <div
             v-if="pulseMeasurements.length === 0"
             class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
@@ -75,6 +123,25 @@
             No data in selected range
           </div>
         </div>
+        <table id="hr-trend-data" class="sr-only">
+          <caption>
+            Resting heart rate trend plotted data
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Resting heart rate (BPM)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="point in heartRateTrendData" :key="point.id">
+              <td>
+                <time :datetime="point.date.toISOString()">{{ formatTrendDate(point.date) }}</time>
+              </td>
+              <td>{{ formatRoundedMetric(point.value, 'BPM') }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <!-- Morning Readiness Score -->
@@ -86,8 +153,32 @@
           </span>
         </div>
         <div class="relative" style="height: 160px">
-          <canvas ref="readinessCanvas" class="w-full h-full" data-testid="readiness-canvas" />
+          <canvas
+            ref="readinessCanvas"
+            class="w-full h-full"
+            data-testid="readiness-canvas"
+            aria-describedby="readiness-trend-data"
+          />
         </div>
+        <table id="readiness-trend-data" class="sr-only">
+          <caption>
+            Morning protocol RMSSD trend plotted data
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Morning protocol RMSSD (ms)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="point in morningReadinessData" :key="point.id">
+              <td>
+                <time :datetime="point.date.toISOString()">{{ formatTrendDate(point.date) }}</time>
+              </td>
+              <td>{{ formatRoundedMetric(point.value, 'ms') }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -150,14 +241,63 @@ const morningMeasurements = computed(() =>
   filterSelectedRange(getLatestComparableMeasurements(props.measurements, 'rmssd', 'morning-readiness'))
 );
 
-// ─── Morning readiness data ───────────────────────────────────────────────────
+// ─── Plotted trend data ──────────────────────────────────────────────────────
 
-const morningReadinessData = computed(() => {
+interface TrendDataPoint {
+  id: string;
+  date: Date;
+  value: number;
+}
+
+const rmssdTrendData = computed<TrendDataPoint[]>(() =>
+  rmssdMeasurements.value.map((measurement) => ({
+    id: measurement.id,
+    date: new Date(measurement.completedAt),
+    value: measurement.analysis.timeDomain.rmssd,
+  }))
+);
+
+const lfPowerTrendData = computed<TrendDataPoint[]>(() =>
+  lfPowerMeasurements.value.flatMap((measurement) =>
+    measurement.analysis.frequencyDomain.available
+      ? [
+          {
+            id: measurement.id,
+            date: new Date(measurement.completedAt),
+            value: measurement.analysis.frequencyDomain.value.lfPowerNorm,
+          },
+        ]
+      : []
+  )
+);
+
+const heartRateTrendData = computed<TrendDataPoint[]>(() =>
+  pulseMeasurements.value.map((measurement) => ({
+    id: measurement.id,
+    date: new Date(measurement.completedAt),
+    value: measurement.analysis.timeDomain.meanHR,
+  }))
+);
+
+const morningReadinessData = computed<TrendDataPoint[]>(() => {
   return morningMeasurements.value.map((m) => ({
+    id: m.id,
     date: new Date(m.completedAt),
     value: m.analysis.timeDomain.rmssd,
   }));
 });
+
+function formatTrendDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatRoundedMetric(value: number, unit: 'ms' | 'BPM'): string {
+  return `${Math.round(value)} ${unit}`;
+}
+
+function formatLfPower(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
 
 // ─── Chart utility ───────────────────────────────────────────────────────────
 
@@ -427,13 +567,8 @@ function drawAllCharts() {
       const { width, height } = getCanvasSize(rmssdCanvas.value);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const rmssdData = rmssdMeasurements.value.map((m) => ({
-        date: new Date(m.completedAt),
-        value: m.analysis.timeDomain.rmssd,
-      }));
-
       drawTrendChart(ctx, {
-        data: rmssdData,
+        data: rmssdTrendData.value,
         width,
         height,
         lineColor: '#4ade80',
@@ -454,19 +589,8 @@ function drawAllCharts() {
       const { width, height } = getCanvasSize(lfPowerCanvas.value);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const lfData = lfPowerMeasurements.value.flatMap((measurement) =>
-        measurement.analysis.frequencyDomain.available
-          ? [
-              {
-                date: new Date(measurement.completedAt),
-                value: measurement.analysis.frequencyDomain.value.lfPowerNorm,
-              },
-            ]
-          : []
-      );
-
       drawTrendChart(ctx, {
-        data: lfData,
+        data: lfPowerTrendData.value,
         width,
         height,
         lineColor: '#60a5fa',
@@ -487,13 +611,8 @@ function drawAllCharts() {
       const { width, height } = getCanvasSize(hrCanvas.value);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const hrData = pulseMeasurements.value.map((m) => ({
-        date: new Date(m.completedAt),
-        value: m.analysis.timeDomain.meanHR,
-      }));
-
       drawTrendChart(ctx, {
-        data: hrData,
+        data: heartRateTrendData.value,
         width,
         height,
         lineColor: '#f87171',
@@ -535,7 +654,7 @@ onMounted(async () => {
 });
 
 watch(
-  [rmssdMeasurements, lfPowerMeasurements, pulseMeasurements, morningReadinessData],
+  [rmssdTrendData, lfPowerTrendData, heartRateTrendData, morningReadinessData],
   async () => {
     await nextTick();
     drawAllCharts();
