@@ -37,4 +37,25 @@ describe('finalizeMeasurement', () => {
     expect(result.eligibility.reasons).toContain('duration-too-short');
     expect(result.eligibility.availableMetrics).not.toContain('frequency-domain');
   });
+
+  it('returns an explicit ineligible result for an empty capture', () => {
+    const result = finalizeMeasurement([], 'quick-check');
+
+    expect(result.samples).toEqual([]);
+    expect(result.analyzedDurationSeconds).toBe(0);
+    expect(result.eligibility.eligible).toBe(false);
+    expect(result.eligibility.reasons).toContain('duration-too-short');
+  });
+
+  it('treats non-finite and negative trim options as zero', () => {
+    const samples = detectedSamplesSpanning(60);
+    const result = finalizeMeasurement(samples, 'quick-check', {
+      settlingSeconds: Number.NaN,
+      endingSeconds: -1,
+    });
+
+    expect(result.samples).toEqual(samples);
+    expect(result.analyzedDurationSeconds).toBe(60);
+    expect(result.eligibility.eligible).toBe(true);
+  });
 });

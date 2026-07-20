@@ -197,6 +197,40 @@ describe('fuseTrialResults', () => {
     expect(result.fusedMetrics.confidence).toBe(1);
   });
 
+  it('returns unavailable fused metrics when both zero-quality sources are unavailable', () => {
+    const ppg = makeAnalysis({
+      signalQuality: 0,
+      frequencyAvailable: false,
+      resonanceAvailable: false,
+    });
+    const scg = makeAnalysis({
+      signalQuality: 0,
+      frequencyAvailable: false,
+      resonanceAvailable: false,
+    });
+
+    const result = fuseTrialResults(ppg, scg, 5.5);
+
+    expect(result.source).toBe('fused');
+    expect(result.fusedMetrics).toEqual({
+      lfPowerNorm: null,
+      peakToTroughAmplitude: null,
+      waveformSmoothness: null,
+      phaseSynchrony: null,
+      confidence: 0,
+    });
+  });
+
+  it('keeps a metric that is available from only one fused source', () => {
+    const ppg = makeAnalysis({ frequencyAvailable: false, resonanceAvailable: false });
+    const scg = makeAnalysis({ lfPowerNorm: 57, amplitude: 13 });
+
+    const result = fuseTrialResults(ppg, scg, 5.5);
+
+    expect(result.fusedMetrics.lfPowerNorm).toBe(57);
+    expect(result.fusedMetrics.peakToTroughAmplitude).toBe(13);
+  });
+
   it('returns unavailable metric values when neither source is provided', () => {
     const result = fuseTrialResults(undefined, undefined, 5.5);
 

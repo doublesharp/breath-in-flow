@@ -135,6 +135,37 @@ describe('evaluateMeasurementEligibility', () => {
     expect(resonanceTrial.warnings).toContain('short-recording-sdnn');
   });
 
+  it('switches freeform metric groups at five eligible minutes', () => {
+    const shortRecording = evaluate(60, 'freeform');
+    const fullRecording = evaluate(300, 'freeform');
+
+    expect(shortRecording.availableMetrics).toContain('sdnn-short-recording');
+    expect(shortRecording.availableMetrics).not.toContain('frequency-domain');
+    expect(shortRecording.warnings).toContain('short-recording-sdnn');
+    expect(fullRecording.availableMetrics).toContain('sdnn');
+    expect(fullRecording.availableMetrics).toContain('frequency-domain');
+    expect(fullRecording.warnings).not.toContain('short-recording-sdnn');
+  });
+
+  it('reports bounded reasons for an empty recording with invalid duration', () => {
+    const result = evaluateMeasurementEligibility([], 'quick-check', Number.NaN);
+
+    expect(result.eligible).toBe(false);
+    expect(result.reasons).toEqual(['duration-too-short', 'low-signal-quality']);
+    expect(result.artifactPercentage).toBe(0);
+    expect(result.meanQuality).toBe(0);
+  });
+
+  it('does not preprocess non-finite sample quality as an artifact series', () => {
+    const samples = samplesFor(60);
+    samples[0] = { ...samples[0], quality: Number.NaN };
+
+    const result = evaluateMeasurementEligibility(samples, 'quick-check', 60);
+
+    expect(result.reasons).toContain('invalid-sample');
+    expect(result.artifactPercentage).toBe(0);
+  });
+
   it('rejects a recording with an unresolved sensor error', () => {
     const result = evaluateMeasurementEligibility(samplesFor(130), 'morning-readiness', 130, {
       hasUnresolvedSensorError: true,
