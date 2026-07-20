@@ -100,11 +100,22 @@
 
     <!-- ═══ PREP SCREEN MODAL — instructions before starting ═══ -->
     <Teleport to="body">
-      <div v-if="showPrep" class="fixed inset-0 z-50 bg-slate-950 flex flex-col safe-area-top safe-area-bottom">
+      <div
+        v-if="showPrep"
+        ref="prepDialogRef"
+        data-testid="prep-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pulse-prep-dialog-title"
+        tabindex="-1"
+        class="fixed inset-0 z-50 bg-slate-950 flex flex-col safe-area-top safe-area-bottom"
+      >
         <div class="flex-1 flex flex-col justify-center items-center px-6 text-center">
           <!-- Protocol info -->
           <div class="text-4xl mb-4">{{ prepProtocol?.icon || '📊' }}</div>
-          <h2 class="text-xl font-bold text-white mb-1">{{ prepProtocol?.name || 'Freeform Measurement' }}</h2>
+          <h2 id="pulse-prep-dialog-title" class="text-xl font-bold text-white mb-1">
+            {{ prepProtocol?.name || 'Freeform Measurement' }}
+          </h2>
 
           <!-- Duration slider -->
           <div v-if="prepProtocol" class="w-full max-w-xs mb-6">
@@ -232,8 +243,15 @@
     <Teleport to="body">
       <div
         v-if="isMeasuring || showResults"
+        ref="measurementDialogRef"
+        data-testid="measurement-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pulse-measurement-dialog-title"
+        tabindex="-1"
         class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom"
       >
+        <h2 id="pulse-measurement-dialog-title" class="sr-only">Pulse variability measurement</h2>
         <!-- Measuring view -->
         <div v-if="isMeasuring" class="flex flex-col h-full p-4">
           <!-- Header -->
@@ -391,7 +409,16 @@
 
     <!-- ═══ FULLSCREEN RF ASSESSMENT MODAL ═══ -->
     <Teleport to="body">
-      <div v-if="showAssessment" class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom">
+      <div
+        v-if="showAssessment"
+        ref="assessmentDialogRef"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="resonance-assessment-dialog-title"
+        tabindex="-1"
+        class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom"
+      >
+        <h2 id="resonance-assessment-dialog-title" class="sr-only">Resonance frequency assessment</h2>
         <ResonanceAssessment
           :sound-enabled="true"
           :sound-theme="'wood'"
@@ -468,6 +495,7 @@ import { requestSensorPermissions, getPermissionDeniedMessage } from '../service
 import { analyzeHRV, finalizeMeasurement, MAX_PLAUSIBLE_IBI_MS } from '@breath-in-flow/shared';
 import { useHrvStorage, type HrvMeasurement } from '../composables/useHrvStorage';
 import { useAppLifecycle } from '../composables/useAppLifecycle';
+import { useModalIsolation } from '../composables/useModalIsolation';
 import type {
   AssessmentResult,
   HeartRateEstimate,
@@ -513,8 +541,8 @@ const protocols: Protocol[] = [
 
 const sensorOptions = [
   { value: 'camera' as const, label: 'Camera', badge: 'Recommended' },
-  { value: 'accelerometer' as const, label: 'Chest', badge: 'Beta' },
-  { value: 'dual' as const, label: 'Both', badge: 'Beta' },
+  { value: 'accelerometer' as const, label: 'Chest' },
+  { value: 'dual' as const, label: 'Both' },
 ];
 
 const hrvStorage = useHrvStorage();
@@ -530,6 +558,9 @@ const elapsedSeconds = ref(0);
 const selectedSensor = ref<'camera' | 'accelerometer' | 'dual'>('camera');
 const selectedProtocol = ref<Protocol | null>(null);
 const showPrep = ref(false);
+const prepDialogRef = ref<HTMLElement | null>(null);
+const measurementDialogRef = ref<HTMLElement | null>(null);
+const assessmentDialogRef = ref<HTMLElement | null>(null);
 const prepProtocol = ref<Protocol | null>(null);
 const availableCameras = ref<{ deviceId: string; label: string }[]>([]);
 const selectedCameraId = ref('');
@@ -559,6 +590,11 @@ const captureDurationSeconds = computed(() =>
     : customDuration.value
 );
 const maxCaptureDurationSeconds = computed(() => captureDurationSeconds.value + (2 * MAX_PLAUSIBLE_IBI_MS) / 1_000);
+const measurementDialogOpen = computed(() => isMeasuring.value || showResults.value);
+
+useModalIsolation(prepDialogRef, showPrep, { onEscape: cancelPendingStart });
+useModalIsolation(measurementDialogRef, measurementDialogOpen);
+useModalIsolation(assessmentDialogRef, showAssessment);
 const signalGuidance = computed(() => {
   if (hrDataPoints.value.length === 0 && sensorQuality.value <= 0) return 'Waiting for a pulse';
   if (sensorQuality.value < 0.35) {

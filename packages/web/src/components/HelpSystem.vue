@@ -17,7 +17,15 @@
     <Teleport to="body">
       <Transition name="help-fade">
         <div v-if="showHelp" class="help-modal-overlay safe-area-top safe-area-bottom" @click.self="showHelp = false">
-          <div class="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-dialog-title">
+          <div
+            ref="helpDialogRef"
+            data-testid="help-dialog"
+            class="help-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="help-dialog-title"
+            tabindex="-1"
+          >
             <!-- Header -->
             <div class="help-header">
               <div class="flex items-center gap-3">
@@ -44,7 +52,7 @@
                   <p class="text-sm text-slate-400">Learn how to use {{ AppConfig.appName }}</p>
                 </div>
               </div>
-              <button @click="showHelp = false" class="help-close-btn" aria-label="Close help">
+              <button ref="closeButtonRef" @click="showHelp = false" class="help-close-btn" aria-label="Close help">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   class="w-6 h-6"
@@ -108,7 +116,9 @@
                   <h4 class="help-card-title">Navigation</h4>
                   <ul class="help-list">
                     <li><strong>Practice</strong> - Main breathing practice area</li>
-                    <li><strong>Lab</strong> - Optional pulse-variability measurements and resonance training</li>
+                    <li>
+                      <strong>Pulse Variability</strong> - Optional pulse-timing measurements and resonance training
+                    </li>
                     <li><strong>History</strong> - View your past sessions</li>
                     <li><strong>Presets</strong> - Save and load breathing patterns</li>
                     <li><strong>Analytics</strong> - Track your progress with charts</li>
@@ -246,15 +256,16 @@
               <div v-if="activeSection === 'lab'" class="help-section">
                 <h3 class="help-section-title">
                   <span class="help-section-icon bg-emerald-500/20 text-emerald-400">♥</span>
-                  Lab & Measurements
+                  Pulse Variability & Measurements
                 </h3>
 
                 <div class="help-card">
                   <h4 class="help-card-title">What the camera measures</h4>
                   <p class="text-slate-300 text-sm">
-                    The camera estimates pulse timing from fingertip color changes. The app reports pulse variability,
-                    which can resemble ECG-derived HRV but is not an ECG or a medical measurement. Compare trends only
-                    when posture, time of day, sensor placement, and protocol are similar.
+                    The camera estimates pulse timing from fingertip color changes and reports pulse-rate variability
+                    (PRV). PRV is related to, but not interchangeable with, ECG-derived HRV; this is not an ECG or a
+                    medical measurement. Compare trends only when posture, time of day, sensor placement, and protocol
+                    are similar.
                   </p>
                 </div>
 
@@ -266,11 +277,12 @@
                       still.
                     </li>
                     <li>
-                      <strong>Chest Motion</strong> - Experimental (Beta); phone motion can be mistaken for heart
-                      timing.
+                      <strong>Chest Motion</strong> - Place the phone flat on your chest and remain still; other phone
+                      motion can be mistaken for pulse timing.
                     </li>
                     <li>
-                      <strong>Camera + Chest</strong> - Experimental (Beta); requires both signals to remain steady.
+                      <strong>Camera + Chest</strong> - Keep the phone steady and your fingertip over the rear camera so
+                      both signals remain clean.
                     </li>
                   </ul>
                 </div>
@@ -286,8 +298,8 @@
 
                 <div class="help-tip warning">
                   <p class="text-sm">
-                    Use Lab results for wellness training and personal trends, not diagnosis. Stop the measurement if
-                    you feel unwell and discuss health concerns with a qualified clinician.
+                    Use Pulse Variability results for wellness training and personal trends, not diagnosis. Stop the
+                    measurement if you feel unwell and discuss health concerns with a qualified clinician.
                   </p>
                 </div>
               </div>
@@ -561,9 +573,19 @@
 <script setup lang="ts">
 import { AppConfig } from '@breath-in-flow/shared';
 import { ref, h } from 'vue';
+import { useModalIsolation } from '../composables/useModalIsolation';
 
 const showHelp = ref(false);
 const activeSection = ref('start');
+const helpDialogRef = ref<HTMLElement | null>(null);
+const closeButtonRef = ref<HTMLElement | null>(null);
+
+useModalIsolation(helpDialogRef, showHelp, {
+  initialFocus: () => closeButtonRef.value,
+  onEscape: () => {
+    showHelp.value = false;
+  },
+});
 
 // Tab configuration with inline icon components
 const tabs = [
@@ -650,7 +672,7 @@ const tabs = [
   },
   {
     id: 'lab',
-    label: 'Lab',
+    label: 'Pulse Variability',
     icon: {
       render: () =>
         h(

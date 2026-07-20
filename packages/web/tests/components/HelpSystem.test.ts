@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { afterEach, describe, it, expect } from 'vitest';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
 import HelpSystem from '../../src/components/HelpSystem.vue';
+
+enableAutoUnmount(afterEach);
 
 describe('HelpSystem.vue', () => {
   it('opens and displays modal when help button clicked', async () => {
@@ -26,21 +28,22 @@ describe('HelpSystem.vue', () => {
     }
   });
 
-  it('explains pulse variability limits, experimental sensors, and diaphragm safety', async () => {
+  it('explains PRV limits, supported sensor instructions, and diaphragm safety', async () => {
     const wrapper = mount(HelpSystem);
     await wrapper.find('button.help-trigger').trigger('click');
     await wrapper.vm.$nextTick();
 
     const labTab = Array.from(document.body.querySelectorAll('.help-tab')).find((button) =>
-      button.textContent?.includes('Lab')
+      button.textContent?.includes('Pulse')
     ) as HTMLElement;
     expect(labTab).toBeTruthy();
     labTab.click();
     await wrapper.vm.$nextTick();
 
-    expect(document.body.textContent).toContain('pulse variability');
+    expect(document.body.textContent?.toLowerCase()).toContain('pulse variability');
     expect(document.body.textContent).toContain('Chest Motion');
-    expect(document.body.textContent?.toLowerCase()).toContain('experimental');
+    expect(document.body.textContent).toContain('pulse-rate variability (PRV)');
+    expect(document.body.textContent).not.toMatch(/\b(?:experimental|beta)\b/i);
     expect(document.body.textContent).toContain('five minutes');
 
     const techniquesTab = Array.from(document.body.querySelectorAll('.help-tab')).find((button) =>
@@ -54,5 +57,30 @@ describe('HelpSystem.vue', () => {
     expect(document.body.textContent).toContain('Stop for dizziness');
 
     wrapper.unmount();
+  });
+
+  it('isolates the page, focuses the close action, and restores focus after Escape', async () => {
+    const wrapper = mount(HelpSystem, { attachTo: document.body });
+    const trigger = wrapper.get<HTMLElement>('button.help-trigger');
+    trigger.element.focus();
+    await trigger.trigger('click');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const dialog = document.body.querySelector<HTMLElement>('[data-testid="help-dialog"]');
+    expect(dialog?.getAttribute('role')).toBe('dialog');
+    expect(dialog?.getAttribute('aria-labelledby')).toBe('help-dialog-title');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Close help');
+    const background = Array.from(document.body.children).find(
+      (element) => element === wrapper.element || element.contains(wrapper.element)
+    ) as HTMLElement;
+    expect(background.getAttribute('inert')).toBe('');
+    expect(background.getAttribute('aria-hidden')).toBe('true');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(document.body.querySelector('[data-testid="help-dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger.element);
+    expect(background.hasAttribute('inert')).toBe(false);
   });
 });

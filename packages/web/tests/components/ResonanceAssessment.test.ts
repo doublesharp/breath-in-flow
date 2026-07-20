@@ -382,20 +382,23 @@ describe('ResonanceAssessment', () => {
       const wrapper = mount(ResonanceAssessment);
       const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
       expect(sensorSection.exists()).toBe(true);
-      expect(sensorSection.text()).toContain('Heart Rate Measurement');
+      expect(sensorSection.text()).toContain('Pulse Timing Measurement');
       expect(sensorSection.text()).toContain('Camera Pulse (Recommended)');
       expect(sensorSection.text()).toContain('Manual Scoring');
-      expect(sensorSection.text()).toContain('Camera + Chest (Beta)');
-      expect(sensorSection.text()).toContain('Chest Motion (Beta)');
+      expect(sensorSection.text()).toContain('Camera + Chest');
+      expect(sensorSection.text()).toContain('Chest Motion');
+      expect(sensorSection.text()).not.toMatch(/\bBeta\b/i);
     });
 
-    it('shows experimental sensor modes without claiming best accuracy', () => {
+    it('keeps supported sensor positioning guidance without experimental treatment', () => {
       const wrapper = mount(ResonanceAssessment);
       const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
       const buttons = sensorSection.findAll('button');
       // 4 modes: none, dual, camera, accelerometer
       expect(buttons).toHaveLength(4);
-      expect(buttons[2].text()).toContain('Camera + Chest (Beta)');
+      expect(buttons[2].text()).toContain('Camera + Chest');
+      expect(buttons[2].text()).toContain('both signals');
+      expect(buttons[3].text()).toContain('phone flat on your chest');
       expect(sensorSection.text()).not.toContain('Best Accuracy');
     });
 
@@ -404,10 +407,35 @@ describe('ResonanceAssessment', () => {
       const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
       const buttons = sensorSection.findAll('button');
       expect(buttons[0].classes()).toContain('border-emerald-500');
+      expect(buttons[0].attributes('aria-pressed')).toBe('true');
       expect(buttons[1].classes()).not.toContain('border-emerald-500');
+      expect(buttons[1].attributes('aria-pressed')).toBe('false');
       expect(buttons[2].classes()).not.toContain('border-emerald-500');
       expect(buttons[3].classes()).not.toContain('border-emerald-500');
     });
+  });
+
+  it('isolates and names the cancel confirmation while focusing the safe action', async () => {
+    const wrapper = mount(ResonanceAssessment, { attachTo: document.body });
+    await wrapper.get('[data-testid="start-btn"]').trigger('click');
+    await flushPromises();
+    const cancel = wrapper.get<HTMLElement>('[data-testid="cancel-btn"]');
+    cancel.element.focus();
+    await cancel.trigger('click');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const dialog = wrapper.get('[data-testid="cancel-assessment-dialog"]');
+    expect(dialog.attributes('role')).toBe('alertdialog');
+    expect(dialog.attributes('aria-modal')).toBe('true');
+    expect(dialog.attributes('aria-labelledby')).toBe('cancel-assessment-title');
+    expect(document.activeElement?.textContent).toContain('Go Back');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-testid="cancel-assessment-dialog"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(cancel.element);
+    wrapper.unmount();
   });
 
   describe('Scoring phase', () => {

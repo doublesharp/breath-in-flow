@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen" style="background: linear-gradient(135deg, #1f1a15 0%, #2a241d 40%, #1f1a15 100%)">
-    <div class="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8">
+    <div ref="assessmentContentRef" class="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8">
       <!-- ======================== INTRO PHASE ======================== -->
       <template v-if="phase === 'INTRO'">
         <div class="card-solid animate-scale-in">
@@ -55,12 +55,13 @@
 
           <!-- Sensor Selection -->
           <div class="mb-6 space-y-3" data-testid="sensor-selection">
-            <label class="text-sm font-medium text-white/80">Heart Rate Measurement</label>
+            <label class="text-sm font-medium text-white/80">Pulse Timing Measurement</label>
             <div class="grid grid-cols-1 gap-2">
               <button
                 v-for="mode in sensorModes"
                 :key="mode.value"
                 @click="selectedSensorMode = mode.value"
+                :aria-pressed="selectedSensorMode === mode.value"
                 :class="[
                   'p-3 rounded-lg border text-left transition-all',
                   selectedSensorMode === mode.value
@@ -239,7 +240,7 @@
                 @click="expandedTrialHrv[index] = !expandedTrialHrv[index]"
                 class="mt-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
               >
-                {{ expandedTrialHrv[index] ? 'Hide HRV data' : 'Show HRV data' }}
+                {{ expandedTrialHrv[index] ? 'Hide pulse variability data' : 'Show pulse variability data' }}
               </button>
             </div>
 
@@ -385,38 +386,49 @@
           </div>
         </div>
       </template>
+    </div>
 
-      <!-- ======================== CANCEL CONFIRMATION MODAL ======================== -->
+    <!-- ======================== CANCEL CONFIRMATION MODAL ======================== -->
+    <div
+      v-if="showCancelConfirm"
+      class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      @click.self="showCancelConfirm = false"
+    >
       <div
-        v-if="showCancelConfirm"
-        class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        @click.self="showCancelConfirm = false"
+        ref="cancelDialogRef"
+        data-testid="cancel-assessment-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="cancel-assessment-title"
+        aria-describedby="cancel-assessment-description"
+        tabindex="-1"
+        class="card-solid max-w-md w-full animate-scale-in"
       >
-        <div class="card-solid max-w-md w-full animate-scale-in">
-          <div class="flex items-start gap-4">
-            <div class="p-3 rounded-xl bg-red-500/10">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="w-6 h-6 text-red-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-            <div class="flex-1">
-              <h3 class="text-xl font-bold text-white mb-2">Cancel assessment?</h3>
-              <p class="text-slate-300 mb-6">All progress will be lost.</p>
-              <div class="flex gap-3 justify-end">
-                <button @click="showCancelConfirm = false" class="btn-secondary">Go Back</button>
-                <button @click="confirmCancel" class="btn-danger">Confirm Cancel</button>
-              </div>
+        <div class="flex items-start gap-4">
+          <div class="p-3 rounded-xl bg-red-500/10">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="w-6 h-6 text-red-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+          </div>
+          <div class="flex-1">
+            <h3 id="cancel-assessment-title" class="text-xl font-bold text-white mb-2">Cancel assessment?</h3>
+            <p id="cancel-assessment-description" class="text-slate-300 mb-6">All progress will be lost.</p>
+            <div class="flex gap-3 justify-end">
+              <button ref="cancelSafeActionRef" @click="showCancelConfirm = false" class="btn-secondary">
+                Go Back
+              </button>
+              <button @click="confirmCancel" class="btn-danger">Confirm Cancel</button>
             </div>
           </div>
         </div>
@@ -457,6 +469,7 @@ import { useBreathingTimer } from '../composables/useBreathingTimer';
 import { useHrvStorage } from '../composables/useHrvStorage';
 import { useStorage } from '../composables/useStorage';
 import { useAppLifecycle } from '../composables/useAppLifecycle';
+import { useModalIsolation } from '../composables/useModalIsolation';
 import {
   ASSESSMENT_TRIALS,
   DEFAULT_BREATHING_CONFIG,
@@ -525,13 +538,13 @@ const sensorModes = [
   },
   {
     value: 'dual' as const,
-    label: 'Camera + Chest (Beta)',
-    description: 'Experimental combined camera and chest-motion detection',
+    label: 'Camera + Chest',
+    description: 'Keep your finger on the camera and the phone steady on your chest so both signals remain clean',
   },
   {
     value: 'accelerometer' as const,
-    label: 'Chest Motion (Beta)',
-    description: 'Experimental phone-on-chest motion detection',
+    label: 'Chest Motion',
+    description: 'Place the phone flat on your chest and remain still during motion-based pulse timing',
   },
 ];
 
@@ -562,6 +575,17 @@ const phase = ref<AssessmentPhase>('INTRO');
 const currentTrialIndex = ref(0);
 const isPaused = ref(false);
 const showCancelConfirm = ref(false);
+const assessmentContentRef = ref<HTMLElement | null>(null);
+const cancelDialogRef = ref<HTMLElement | null>(null);
+const cancelSafeActionRef = ref<HTMLElement | null>(null);
+
+useModalIsolation(cancelDialogRef, showCancelConfirm, {
+  backgroundRef: assessmentContentRef,
+  initialFocus: () => cancelSafeActionRef.value,
+  onEscape: () => {
+    showCancelConfirm.value = false;
+  },
+});
 
 // Warmup config (user-adjustable on INTRO)
 const assessmentConfig = reactive<AssessmentConfig>({
@@ -771,7 +795,7 @@ function stopSensorAndAnalyze() {
     trialAnalyses.value[currentTrialIndex.value] = limitAnalysisToEligibility(analysis, sessionResult.eligibility);
   } else if (sessionResult?.eligibility && !sessionResult.eligibility.eligible) {
     sensorStatusMessage.value =
-      'This trial did not produce enough clean detected beats for automatic HRV scoring. Use the comfort and waveform questions to score it manually.';
+      'This trial did not produce enough clean detected beats for automatic pulse-variability scoring. Use the comfort and waveform questions to score it manually.';
   }
 }
 

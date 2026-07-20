@@ -176,15 +176,64 @@ describe('LabTab.vue', () => {
     ).not.toContain('truncate');
   });
 
-  it('defaults to the recommended camera sensor with accessible selection state', () => {
+  it('presents every supported sensor without Beta treatment', () => {
     const wrapper = shallowMount(LabTab);
     const cameraButton = wrapper.find('[data-testid="sensor-camera"]');
 
     expect(cameraButton.text()).toContain('Camera');
     expect(cameraButton.text()).toContain('Recommended');
     expect(cameraButton.attributes('aria-pressed')).toBe('true');
-    expect(wrapper.find('[data-testid="sensor-accelerometer"]').text()).toContain('Beta');
-    expect(wrapper.find('[data-testid="sensor-dual"]').text()).toContain('Beta');
+    expect(wrapper.find('[data-testid="sensor-accelerometer"]').text()).toContain('Chest');
+    expect(wrapper.find('[data-testid="sensor-dual"]').text()).toContain('Both');
+    expect(wrapper.text()).not.toMatch(/\bBeta\b/i);
+  });
+
+  it('labels and isolates the preparation dialog, then restores focus on safe Escape', async () => {
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    const trigger = wrapper.get<HTMLElement>('[data-testid="protocol-quick-check"]');
+    trigger.element.focus();
+
+    await trigger.trigger('click');
+    await flushPromises();
+
+    const dialog = document.body.querySelector<HTMLElement>('[data-testid="prep-dialog"]');
+    expect(dialog?.getAttribute('role')).toBe('dialog');
+    expect(dialog?.getAttribute('aria-modal')).toBe('true');
+    expect(dialog?.getAttribute('aria-labelledby')).toBe('pulse-prep-dialog-title');
+    expect(dialog?.contains(document.activeElement)).toBe(true);
+    const background = Array.from(document.body.children).find(
+      (element) => element === wrapper.element || element.contains(wrapper.element)
+    ) as HTMLElement;
+    expect(background.getAttribute('inert')).toBe('');
+    expect(background.getAttribute('aria-hidden')).toBe('true');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wrapper.vm.$nextTick();
+
+    expect(document.body.querySelector('[data-testid="prep-dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger.element);
+    expect(background.hasAttribute('inert')).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('keeps an active capture open on Escape and exposes a visible Stop action', async () => {
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    await wrapper.get('[data-testid="protocol-quick-check"]').trigger('click');
+    await flushPromises();
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Start')!
+      .click();
+    await flushPromises();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wrapper.vm.$nextTick();
+
+    const dialog = document.body.querySelector<HTMLElement>('[data-testid="measurement-dialog"]');
+    expect(dialog?.getAttribute('role')).toBe('dialog');
+    expect(dialog?.getAttribute('aria-labelledby')).toBe('pulse-measurement-dialog-title');
+    expect(dialog?.textContent).toContain('Stop Measurement');
+    expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
+    wrapper.unmount();
   });
 
   it('labels the duration control and enforces the selected protocol minimum', async () => {
@@ -477,7 +526,7 @@ describe('LabTab.vue', () => {
     expect(wrapper.text()).toContain('Camera');
     expect(wrapper.text()).toContain('Chest');
     expect(wrapper.text()).toContain('Both');
-    expect(wrapper.text()).toContain('Beta');
+    expect(wrapper.text()).not.toMatch(/\bBeta\b/i);
   });
 
   it('shows RF assessment section with "Find My Resonance Frequency" button', () => {

@@ -1,6 +1,9 @@
+/// <reference types="node" />
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import App from '../../src/App.vue';
 import { AppConfig, BreathingConfig } from '@breath-in-flow/shared';
 
@@ -23,10 +26,43 @@ describe('App.vue', () => {
 
     // Desktop nav buttons (rendered in header)
     expect(wrapper.findAll('button').some((b) => b.text().includes('Practice'))).toBeTruthy();
-    expect(wrapper.findAll('button').some((b) => b.text().includes('Lab'))).toBeTruthy();
+    expect(
+      wrapper.findAll('button').some((b) => b.text().includes('Pulse Variability'))
+    ).toBeTruthy();
     expect(wrapper.findAll('button').some((b) => b.text().includes('History'))).toBeTruthy();
     expect(wrapper.findAll('button').some((b) => b.text().includes('Presets'))).toBeTruthy();
     expect(wrapper.findAll('button').some((b) => b.text().includes('Analytics'))).toBeTruthy();
+  });
+
+  it('names both desktop and mobile pulse navigation consistently', () => {
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          BreathingPractice: true,
+          SessionHistory: true,
+          PracticePresets: true,
+          AnalyticsDashboard: true,
+          LabTab: true,
+          HelpSystem: true,
+        },
+      },
+    });
+
+    const pulseNavigation = wrapper.findAll('button[aria-label="Pulse Variability"]');
+    expect(pulseNavigation).toHaveLength(2);
+    expect(pulseNavigation.every((button) => button.text().includes('Pulse Variability'))).toBe(
+      true
+    );
+  });
+
+  it('uses offline fonts and defines a reduced-motion presentation', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/style.css'), 'utf8');
+
+    expect(css).not.toMatch(/@import\s+url\(/i);
+    expect(css).not.toContain('fonts.googleapis.com');
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(css).toMatch(/\.animated-bg::before[\s\S]*animation:\s*none/);
+    expect(css).toMatch(/\.animate-scale-in[\s\S]*animation:\s*none/);
   });
 
   it('switches between all tabs', async () => {
@@ -46,7 +82,7 @@ describe('App.vue', () => {
     const buttons = wrapper.findAll('button');
 
     // Test Lab tab
-    const labBtn = buttons.find((b) => b.text().includes('Lab'));
+    const labBtn = buttons.find((b) => b.text().includes('Pulse Variability'));
     if (labBtn) {
       await labBtn.trigger('click');
       await nextTick();
