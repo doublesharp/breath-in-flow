@@ -14,7 +14,12 @@ vi.mock('@capawesome/capacitor-torch', () => ({
 
 import { ppgService } from '../../src/services/ppgService';
 import type { PPGStatus } from '../../src/services/ppgService';
-import type { IBISample } from '@breath-in-flow/shared';
+import type { HeartRateEstimate, IBISample } from '@breath-in-flow/shared';
+
+type TestPPGService = {
+  estimateHRFromAutocorrelation: () => HeartRateEstimate | null;
+  rawBuffer: number[];
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -211,11 +216,12 @@ describe('ppgService', () => {
       void playResolve!;
 
       ppgService.setCallbacks({ onStatusChange: (s) => statuses.push(s) });
-      await ppgService.start();
+      const result = await ppgService.start();
 
       expect(statuses).toContain('initializing');
       expect(statuses).toContain('capturing');
       expect(ppgService.getStatus()).toBe('capturing');
+      expect(result).toEqual({ ok: true });
     });
 
     it('transitions capturing → idle on stop', async () => {
@@ -259,6 +265,40 @@ describe('ppgService', () => {
       ppgService.stop();
       expect(ppgService.getStatus()).toBe('idle');
       expect(statuses).toContain('idle');
+    });
+
+    it('releases camera resources if video playback fails during start', async () => {
+      const errors: Error[] = [];
+      const track = makeMockTrack({ torchSupported: false });
+      const stream = makeMockStream(track);
+      mockGetUserMediaSuccess(stream);
+
+      const removeChild = vi.fn();
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        if (tag === 'video') {
+          return {
+            srcObject: null,
+            playsInline: false,
+            muted: false,
+            readyState: 0,
+            videoWidth: 0,
+            videoHeight: 0,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild },
+            play: vi.fn().mockRejectedValue(new Error('play failed')),
+          } as unknown as HTMLVideoElement;
+        }
+        return document.createElement(tag);
+      });
+
+      const result = await ppgService.start({ onError: (e) => errors.push(e) });
+
+      expect(ppgService.getStatus()).toBe('error');
+      expect(errors[0].message).toMatch(/camera preview/i);
+      expect(track.stop).toHaveBeenCalled();
+      expect(removeChild).toHaveBeenCalled();
+      expect(result).toMatchObject({ ok: false, reason: 'start-failed' });
     });
 
     it('does not re-enter start() if already capturing', async () => {
@@ -354,10 +394,11 @@ describe('ppgService', () => {
       mockGetUserMediaFailure(permErr);
 
       const errors: Error[] = [];
-      await ppgService.start({ onError: (e) => errors.push(e) });
+      const result = await ppgService.start({ onError: (e) => errors.push(e) });
 
       expect(ppgService.getStatus()).toBe('error');
       expect(errors[0].message).toMatch(/permission/i);
+      expect(result).toMatchObject({ ok: false, reason: 'permission-denied' });
     });
 
     it('emits user-friendly message on camera not found', async () => {
@@ -420,7 +461,37 @@ describe('ppgService', () => {
       for (const sample of ibiSamples) {
         expect(sample.interval).toBeGreaterThanOrEqual(300);
         expect(sample.interval).toBeLessThanOrEqual(2000);
+        expect(sample.provenance).toEqual({
+          source: 'ppg',
+          method: 'peak-detected',
+        });
       }
+    });
+
+    it('reports autocorrelation as a heart-rate estimate without fabricating IBIs', () => {
+      const estimates: HeartRateEstimate[] = [];
+      const ibiSamples: IBISample[] = [];
+      ppgService.setCallbacks({
+        onHeartRateEstimate: (estimate) => estimates.push(estimate),
+        onIBI: (sample) => ibiSamples.push(sample),
+      });
+
+      const service = ppgService as unknown as TestPPGService;
+      service.rawBuffer = Array.from({ length: 150 }, (_, index) =>
+        Math.sin((2 * Math.PI * index) / 30),
+      );
+      vi.spyOn(performance, 'now').mockReturnValue(12_345);
+
+      const result = service.estimateHRFromAutocorrelation();
+
+      expect(result).toMatchObject({
+        timestamp: 12_345,
+        bpm: 60,
+        source: 'ppg',
+        method: 'autocorrelation-estimate',
+      });
+      expect(estimates).toEqual([result]);
+      expect(ibiSamples).toHaveLength(0);
     });
 
     it('IBI intervals for 60 BPM signal cluster around 1000ms', () => {
@@ -878,6 +949,9 @@ describe('ppgService', () => {
 
   describe('adaptive bandpass filter', () => {
     it('updateAdaptiveFilter does not throw with insufficient IBI data', () => {
+      (ppgService as unknown as { currentLowCut: number }).currentLowCut = 1.2;
+      (ppgService as unknown as { currentHighCut: number }).currentHighCut = 2.4;
+
       // With fewer than 3 IBIs, updateAdaptiveFilter should revert to defaults without error
       expect(() => {
         (ppgService as unknown as { updateAdaptiveFilter: () => void }).updateAdaptiveFilter();
@@ -892,7 +966,7 @@ describe('ppgService', () => {
 
     it('updateAdaptiveFilter adjusts cutoffs when IBIs available', () => {
       // Simulate 60 BPM → IBI = 1000ms → HR_Hz = 1.0
-      // Expected: low = max(0.5, 1.0*0.5) = 0.5, high = min(4.0, 1.0*2.5) = 2.5
+      // Expected: low = max(0.7, 1.0*0.5) = 0.7, high = min(3.5, 1.0*2.5) = 2.5
       (ppgService as unknown as { recentIBIsMs: number[] }).recentIBIsMs = [
         1000, 1000, 1000, 1000, 1000,
       ];
@@ -900,8 +974,8 @@ describe('ppgService', () => {
       (ppgService as unknown as { updateAdaptiveFilter: () => void }).updateAdaptiveFilter();
 
       const highCut = (ppgService as unknown as { currentHighCut: number }).currentHighCut;
-      // high cut should have moved toward 2.5 (from 4.0)
-      expect(highCut).toBeLessThanOrEqual(4.0);
+      // high cut should have moved toward 2.5 (from 3.5)
+      expect(highCut).toBeLessThanOrEqual(3.5);
       expect(highCut).toBeGreaterThan(2.0);
     });
 

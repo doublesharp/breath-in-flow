@@ -3,16 +3,41 @@ import {
   StreamingPeakDetector,
   assessSignalQuality,
   detectPeaks,
+  type HeartRateEstimate,
   type IBISample,
 } from '@breath-in-flow/shared';
 import type { SOSFilter } from '@breath-in-flow/shared';
 import { Capacitor } from '@capacitor/core';
 import { Torch } from '@capawesome/capacitor-torch';
+import {
+  sensorStartFailure,
+  type SensorStartFailureReason,
+  type SensorStartResult,
+} from './sensorTypes';
+
+const PPG_DEBUG = import.meta.env.DEV && import.meta.env.VITE_PPG_DEBUG === 'true';
+const DEFAULT_LOW_CUT_HZ = 0.7;
+const DEFAULT_HIGH_CUT_HZ = 3.5;
+const DEFAULT_FILTER_ORDER = 4;
+const ADAPTIVE_FILTER_ORDER = 2;
+
+function debugLog(message: string, ...args: unknown[]): void {
+  if (PPG_DEBUG) {
+    console.log(message, ...args);
+  }
+}
+
+function debugWarn(message: string, ...args: unknown[]): void {
+  if (PPG_DEBUG) {
+    console.warn(message, ...args);
+  }
+}
 
 export type PPGStatus = 'idle' | 'initializing' | 'capturing' | 'error';
 
 export interface PPGCallbacks {
   onIBI?: (sample: IBISample) => void;
+  onHeartRateEstimate?: (estimate: HeartRateEstimate) => void;
   onRawSignal?: (value: number, timestamp: number) => void;
   onQualityChange?: (quality: number) => void;
   onError?: (error: Error) => void;
@@ -74,8 +99,8 @@ class PPGService {
   // Adaptive bandpass state
   private adaptiveFilterFrameCount: number = 0;
   private recentIBIsMs: number[] = []; // Recent IBI values for adaptive filter
-  private currentLowCut: number = 0.7;
-  private currentHighCut: number = 3.5;
+  private currentLowCut: number = DEFAULT_LOW_CUT_HZ;
+  private currentHighCut: number = DEFAULT_HIGH_CUT_HZ;
 
   // Configuration
   private readonly SAMPLE_RATE = 30; // fps
@@ -89,7 +114,12 @@ class PPGService {
     // 4th-order Butterworth bandpass 0.7-3.5 Hz (42-210 BPM)
     // Higher order = sharper rolloff = better rejection of baseline drift
     // Narrower band = less noise, more focused on cardiac frequency
-    this.bandpassFilter = createBandpassFilter(0.7, 3.5, this.SAMPLE_RATE, 4);
+    this.bandpassFilter = createBandpassFilter(
+      DEFAULT_LOW_CUT_HZ,
+      DEFAULT_HIGH_CUT_HZ,
+      this.SAMPLE_RATE,
+      DEFAULT_FILTER_ORDER
+    );
     this.peakDetector = new StreamingPeakDetector({
       minPeakDistance: this.MIN_PEAK_DISTANCE_SAMPLES,
       thresholdFactor: 0.3,
@@ -127,11 +157,11 @@ class PPGService {
         if (available) {
           await Torch.enable();
           this.torchEnabled = true;
-          console.log('PPG: Torch enabled via native Capacitor plugin');
+          debugLog('PPG: Torch enabled via native Capacitor plugin');
           return;
         }
       } catch (e) {
-        console.warn('PPG: Native torch plugin failed:', e);
+        debugWarn('PPG: Native torch plugin failed:', e);
       }
     }
 
@@ -147,7 +177,7 @@ class PPGService {
               advanced: [{ torch: true } as MediaTrackConstraintSet],
             });
             this.torchEnabled = true;
-            console.log('PPG: Torch enabled via MediaStream constraint');
+            debugLog('PPG: Torch enabled via MediaStream constraint');
             return;
           }
         } catch {
@@ -160,7 +190,7 @@ class PPGService {
             advanced: [{ torch: true } as MediaTrackConstraintSet],
           });
           this.torchEnabled = true;
-          console.log('PPG: Torch enabled via blind constraint attempt');
+          debugLog('PPG: Torch enabled via blind constraint attempt');
           return;
         } catch {
           // Truly not available
@@ -168,7 +198,7 @@ class PPGService {
       }
     }
 
-    console.warn('PPG: Torch/flashlight not available on this device');
+    debugWarn('PPG: Torch/flashlight not available on this device');
   }
 
   /**
@@ -187,7 +217,9 @@ class PPGService {
     this.torchEnabled = false;
   }
 
-  public async start(callbacksOrOptions?: PPGCallbacks | PPGStartOptions): Promise<void> {
+  public async start(
+    callbacksOrOptions?: PPGCallbacks | PPGStartOptions,
+  ): Promise<SensorStartResult> {
     // Support both old signature (callbacks only) and new options object
     let options: PPGStartOptions = {};
     if (callbacksOrOptions) {
@@ -202,7 +234,7 @@ class PPGService {
     const useTorch = options.torchEnabled !== false; // default true
 
     if (this.status === 'capturing' || this.status === 'initializing') {
-      return;
+      return { ok: true };
     }
 
     this.setStatus('initializing');
@@ -255,81 +287,133 @@ class PPGService {
 
       this.setStatus('error');
       this.callbacks.onError?.(new Error(message));
-      return;
+
+      let reason: SensorStartFailureReason = 'start-failed';
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        reason = 'permission-denied';
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        reason = 'unavailable';
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        reason = 'device-busy';
+      }
+      return sensorStartFailure(reason, message);
     }
 
-    // Create video element — must be added to DOM for Android WebView compatibility
-    this.video = document.createElement('video');
-    this.video.srcObject = this.stream;
-    this.video.playsInline = true;
-    this.video.muted = true;
-    this.video.setAttribute('autoplay', '');
-    this.video.setAttribute('playsinline', '');
-    this.video.setAttribute('webkit-playsinline', '');
-    // Hide but keep in DOM — some Android WebViews require this for frame capture
-    this.video.style.position = 'fixed';
-    this.video.style.top = '-9999px';
-    this.video.style.left = '-9999px';
-    this.video.style.width = '1px';
-    this.video.style.height = '1px';
-    this.video.style.opacity = '0.01';
-    document.body.appendChild(this.video);
+    try {
+      // Create video element — must be added to DOM for Android WebView compatibility
+      this.video = document.createElement('video');
+      this.video.srcObject = this.stream;
+      this.video.playsInline = true;
+      this.video.muted = true;
+      this.video.setAttribute('autoplay', '');
+      this.video.setAttribute('playsinline', '');
+      this.video.setAttribute('webkit-playsinline', '');
+      // Hide but keep in DOM — some Android WebViews require this for frame capture
+      this.video.style.position = 'fixed';
+      this.video.style.top = '-9999px';
+      this.video.style.left = '-9999px';
+      this.video.style.width = '1px';
+      this.video.style.height = '1px';
+      this.video.style.opacity = '0.01';
+      document.body.appendChild(this.video);
 
-    // Reset processing state
-    this.rawBuffer = [];
-    this.normBuffer = [];
-    this.lastRawValue = -1;
-    this.lastPeakTimestamp = null;
-    this.frameCount = 0;
-    this.lastFrameTime = 0;
-    this.adaptiveFilterFrameCount = 0;
-    this.recentIBIsMs = [];
-    this.currentLowCut = 0.7;
-    this.currentHighCut = 3.5;
-    this.bandpassFilter.reset();
-    this.peakDetector.reset();
+      // Reset processing state
+      this.rawBuffer = [];
+      this.normBuffer = [];
+      this.lastRawValue = -1;
+      this.lastPeakTimestamp = null;
+      this.frameCount = 0;
+      this.lastFrameTime = 0;
+      this.adaptiveFilterFrameCount = 0;
+      this.recentIBIsMs = [];
+      this.currentLowCut = DEFAULT_LOW_CUT_HZ;
+      this.currentHighCut = DEFAULT_HIGH_CUT_HZ;
+      this.bandpassFilter.reset();
+      this.peakDetector.reset();
 
-    // Start video playback — must happen before torch and canvas setup
-    await this.video.play();
-    console.log('PPG: Video playing, readyState:', this.video.readyState);
+      // Start video playback — must happen before torch and canvas setup
+      await this.video.play();
+      debugLog('PPG: Video playing, readyState:', this.video.readyState);
 
-    // Wait for video to be ready with actual dimensions (timeout after 5s)
-    await new Promise<void>((resolve) => {
-      let attempts = 0;
-      const checkReady = () => {
-        attempts++;
-        if (this.video && this.video.videoWidth > 0 && this.video.videoHeight > 0) {
-          console.log(`PPG: Video ready — ${this.video.videoWidth}x${this.video.videoHeight}`);
-          resolve();
-        } else if (attempts > 150) {
-          // Timeout after ~5 seconds, use defaults
-          console.warn('PPG: Video dimension timeout, using defaults 320x240');
-          resolve();
-        } else {
-          requestAnimationFrame(checkReady);
-        }
-      };
-      checkReady();
-    });
+      // Wait for video to be ready with actual dimensions (timeout after 5s)
+      await new Promise<void>((resolve) => {
+        let attempts = 0;
+        const checkReady = () => {
+          attempts++;
+          if (!this.video || this.status !== 'initializing') {
+            resolve();
+          } else if (this.video.videoWidth > 0 && this.video.videoHeight > 0) {
+            debugLog(`PPG: Video ready — ${this.video.videoWidth}x${this.video.videoHeight}`);
+            resolve();
+          } else if (attempts > 150) {
+            // Timeout after ~5 seconds, use defaults
+            debugWarn('PPG: Video dimension timeout, using defaults 320x240');
+            resolve();
+          } else {
+            requestAnimationFrame(checkReady);
+          }
+        };
+        checkReady();
+      });
 
-    // Create canvas matching actual video dimensions (not hardcoded)
-    const vw = this.video.videoWidth || 320;
-    const vh = this.video.videoHeight || 240;
-    console.log(`PPG: Canvas size ${vw}x${vh}`);
-    this.canvas = document.createElement('canvas');
-    this.canvas.width = vw;
-    this.canvas.height = vh;
-    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+      if (!this.video || this.getStatus() !== 'initializing') {
+        return sensorStartFailure('start-failed', 'Camera startup was cancelled.');
+      }
 
-    // Enable torch/flashlight for PPG illumination (unless user disabled it)
-    if (useTorch) {
-      await this.enableTorch();
-    } else {
-      console.log('PPG: Torch disabled by user');
+      // Create canvas matching actual video dimensions (not hardcoded)
+      const vw = this.video.videoWidth || 320;
+      const vh = this.video.videoHeight || 240;
+      debugLog(`PPG: Canvas size ${vw}x${vh}`);
+      this.canvas = document.createElement('canvas');
+      this.canvas.width = vw;
+      this.canvas.height = vh;
+      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+
+      // Enable torch/flashlight for PPG illumination (unless user disabled it)
+      if (useTorch) {
+        await this.enableTorch();
+      } else {
+        debugLog('PPG: Torch disabled by user');
+      }
+
+      this.setStatus('capturing');
+      this.scheduleNextFrame();
+      return { ok: true };
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+
+      await this.cleanupCaptureResources();
+
+      this.setStatus('error');
+      const message = `Unable to start camera preview. ${error.message}`;
+      this.callbacks.onError?.(new Error(message));
+      return sensorStartFailure('start-failed', message);
+    }
+  }
+
+  private async cleanupCaptureResources(): Promise<void> {
+    if (this.animFrameId !== null) {
+      cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = null;
     }
 
-    this.setStatus('capturing');
-    this.scheduleNextFrame();
+    await this.disableTorch();
+
+    if (this.stream) {
+      this.stream.getTracks().forEach((track) => track.stop());
+      this.stream = null;
+    }
+
+    if (this.video) {
+      this.video.srcObject = null;
+      if (this.video.parentNode) {
+        this.video.parentNode.removeChild(this.video);
+      }
+      this.video = null;
+    }
+
+    this.canvas = null;
+    this.ctx = null;
   }
 
   private scheduleNextFrame(): void {
@@ -391,7 +475,9 @@ class PPGService {
 
     // Debug logging every 60 frames (~2 seconds)
     if (this.frameCount % 60 === 0 && this.frameCount > 0) {
-      console.log(`PPG signal: raw=${value.toFixed(1)} filtered=${filtered.toFixed(4)} normalized=${normalized.toFixed(3)} bufLen=${this.rawBuffer.length}`);
+      debugLog(
+        `PPG signal: raw=${value.toFixed(1)} filtered=${filtered.toFixed(4)} normalized=${normalized.toFixed(3)} bufLen=${this.rawBuffer.length}`
+      );
     }
 
     // Feed the normalized signal to the streaming peak detector
@@ -412,6 +498,7 @@ class PPGService {
             timestamp: peakTimestamp,
             interval,
             quality: this.signalQuality,
+            provenance: { source: 'ppg', method: 'peak-detected' },
           };
           this.callbacks.onIBI?.(ibiSample);
 
@@ -436,7 +523,7 @@ class PPGService {
    *
    * Called every 5 seconds as a fallback when peak detection hasn't found enough beats.
    */
-  private estimateHRFromAutocorrelation(): IBISample | null {
+  private estimateHRFromAutocorrelation(): HeartRateEstimate | null {
     // Need at least 5 seconds of data (150 samples at 30fps)
     if (this.rawBuffer.length < 150) return null;
 
@@ -482,7 +569,7 @@ class PPGService {
     // Only accept if autocorrelation is strong enough (> 0.3)
     if (bestCorr < 0.3 || bestLag === 0) {
       if (this.frameCount % 150 === 0) {
-        console.log(`PPG autocorr: bestCorr=${bestCorr.toFixed(3)} bestLag=${bestLag} — too weak`);
+        debugLog(`PPG autocorr: bestCorr=${bestCorr.toFixed(3)} bestLag=${bestLag} — too weak`);
       }
       return null;
     }
@@ -490,23 +577,20 @@ class PPGService {
     const intervalMs = (bestLag / this.SAMPLE_RATE) * 1000;
     const hr = 60000 / intervalMs;
 
-    console.log(`PPG autocorr: HR=${hr.toFixed(1)} BPM (lag=${bestLag}, corr=${bestCorr.toFixed(3)}, interval=${intervalMs.toFixed(0)}ms)`);
+    debugLog(
+      `PPG autocorr: HR=${hr.toFixed(1)} BPM (lag=${bestLag}, corr=${bestCorr.toFixed(3)}, interval=${intervalMs.toFixed(0)}ms)`
+    );
 
-    // Emit as an IBI sample
-    const ibiSample: IBISample = {
+    const estimate: HeartRateEstimate = {
       timestamp: performance.now(),
-      interval: intervalMs,
+      bpm: hr,
       quality: Math.min(1, bestCorr), // correlation strength as quality
+      source: 'ppg',
+      method: 'autocorrelation-estimate',
     };
-    this.callbacks.onIBI?.(ibiSample);
+    this.callbacks.onHeartRateEstimate?.(estimate);
 
-    // Track for adaptive filter
-    this.recentIBIsMs.push(intervalMs);
-    if (this.recentIBIsMs.length > 10) {
-      this.recentIBIsMs.shift();
-    }
-
-    return ibiSample;
+    return estimate;
   }
 
   /**
@@ -519,14 +603,14 @@ class PPGService {
   private updateAdaptiveFilter(): void {
     if (this.recentIBIsMs.length < 3) {
       // Not enough data — revert to defaults if we drifted
-      if (this.currentLowCut !== 0.7 || this.currentHighCut !== 3.5) {
-        this.currentLowCut = 0.5;
-        this.currentHighCut = 4.0;
+      if (this.currentLowCut !== DEFAULT_LOW_CUT_HZ || this.currentHighCut !== DEFAULT_HIGH_CUT_HZ) {
+        this.currentLowCut = DEFAULT_LOW_CUT_HZ;
+        this.currentHighCut = DEFAULT_HIGH_CUT_HZ;
         this.bandpassFilter = createBandpassFilter(
           this.currentLowCut,
           this.currentHighCut,
           this.SAMPLE_RATE,
-          2,
+          DEFAULT_FILTER_ORDER,
         );
       }
       return;
@@ -538,8 +622,8 @@ class PPGService {
     const hrHz = 1000 / meanIBI; // convert ms to Hz
 
     // Adjust cutoffs: low = HR * 0.5, high = HR * 2.5, clamped to [0.7, 3.5]
-    const newLowCut = Math.max(0.7, hrHz * 0.5);
-    const newHighCut = Math.min(3.5, hrHz * 2.5);
+    const newLowCut = Math.max(DEFAULT_LOW_CUT_HZ, hrHz * 0.5);
+    const newHighCut = Math.min(DEFAULT_HIGH_CUT_HZ, hrHz * 2.5);
 
     // Only rebuild if cutoffs changed meaningfully (>0.05 Hz)
     if (
@@ -552,7 +636,7 @@ class PPGService {
         this.currentLowCut,
         this.currentHighCut,
         this.SAMPLE_RATE,
-        2,
+        ADAPTIVE_FILTER_ORDER,
       );
     }
   }
@@ -603,22 +687,21 @@ class PPGService {
 
     // Debug: log pixel values every 2 seconds (60 frames at 30fps)
     if (this.frameCount > 0 && this.frameCount % 60 === 0) {
-      console.log(`PPG frame ${this.frameCount}: R=${redAvg.toFixed(1)} G=${greenAvg.toFixed(1)} readyState=${this.video.readyState} torch=${this.torchEnabled}`);
+      debugLog(
+        `PPG frame ${this.frameCount}: R=${redAvg.toFixed(1)} G=${greenAvg.toFixed(1)} readyState=${this.video.readyState} torch=${this.torchEnabled}`
+      );
     }
 
     // Use whichever channel has a stronger, non-saturated signal.
     // With flash on finger: red penetrates tissue best and saturates less.
     // Green channel can saturate to 0 on some Android cameras when flash is on.
     // Pick the channel that's not at 0 and not at 255 (saturated).
-    let primarySignal = greenAvg;
-    if (greenAvg < 1 || greenAvg > 254) {
-      primarySignal = redAvg; // green saturated, use red
-    } else if (redAvg < 1 || redAvg > 254) {
-      primarySignal = greenAvg; // red saturated, use green
-    } else {
-      // Neither saturated — use red (better tissue penetration with flash)
-      primarySignal = redAvg;
-    }
+    const primarySignal =
+      greenAvg < 1 || greenAvg > 254
+        ? redAvg
+        : redAvg < 1 || redAvg > 254
+          ? greenAvg
+          : redAvg;
     this.processSignalSample(primarySignal, timestamp);
 
     this.frameCount++;
@@ -701,8 +784,8 @@ class PPGService {
     this.lastFrameTime = 0;
     this.adaptiveFilterFrameCount = 0;
     this.recentIBIsMs = [];
-    this.currentLowCut = 0.7;
-    this.currentHighCut = 3.5;
+    this.currentLowCut = DEFAULT_LOW_CUT_HZ;
+    this.currentHighCut = DEFAULT_HIGH_CUT_HZ;
     this.signalQuality = 0;
     this.torchEnabled = false;
     this.bandpassFilter.reset();

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { scgService } from '@/services/scgService';
+import { resolveMotionInterval, scgService } from '@/services/scgService';
 import type { SCGStatus } from '@/services/scgService';
-import type { IBISample } from '@breath-in-flow/shared';
+import type { HeartRateEstimate, IBISample } from '@breath-in-flow/shared';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -15,11 +15,41 @@ function dispatchMotionEvent(
   acceleration: { x: number; y: number; z: number },
   interval: number = 10,
 ): void {
+  window.dispatchEvent(makeMotionEvent(acceleration, interval));
+}
+
+function makeMotionEvent(
+  acceleration: { x: number; y: number; z: number },
+  interval: number = 10,
+): DeviceMotionEvent {
   const event = new Event('devicemotion') as DeviceMotionEvent;
   Object.defineProperty(event, 'accelerationIncludingGravity', { value: acceleration });
   Object.defineProperty(event, 'acceleration', { value: acceleration });
   Object.defineProperty(event, 'interval', { value: interval });
-  window.dispatchEvent(event);
+  return event;
+}
+
+type TestSCGService = {
+  axisCalibrated: boolean;
+  detectedPeakSampleIndices: number[];
+  elapsedMs: number;
+  estimateHRFromAutocorrelation: () => HeartRateEstimate | null;
+  filteredHistory: number[];
+  handleMotion: (event: DeviceMotionEvent) => void;
+  hpFilter: { filter: (value: number) => number } | null;
+  lastIntervalMs: number;
+  measurementStartMonotonicMs: number;
+  lpFilter: { filter: (value: number) => number } | null;
+  peakDetector: { addSample: (value: number, timestamp?: number) => { index: number; amplitude: number; timestamp?: number } | null } | null;
+  rateEstimated: boolean;
+  sampleRateHz: number;
+};
+
+function generateSineWave(sampleRateHz: number, durationSeconds: number, frequencyHz: number): number[] {
+  const totalSamples = Math.round(sampleRateHz * durationSeconds);
+  return Array.from({ length: totalSamples }, (_, i) => (
+    Math.sin((2 * Math.PI * frequencyHz * i) / sampleRateHz)
+  ));
 }
 
 /**
@@ -64,6 +94,7 @@ function generateSCGSequence(
 describe('scgService', () => {
   const statusChanges: SCGStatus[] = [];
   const ibiSamples: IBISample[] = [];
+  const heartRateEstimates: HeartRateEstimate[] = [];
   const qualityChanges: number[] = [];
   const errors: Error[] = [];
 
@@ -73,12 +104,14 @@ describe('scgService', () => {
 
     statusChanges.length = 0;
     ibiSamples.length = 0;
+    heartRateEstimates.length = 0;
     qualityChanges.length = 0;
     errors.length = 0;
 
     scgService.setCallbacks({
       onStatusChange: (s) => statusChanges.push(s),
       onIBI: (sample) => ibiSamples.push(sample),
+      onHeartRateEstimate: (estimate) => heartRateEstimates.push(estimate),
       onQualityChange: (q) => qualityChanges.push(q),
       onError: (e) => errors.push(e),
     });
@@ -98,11 +131,12 @@ describe('scgService', () => {
     });
 
     it('transitions idle → initializing → capturing on start()', async () => {
-      await scgService.start();
+      const result = await scgService.start();
       // 'initializing' is set synchronously then 'capturing' follows
       expect(statusChanges).toContain('initializing');
       expect(statusChanges).toContain('capturing');
       expect(scgService.getStatus()).toBe('capturing');
+      expect(result).toEqual({ ok: true });
     });
 
     it('transitions capturing → idle on stop()', async () => {
@@ -140,11 +174,12 @@ describe('scgService', () => {
       (DeviceMotionEvent as unknown as Record<string, unknown>)['requestPermission'] =
         requestPermission;
 
-      await scgService.start();
+      const result = await scgService.start();
 
       expect(scgService.getStatus()).toBe('error');
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toMatch(/denied/i);
+      expect(result).toMatchObject({ ok: false, reason: 'permission-denied' });
     });
 
     it('emits error when requestPermission rejects', async () => {
@@ -262,9 +297,58 @@ describe('scgService', () => {
       }
     });
 
-    it('uses 5 Hz high-pass cutoff — low-frequency drift does not prevent IBI detection', async () => {
-      // Feed a signal where a 2 Hz respiratory drift is added to the cardiac spikes.
-      // With a 5 Hz HP filter the respiratory component should be attenuated enough
+    it('uses the peak detector candidate time and index for emitted IBIs', () => {
+      const service = scgService as unknown as TestSCGService;
+      const identityFilter = { filter: (value: number) => value };
+      const peakDetector = {
+        addSample: vi.fn()
+          .mockReturnValueOnce({ index: 10, amplitude: 1, timestamp: 1000 })
+          .mockReturnValueOnce({ index: 20, amplitude: 1, timestamp: 1800 }),
+      };
+
+      service.axisCalibrated = true;
+      service.rateEstimated = true;
+      service.sampleRateHz = 100;
+      service.lastIntervalMs = 10;
+      service.measurementStartMonotonicMs = 10_000;
+      service.hpFilter = identityFilter;
+      service.lpFilter = identityFilter;
+      service.peakDetector = peakDetector;
+
+      service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 1 }, 10));
+      service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 0.5 }, 10));
+
+      expect(ibiSamples).toHaveLength(1);
+      expect(ibiSamples[0]).toMatchObject({
+        timestamp: 11_800,
+        interval: 800,
+        provenance: { source: 'scg', method: 'peak-detected' },
+      });
+      expect(service.detectedPeakSampleIndices).toEqual([10, 20]);
+    });
+
+    it('reports autocorrelation as a heart-rate estimate without fabricating IBIs', () => {
+      const service = scgService as unknown as TestSCGService;
+
+      service.sampleRateHz = 100;
+      service.elapsedMs = 3000;
+      service.measurementStartMonotonicMs = 10_000;
+      service.filteredHistory = generateSineWave(100, 3, 1);
+      const result = service.estimateHRFromAutocorrelation();
+
+      expect(result).toMatchObject({
+        timestamp: 13_000,
+        bpm: 60,
+        source: 'scg',
+        method: 'autocorrelation-estimate',
+      });
+      expect(heartRateEstimates).toEqual([result]);
+      expect(ibiSamples).toHaveLength(0);
+    });
+
+    it('uses the high-pass cutoff so low-frequency drift does not prevent IBI detection', async () => {
+      // Feed a signal where a 0.3 Hz respiratory drift is added to the cardiac spikes.
+      // With the HP filter the respiratory component should be attenuated enough
       // that heartbeats are still detected.
       await scgService.start();
 
@@ -433,6 +517,12 @@ describe('scgService', () => {
   // ─── 8. Sample rate handling ──────────────────────────────────────────────
 
   describe('sample rate detection', () => {
+    it('uses a valid native event interval instead of a hard-coded frame rate', () => {
+      expect(resolveMotionInterval(25, 10)).toBe(25);
+      expect(resolveMotionInterval(0, 10)).toBe(10);
+      expect(resolveMotionInterval(undefined, 10)).toBe(10);
+    });
+
     it('uses the event.interval field to detect sample rate', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 

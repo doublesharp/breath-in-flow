@@ -24,12 +24,14 @@ import {
   StreamingPeakDetector,
   assessIBIQuality,
   standardDeviation,
+  type HeartRateEstimate,
   type IBISample,
 } from '@breath-in-flow/shared';
 
 import type { SOSFilter } from '@breath-in-flow/shared';
 import { Capacitor } from '@capacitor/core';
 import { Motion } from '@capacitor/motion';
+import { sensorStartFailure, type SensorStartResult } from './sensorTypes';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -37,6 +39,7 @@ export type SCGStatus = 'idle' | 'initializing' | 'capturing' | 'error';
 
 export interface SCGCallbacks {
   onIBI?: (sample: IBISample) => void;
+  onHeartRateEstimate?: (estimate: HeartRateEstimate) => void;
   onRawSignal?: (value: number, timestamp: number) => void;
   onQualityChange?: (quality: number) => void;
   onError?: (error: Error) => void;
@@ -96,6 +99,22 @@ const MAX_RECENT_IBIS = 20;
 /** Warn if the detected sample rate is below this value. */
 const MIN_RECOMMENDED_SAMPLE_RATE_HZ = 50;
 
+const SCG_DEBUG = import.meta.env.DEV && import.meta.env.VITE_SCG_DEBUG === 'true';
+
+export function resolveMotionInterval(
+  eventIntervalMs: number | undefined,
+  fallbackIntervalMs: number,
+): number {
+  if (
+    typeof eventIntervalMs === 'number' &&
+    Number.isFinite(eventIntervalMs) &&
+    eventIntervalMs > 0
+  ) {
+    return eventIntervalMs;
+  }
+  return fallbackIntervalMs;
+}
+
 // ─── Service implementation ───────────────────────────────────────────────────
 
 class SCGService {
@@ -116,6 +135,7 @@ class SCGService {
 
   // Synthetic elapsed-time clock (ms since start(), advanced by event.interval)
   private elapsedMs: number = 0;
+  private measurementStartMonotonicMs: number = 0;
 
   // Hilbert FIR coefficients (computed once per sample-rate change)
   private hilbertCoeffs: number[] = [];
@@ -169,8 +189,8 @@ class SCGService {
     return this.currentQuality;
   }
 
-  public async start(): Promise<void> {
-    if (this.status === 'capturing') return;
+  public async start(): Promise<SensorStartResult> {
+    if (this.status === 'capturing') return { ok: true };
 
     this.setStatus('initializing');
     this.resetInternals();
@@ -178,19 +198,19 @@ class SCGService {
     // Strategy 1: Use Capacitor Motion plugin on native (more reliable than DeviceMotionEvent in WebView)
     if (Capacitor.isNativePlatform()) {
       try {
-        console.log('SCG: Using Capacitor Motion plugin (native)');
+        this.debug('SCG: Using Capacitor Motion plugin (native)');
         this.capacitorListenerId = await Motion.addListener('accel', (event) => {
           // Convert Capacitor motion event to DeviceMotionEvent-like format
           const fakeEvent = {
             acceleration: event.acceleration,
             accelerationIncludingGravity: event.accelerationIncludingGravity,
-            interval: 16, // Capacitor doesn't provide interval, assume ~60Hz
+            interval: resolveMotionInterval(event.interval, this.lastIntervalMs),
           } as DeviceMotionEvent;
           this.handleMotion(fakeEvent);
         });
         this.setStatus('capturing');
-        console.log('SCG: Capacitor Motion listener added, status: capturing');
-        return;
+        this.debug('SCG: Capacitor Motion listener added, status: capturing');
+        return { ok: true };
       } catch (err) {
         console.warn('SCG: Capacitor Motion failed, falling back to web API:', err);
       }
@@ -198,8 +218,9 @@ class SCGService {
 
     // Strategy 2: Web DeviceMotionEvent API (desktop browsers, some WebViews)
     if (typeof window === 'undefined' || !('DeviceMotionEvent' in window)) {
-      this.emitError(new Error('Motion sensor not available. This device may not have an accelerometer.'));
-      return;
+      const message = 'Motion sensor not available. This device may not have an accelerometer.';
+      this.emitError(new Error(message));
+      return sensorStartFailure('unavailable', message);
     }
 
     // iOS 13+ requires explicit permission
@@ -212,23 +233,25 @@ class SCGService {
           DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> }
         ).requestPermission();
         if (permission !== 'granted') {
-          this.emitError(
-            new Error('Motion sensor permission denied. Please enable in iOS Settings > Privacy > Motion & Fitness.'),
-          );
-          return;
+          const message =
+            'Motion sensor permission denied. Please enable in iOS Settings > Privacy > Motion & Fitness.';
+          this.emitError(new Error(message));
+          return sensorStartFailure('permission-denied', message);
         }
       } catch (err) {
-        this.emitError(
-          new Error(`Failed to request motion permission: ${err instanceof Error ? err.message : String(err)}`),
-        );
-        return;
+        const message = `Failed to request motion permission: ${
+          err instanceof Error ? err.message : String(err)
+        }`;
+        this.emitError(new Error(message));
+        return sensorStartFailure('start-failed', message);
       }
     }
 
-    console.log('SCG: Using web DeviceMotionEvent API');
+    this.debug('SCG: Using web DeviceMotionEvent API');
     window.addEventListener('devicemotion', this.boundHandleMotion);
     this.setStatus('capturing');
-    console.log('SCG: Status set to capturing');
+    this.debug('SCG: Status set to capturing');
+    return { ok: true };
   }
 
   public stop(): void {
@@ -253,13 +276,12 @@ class SCGService {
     if (this.sampleCount < 3) {
       const acc = event.accelerationIncludingGravity || event.acceleration;
       const mag = acc ? Math.sqrt((acc.x ?? 0) ** 2 + (acc.y ?? 0) ** 2 + (acc.z ?? 0) ** 2) : 0;
-      console.log(`SCG event #${this.sampleCount}: x=${acc?.x?.toFixed(3)} y=${acc?.y?.toFixed(3)} z=${acc?.z?.toFixed(3)} mag=${mag.toFixed(3)} interval=${event.interval}`);
+      this.debug(`SCG event #${this.sampleCount}: x=${acc?.x?.toFixed(3)} y=${acc?.y?.toFixed(3)} z=${acc?.z?.toFixed(3)} mag=${mag.toFixed(3)} interval=${event.interval}`);
     }
 
     // ── 1. Advance synthetic clock ──
     // Use event.interval when available; fall back to the last known interval.
-    const intervalMs =
-      event.interval && event.interval > 0 ? event.interval : this.lastIntervalMs;
+    const intervalMs = resolveMotionInterval(event.interval, this.lastIntervalMs);
     this.lastIntervalMs = intervalMs;
     this.elapsedMs += intervalMs;
     this.sampleCount++;
@@ -284,7 +306,7 @@ class SCGService {
     if (z === null) return;
 
     // Emit raw (unfiltered) Z-axis for external visualization
-    this.callbacks.onRawSignal?.(z, this.elapsedMs);
+    this.callbacks.onRawSignal?.(z, this.toMonotonicTimestamp(this.elapsedMs));
 
     // Ensure filters exist (lazy init in case rate wasn't known at start)
     if (!this.hpFilter || !this.lpFilter || !this.peakDetector) {
@@ -319,17 +341,18 @@ class SCGService {
     const peak = this.peakDetector!.addSample(envelope, this.elapsedMs);
 
     if (peak) {
-      const currentSampleIndex = this.sampleIndex;
+      const peakSampleIndex = peak.index;
+      const peakElapsedMs = peak.timestamp ?? this.elapsedMs;
 
       // Template validation: only apply after we have a template
-      const accepted = this.validatePeakWithTemplate(currentSampleIndex);
+      const accepted = this.validatePeakWithTemplate(peakSampleIndex);
 
       if (accepted) {
-        this.lastPeakDetectionElapsedMs = this.elapsedMs;
-        this.detectedPeakSampleIndices.push(currentSampleIndex);
+        this.lastPeakDetectionElapsedMs = peakElapsedMs;
+        this.detectedPeakSampleIndices.push(peakSampleIndex);
 
         if (this.lastPeakElapsedMs !== null) {
-          const ibi = this.elapsedMs - this.lastPeakElapsedMs;
+          const ibi = peakElapsedMs - this.lastPeakElapsedMs;
 
           // Physiological sanity check: 200 BPM (300 ms) to 30 BPM (2000 ms)
           // Tighter range for SCG: 400-1500ms (40-150 BPM) to reduce motion artifacts
@@ -343,15 +366,16 @@ class SCGService {
             this.updateQuality(quality);
 
             const sample: IBISample = {
-              timestamp: this.elapsedMs,
+              timestamp: this.toMonotonicTimestamp(peakElapsedMs),
               interval: ibi,
               quality,
+              provenance: { source: 'scg', method: 'peak-detected' },
             };
             this.callbacks.onIBI?.(sample);
           }
         }
 
-        this.lastPeakElapsedMs = this.elapsedMs;
+        this.lastPeakElapsedMs = peakElapsedMs;
 
         // Build/update template after enough initial peaks
         const totalPeaks = this.detectedPeakSampleIndices.length;
@@ -365,12 +389,14 @@ class SCGService {
       }
     }
 
-    // ── 6b. Autocorrelation fallback — every 5 seconds if no peaks found ──
+    // ── 6b. Autocorrelation fallback — every 3 seconds if no peaks found ──
     // The quantized 0.1 m/s² accelerometer data may not produce detectable peaks
     // but still contains periodic heartbeat information in the timing of the 0.1 jumps.
-    const autocorrInterval = Math.round(this.sampleRateHz * 3); // Every 3 seconds
-    // Always run autocorrelation — peak detection rarely works with 0.1 m/s² quantized data
-    if (this.sampleCount > 0 && this.sampleCount % autocorrInterval === 0) {
+    const autocorrInterval = Math.max(1, Math.round(this.sampleRateHz * 3)); // Every 3 seconds
+    const peakDetectionStale =
+      this.lastPeakDetectionElapsedMs === null ||
+      this.elapsedMs - this.lastPeakDetectionElapsedMs > NO_PEAK_TIMEOUT_MS;
+    if (this.sampleCount > 0 && this.sampleCount % autocorrInterval === 0 && peakDetectionStale) {
       this.estimateHRFromAutocorrelation();
     }
 
@@ -386,7 +412,7 @@ class SCGService {
       // Debug: log every ~2 seconds with more detail
       if (this.sampleCount % Math.round(this.sampleRateHz * 2) < 1) {
         const env = this.envelopeBuffer.length > 0 ? this.envelopeBuffer[this.envelopeBuffer.length - 1] : 0;
-        console.log(`SCG: fltVar=${filteredVariance.toFixed(4)} flt=${filtered.toFixed(4)} env=${env.toFixed(4)} z=${z.toFixed(1)} peaks=${this.recentIBIs.length} q=${this.currentQuality.toFixed(2)} n=${this.sampleCount}`);
+        this.debug(`SCG: fltVar=${filteredVariance.toFixed(4)} flt=${filtered.toFixed(4)} env=${env.toFixed(4)} z=${z.toFixed(1)} peaks=${this.recentIBIs.length} q=${this.currentQuality.toFixed(2)} n=${this.sampleCount}`);
       }
 
       // TODO: Re-enable motion gate after tuning with real device data
@@ -580,7 +606,7 @@ class SCGService {
         else this.bestAxis = 'z';
 
         this.axisCalibrated = true;
-        console.log(`SCG: Auto-calibrated axis=${this.bestAxis} (avgX=${avgX.toFixed(2)} avgY=${avgY.toFixed(2)} avgZ=${avgZ.toFixed(2)})`);
+        this.debug(`SCG: Auto-calibrated axis=${this.bestAxis} (avgX=${avgX.toFixed(2)} avgY=${avgY.toFixed(2)} avgZ=${avgZ.toFixed(2)})`);
       }
       return z; // Use Z during calibration
     }
@@ -624,8 +650,10 @@ class SCGService {
 
   private rebuildFiltersAndDetector(): void {
     const fs = this.sampleRateHz;
-    this.hpFilter = createHighpassFilter(HP_CUTOFF_HZ, fs);
-    this.lpFilter = createLowpassFilter(LP_CUTOFF_HZ, fs);
+    const lowpassCutoffHz = Math.min(LP_CUTOFF_HZ, fs * 0.45);
+    const highpassCutoffHz = Math.min(HP_CUTOFF_HZ, lowpassCutoffHz * 0.5);
+    this.hpFilter = createHighpassFilter(highpassCutoffHz, fs);
+    this.lpFilter = createLowpassFilter(lowpassCutoffHz, fs);
 
     this.TEMPLATE_WINDOW_SAMPLES = Math.round(fs * 0.1); // ±100 ms
     this.filteredHistoryMaxLen = Math.max(
@@ -641,7 +669,7 @@ class SCGService {
     this.envelopeSmoothSamples = Math.max(1, Math.round(fs * ENVELOPE_SMOOTH_SECONDS));
     this.envelopeBuffer = [];
 
-    const minPeakDistance = Math.floor(fs * (60 / MAX_HEART_RATE_BPM));
+    const minPeakDistance = Math.max(1, Math.floor(fs * (60 / MAX_HEART_RATE_BPM)));
     this.peakDetector = new StreamingPeakDetector({
       minPeakDistance,
       thresholdFactor: 0.3,  // Lower for quantized accelerometer data (0.1 m/s² resolution)
@@ -655,10 +683,10 @@ class SCGService {
    * When the accelerometer resolution is too low for peak detection (0.1 m/s²),
    * the timing of the quantization steps still carries cardiac periodicity.
    */
-  private estimateHRFromAutocorrelation(): void {
+  private estimateHRFromAutocorrelation(): HeartRateEstimate | null {
     // Use the filtered signal history (high-pass removes gravity)
     const data = this.filteredHistory;
-    if (data.length < Math.round(this.sampleRateHz * 3)) return; // need 3+ seconds
+    if (data.length < Math.round(this.sampleRateHz * 3)) return null; // need 3+ seconds
 
     const N = Math.min(data.length, Math.round(this.sampleRateHz * 5));
     const segment = data.slice(-N);
@@ -675,6 +703,7 @@ class SCGService {
     const minLag = Math.round(this.sampleRateHz * 60 / 150); // ~25 at 60Hz
     const maxLag = Math.round(this.sampleRateHz * 60 / 40);  // ~90 at 60Hz
 
+    const correlations: Array<{ lag: number; ncc: number }> = [];
     let bestLag = 0;
     let bestCorr = -Infinity;
 
@@ -688,37 +717,48 @@ class SCGService {
       }
       const denom = Math.sqrt(norm1 * norm2);
       const ncc = denom > 0 ? corr / denom : 0;
+      correlations.push({ lag, ncc });
       if (ncc > bestCorr) {
         bestCorr = ncc;
         bestLag = lag;
       }
     }
 
+    if (bestLag > 0 && bestCorr > 0) {
+      const localPeak = correlations.find((point, index) => {
+        const previous = correlations[index - 1]?.ncc ?? -Infinity;
+        const next = correlations[index + 1]?.ncc ?? -Infinity;
+        return point.ncc >= bestCorr * 0.8 && point.ncc >= previous && point.ncc >= next;
+      });
+      bestLag = localPeak?.lag ?? bestLag;
+      bestCorr = localPeak?.ncc ?? bestCorr;
+    }
+
     const intervalMs = (bestLag / this.sampleRateHz) * 1000;
     const hr = 60000 / intervalMs;
 
-    console.log(`SCG autocorr: corr=${bestCorr.toFixed(3)} lag=${bestLag} HR=${hr.toFixed(1)} BPM interval=${intervalMs.toFixed(0)}ms`);
+    this.debug(`SCG autocorr: corr=${bestCorr.toFixed(3)} lag=${bestLag} HR=${hr.toFixed(1)} BPM interval=${intervalMs.toFixed(0)}ms`);
 
-    if (bestCorr < 0.15 || bestLag === 0) return; // too weak
-
-    // Emit multiple IBIs to fill the HR chart — one per estimated heartbeat
-    // in the autocorrelation window. This gives ~5 data points per 5-second run.
-    const beatsInWindow = Math.round(5000 / intervalMs);
-    const quality = Math.min(1, bestCorr);
-    for (let i = 0; i < beatsInWindow; i++) {
-      const sample: IBISample = {
-        timestamp: this.elapsedMs - (beatsInWindow - 1 - i) * intervalMs,
-        interval: intervalMs,
-        quality,
-      };
-      this.callbacks.onIBI?.(sample);
+    if (
+      bestCorr < 0.15 ||
+      bestLag === 0 ||
+      !Number.isFinite(intervalMs) ||
+      intervalMs < 400 ||
+      intervalMs > 1500
+    ) {
+      return null;
     }
 
-    this.recentIBIs.push(intervalMs);
-    if (this.recentIBIs.length > 20) this.recentIBIs.shift();
-
-    // Update quality based on correlation strength
+    const estimate: HeartRateEstimate = {
+      timestamp: this.toMonotonicTimestamp(this.elapsedMs),
+      bpm: hr,
+      quality: Math.min(1, bestCorr),
+      source: 'scg',
+      method: 'autocorrelation-estimate',
+    };
+    this.callbacks.onHeartRateEstimate?.(estimate);
     this.updateQuality(Math.min(1, bestCorr * 1.5));
+    return estimate;
   }
 
   private computeQuality(): number {
@@ -767,6 +807,10 @@ class SCGService {
     this.callbacks.onError?.(error);
   }
 
+  private toMonotonicTimestamp(elapsedTimestampMs: number): number {
+    return this.measurementStartMonotonicMs + elapsedTimestampMs;
+  }
+
   private resetInternals(): void {
     this.hpFilter = null;
     this.lpFilter = null;
@@ -780,6 +824,7 @@ class SCGService {
     this.sampleRateHz = DEFAULT_SAMPLE_RATE_HZ;
     this.lastIntervalMs = DEFAULT_INTERVAL_MS;
     this.elapsedMs = 0;
+    this.measurementStartMonotonicMs = performance.now();
     this.lastPeakElapsedMs = null;
     this.lastPeakDetectionElapsedMs = null;
     this.recentIBIs = [];
@@ -795,6 +840,12 @@ class SCGService {
     this.detectedPeakSampleIndices = [];
     this.sampleIndex = 0;
     this.TEMPLATE_WINDOW_SAMPLES = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.1);
+  }
+
+  private debug(message: string): void {
+    if (SCG_DEBUG) {
+      console.log(message);
+    }
   }
 }
 
