@@ -17,8 +17,14 @@ import type { PPGStatus } from '../../src/services/ppgService';
 import type { HeartRateEstimate, IBISample } from '@breath-in-flow/shared';
 
 type TestPPGService = {
+  currentHighCut: number;
+  currentLowCut: number;
+  disableTorch: () => Promise<void>;
   estimateHRFromAutocorrelation: () => HeartRateEstimate | null;
   rawBuffer: number[];
+  recentIBIsMs: number[];
+  torchEnabled: boolean;
+  updateAdaptiveFilter: () => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -1061,6 +1067,39 @@ describe('ppgService', () => {
       // high cut should have moved toward 2.5 (from 3.5)
       expect(highCut).toBeLessThanOrEqual(3.5);
       expect(highCut).toBeGreaterThan(2.0);
+    });
+
+    it('keeps default cutoffs when insufficient data has not drifted', () => {
+      const service = ppgService as unknown as TestPPGService;
+      service.currentLowCut = 0.7;
+      service.currentHighCut = 3.5;
+      service.recentIBIsMs = [];
+
+      service.updateAdaptiveFilter();
+
+      expect(service.currentLowCut).toBe(0.7);
+      expect(service.currentHighCut).toBe(3.5);
+    });
+
+    it('does not rebuild an adaptive filter when calculated cutoffs are unchanged', () => {
+      const service = ppgService as unknown as TestPPGService;
+      service.currentLowCut = 0.7;
+      service.currentHighCut = 2.5;
+      service.recentIBIsMs = [1000, 1000, 1000];
+
+      service.updateAdaptiveFilter();
+
+      expect(service.currentLowCut).toBe(0.7);
+      expect(service.currentHighCut).toBe(2.5);
+    });
+
+    it('clears a web torch flag without calling the native plugin', async () => {
+      const service = ppgService as unknown as TestPPGService;
+      service.torchEnabled = true;
+
+      await service.disableTorch();
+
+      expect(service.torchEnabled).toBe(false);
     });
 
     it('IBI detection still works after adaptive filter update at 60 BPM', () => {

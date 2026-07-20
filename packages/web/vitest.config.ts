@@ -2,6 +2,24 @@ import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
 import { resolve } from 'path';
 
+const sensorServiceThresholds = {
+  lines: 90,
+  branches: 80,
+  functions: 85,
+};
+
+const labComponentThresholds = {
+  statements: 75,
+  lines: 75,
+  branches: 40,
+  functions: 35,
+};
+
+const completeLineAndFunctionThresholds = {
+  lines: 100,
+  functions: 100,
+};
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -33,36 +51,19 @@ export default defineConfig({
         lines: 80,
         branches: 70,
         functions: 75,
-        'src/services/{measurementSession,permissionService,ppgService,scgService,sensorFusion}.ts':
-          {
-            statements: 90,
-            lines: 90,
-            branches: 80,
-            functions: 85,
-            perFile: true,
-          },
-        'src/components/{LabTab,ResonanceAssessment}.vue': {
-          statements: 75,
-          lines: 75,
-          branches: 40,
-          functions: 35,
-          perFile: true,
-        },
-        'src/composables/{useAppLifecycle,useModalIsolation}.ts': {
-          lines: 100,
-          functions: 100,
-          perFile: true,
-        },
-        'src/services/adaptiveMotionGate.ts': {
-          lines: 100,
-          functions: 100,
-          perFile: true,
-        },
-        'src/utils/{hrvAnalysisValidation,measurementTrends,storedRecordValidation}.ts': {
-          lines: 100,
-          functions: 100,
-          perFile: true,
-        },
+        'src/services/measurementSession.ts': sensorServiceThresholds,
+        'src/services/permissionService.ts': sensorServiceThresholds,
+        'src/services/ppgService.ts': sensorServiceThresholds,
+        'src/services/scgService.ts': sensorServiceThresholds,
+        'src/services/sensorFusion.ts': sensorServiceThresholds,
+        'src/components/LabTab.vue': labComponentThresholds,
+        'src/components/ResonanceAssessment.vue': labComponentThresholds,
+        'src/composables/useAppLifecycle.ts': completeLineAndFunctionThresholds,
+        'src/composables/useModalIsolation.ts': completeLineAndFunctionThresholds,
+        'src/services/adaptiveMotionGate.ts': completeLineAndFunctionThresholds,
+        'src/utils/hrvAnalysisValidation.ts': completeLineAndFunctionThresholds,
+        'src/utils/measurementTrends.ts': completeLineAndFunctionThresholds,
+        'src/utils/storedRecordValidation.ts': completeLineAndFunctionThresholds,
       },
     },
   },

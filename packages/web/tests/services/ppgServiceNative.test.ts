@@ -42,4 +42,14 @@ describe('PPG native torch lifecycle', () => {
     expect(nativeMocks.disable).toHaveBeenCalledOnce();
     expect(service.torchEnabled).toBe(false);
   });
+
+  it('leaves torch disabled when the native plugin reports it unavailable', async () => {
+    nativeMocks.isAvailable.mockResolvedValue({ available: false });
+    const service = ppgService as unknown as NativeTorchService;
+
+    await service.enableTorch();
+
+    expect(nativeMocks.enable).not.toHaveBeenCalled();
+    expect(service.torchEnabled).toBe(false);
+  });
 });

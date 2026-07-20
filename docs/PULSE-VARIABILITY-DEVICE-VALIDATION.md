@@ -8,10 +8,10 @@ Passing this matrix establishes product behavior on the tested hardware only. It
 
 ## Supported native versions
 
-| Platform | Project support floor | Current build target        | Release expectation                                                                                                        |
-| -------- | --------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| iOS      | iOS 16.0              | Installed Xcode SDK/runtime | Launch and complete supported flows on iOS 16 and a current supported iOS version                                          |
-| Android  | Android 7.0 / API 24  | Android API 36              | Launch and complete supported flows on API 24 and API 36 hardware, or the nearest available versions with any gap recorded |
+| Platform | Project support floor | Intended build target                                         | Release expectation                                                                                                        |
+| -------- | --------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| iOS      | iOS 16.0              | Xcode 26.2, iOS 26.2 platform, iPhone 16 Pro simulator target | Launch and complete supported flows on iOS 16 and a current supported iOS version                                          |
+| Android  | Android 7.0 / API 24  | Android API 36                                                | Launch and complete supported flows on API 24 and API 36 hardware, or the nearest available versions with any gap recorded |
 
 Camera, flash/torch, and motion sampling remain capability-dependent even on a supported operating-system version. A device that cannot supply a required sensor must receive an actionable unavailable state rather than a false successful measurement.
 
@@ -19,14 +19,14 @@ Camera, flash/torch, and motion sampling remain capability-dependent even on a s
 
 Build and synchronization evidence does not complete any physical-device check below.
 
-| Check                            | Result             | Evidence                                                                                                                                                                     |
-| -------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Capacitor Android/iOS sync       | Passed             | Four native plugins synchronized with no tracked native-project diff.                                                                                                        |
-| Android debug build              | Passed             | Java 21 and Gradle produced `app-debug.apk` (SHA-256 `85e16f7e7bb3f6b86ec4858e112ee232729e933133cf80ef02cd6acd60faeab2`).                                                    |
-| Repository iOS simulator command | Blocked externally | The configured `iPhone 16 Pro` target is not installed.                                                                                                                      |
-| Direct installed-simulator build | Blocked externally | Xcode 26.2 found the installed iPhone 15 Pro/iOS 17.5 simulator, but reported that the iOS 26.2 platform component is not installed and exposed no eligible App destination. |
+| Check                            | Result             | Evidence                                                                                                                                                                                        |
+| -------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Capacitor Android/iOS sync       | Passed             | Four native plugins synchronized with no tracked native-project diff.                                                                                                                           |
+| Android debug build              | Passed             | Java 21 and Gradle produced `app-debug.apk` (SHA-256 `85e16f7e7bb3f6b86ec4858e112ee232729e933133cf80ef02cd6acd60faeab2`).                                                                       |
+| Repository iOS simulator command | Blocked externally | The command targets `iPhone 16 Pro` on the intended iOS 26.2 simulator platform; that target/platform is unavailable locally.                                                                   |
+| Direct installed-simulator build | Blocked externally | The only installed simulator runtime is iOS 17.5, including an iPhone 15 Pro. Xcode 26.2 reports that the iOS 26.2 platform component is not installed and exposes no eligible App destination. |
 
-The iOS rows remain blocked and are not release passes. Install the matching iOS 26.2 platform/runtime (or use an Xcode installation compatible with the available iOS 17.5 simulator), then rerun the repository command with an installed target.
+The iOS rows remain blocked and are not release passes. The intended verification target is an iPhone 16 Pro simulator backed by the iOS 26.2 platform. The current machine instead has only the iOS 17.5 simulator runtime, while Xcode 26.2 is missing its iOS 26.2 platform component. Install that component and target, or use a compatible Xcode/runtime pair and explicitly record the substituted target before rerunning verification.
 
 ## Device matrix
 

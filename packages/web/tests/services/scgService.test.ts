@@ -31,14 +31,21 @@ function makeMotionEvent(
 
 type TestSCGService = {
   axisCalibrated: boolean;
+  bestAxis: 'x' | 'y' | 'z';
+  calibrationSamples: { x: number; y: number; z: number }[];
+  computeQuality: () => number;
   detectedPeakSampleIndices: number[];
   elapsedMs: number;
   estimateHRFromAutocorrelation: () => HeartRateEstimate | null;
+  estimateSampleRateFromWallClock: () => void;
+  extractSignal: (event: DeviceMotionEvent) => number | null;
   filteredHistory: number[];
+  getAccelerationMagnitude: (event: DeviceMotionEvent) => number | null;
   handleMotion: (event: DeviceMotionEvent) => void;
   hpFilter: { filter: (value: number) => number } | null;
   lastIntervalMs: number;
   measurementStartMonotonicMs: number;
+  normalizedCrossCorrelation: (a: number[], b: number[]) => number;
   lpFilter: { filter: (value: number) => number } | null;
   peakDetector: {
     addSample: (
@@ -47,7 +54,10 @@ type TestSCGService = {
     ) => { index: number; amplitude: number; timestamp?: number } | null;
   } | null;
   rateEstimated: boolean;
+  rateEstimationTimestamps: number[];
+  recentIBIs: number[];
   sampleRateHz: number;
+  lastPeakDetectionElapsedMs: number | null;
   motionGate: { addSample: (magnitude: number, timestamp: number) => { accepted: boolean } };
 };
 
@@ -504,6 +514,92 @@ describe('scgService', () => {
         expect(sample.interval).toBeGreaterThanOrEqual(700);
         expect(sample.interval).toBeLessThanOrEqual(1300);
       }
+    });
+  });
+
+  describe('signal guard branches', () => {
+    it('handles invalid and zero-energy template correlation inputs', () => {
+      const service = scgService as unknown as TestSCGService;
+
+      expect(service.normalizedCrossCorrelation([1], [1, 2])).toBe(0);
+      expect(service.normalizedCrossCorrelation([], [])).toBe(0);
+      expect(service.normalizedCrossCorrelation([0, 0], [0, 0])).toBe(0);
+      expect(service.normalizedCrossCorrelation([1, -1], [1, -1])).toBeCloseTo(1);
+    });
+
+    it('extracts each calibrated axis and rejects an event without acceleration', () => {
+      const service = scgService as unknown as TestSCGService;
+      const noAcceleration = {
+        accelerationIncludingGravity: null,
+        acceleration: null,
+      } as DeviceMotionEvent;
+      expect(service.extractSignal(noAcceleration)).toBeNull();
+      expect(service.getAccelerationMagnitude(noAcceleration)).toBeNull();
+
+      const event = {
+        accelerationIncludingGravity: { x: 3, y: 4, z: 12 },
+        acceleration: null,
+      } as DeviceMotionEvent;
+      service.axisCalibrated = true;
+      service.bestAxis = 'x';
+      expect(service.extractSignal(event)).toBe(3);
+      service.bestAxis = 'y';
+      expect(service.extractSignal(event)).toBe(4);
+      service.bestAxis = 'z';
+      expect(service.extractSignal(event)).toBe(12);
+      expect(service.getAccelerationMagnitude(event)).toBe(13);
+    });
+
+    it('calibrates to the dominant X and Y axes', () => {
+      const service = scgService as unknown as TestSCGService;
+      const calibrate = (sample: { x: number; y: number; z: number }) => {
+        service.axisCalibrated = false;
+        service.calibrationSamples = Array.from({ length: 29 }, () => sample);
+        service.extractSignal(makeMotionEvent(sample));
+        return service.bestAxis;
+      };
+
+      expect(calibrate({ x: 9, y: 2, z: 1 })).toBe('x');
+      expect(calibrate({ x: 1, y: 9, z: 2 })).toBe('y');
+    });
+
+    it('uses wall-clock sample-rate fallback only for a valid estimate', () => {
+      const service = scgService as unknown as TestSCGService;
+
+      service.rateEstimationTimestamps = [];
+      service.estimateSampleRateFromWallClock();
+      expect(service.rateEstimated).toBe(false);
+
+      service.rateEstimationTimestamps = [10, 10];
+      service.estimateSampleRateFromWallClock();
+      expect(service.rateEstimated).toBe(false);
+
+      service.rateEstimationTimestamps = [0, 0.5];
+      service.estimateSampleRateFromWallClock();
+      expect(service.rateEstimated).toBe(false);
+
+      service.rateEstimationTimestamps = [0, 10, 20];
+      service.estimateSampleRateFromWallClock();
+      expect(service.rateEstimated).toBe(true);
+      expect(service.sampleRateHz).toBe(100);
+    });
+
+    it('reports zero quality for excessive variance and a stale last peak', () => {
+      const service = scgService as unknown as TestSCGService;
+      service.sampleRateHz = 100;
+      service.filteredHistory = Array.from({ length: 50 }, (_, index) =>
+        index % 2 === 0 ? -10 : 10
+      );
+      expect(service.computeQuality()).toBe(0);
+
+      service.filteredHistory = [];
+      service.lastPeakDetectionElapsedMs = 100;
+      service.elapsedMs = 10_000;
+      expect(service.computeQuality()).toBe(0);
+
+      service.lastPeakDetectionElapsedMs = null;
+      service.recentIBIs = [];
+      expect(service.computeQuality()).toBe(0.5);
     });
   });
 
