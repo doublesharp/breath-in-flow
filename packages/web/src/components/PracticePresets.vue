@@ -4,6 +4,9 @@
     <Teleport to="body">
       <div
         v-if="showDeleteConfirmation"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-preset-title"
         class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         @click.self="showDeleteConfirmation = false"
       >
@@ -26,7 +29,7 @@
               </svg>
             </div>
             <div class="flex-1">
-              <h3 class="text-xl font-bold text-white mb-2">Delete Configuration?</h3>
+              <h3 id="delete-preset-title" class="text-xl font-bold text-white mb-2">Delete Configuration?</h3>
               <p class="text-slate-300 mb-6">
                 Are you sure you want to delete "{{ configToDelete?.name }}"? This action cannot be undone.
               </p>
@@ -122,6 +125,7 @@
               </button>
               <button
                 @click="deleteConfig(config.id!)"
+                :aria-label="`Delete ${config.name}`"
                 class="w-10 h-10 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all flex items-center justify-center"
                 title="Delete configuration"
               >
@@ -160,6 +164,9 @@
               <div class="text-xs text-amber-400 uppercase tracking-wider">Target Sets</div>
               <div class="text-lg font-semibold text-white mt-1">
                 {{ config.targetSets || '∞' }}
+              </div>
+              <div v-if="config.restBetweenSetsSeconds" class="text-xs text-slate-400 mt-0.5">
+                {{ config.restBetweenSetsSeconds }}s rest
               </div>
             </div>
           </div>

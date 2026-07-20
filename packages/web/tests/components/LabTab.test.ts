@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { flushPromises, mount, shallowMount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount, shallowMount } from '@vue/test-utils';
 import LabTab from '@/components/LabTab.vue';
 import { ppgService } from '@/services/ppgService';
 import { sensorFusionService } from '@/services/sensorFusion';
+
+enableAutoUnmount(afterEach);
 
 // Mock all services and storage
 vi.mock('@/services/ppgService', () => ({
@@ -82,6 +84,57 @@ describe('LabTab.vue', () => {
     expect(wrapper.text()).toContain('Quick Check');
     expect(wrapper.text()).toContain('Full Analysis');
     expect(wrapper.text()).toContain('Morning Readiness');
+    expect(wrapper.find('[data-testid="protocol-description-quick-check"]').classes()).not.toContain('truncate');
+  });
+
+  it('defaults to the recommended camera sensor with accessible selection state', () => {
+    const wrapper = shallowMount(LabTab);
+    const cameraButton = wrapper.find('[data-testid="sensor-camera"]');
+
+    expect(cameraButton.text()).toContain('Camera');
+    expect(cameraButton.text()).toContain('Recommended');
+    expect(cameraButton.attributes('aria-pressed')).toBe('true');
+    expect(wrapper.find('[data-testid="sensor-accelerometer"]').text()).toContain('Beta');
+    expect(wrapper.find('[data-testid="sensor-dual"]').text()).toContain('Beta');
+  });
+
+  it('labels the duration control and enforces the selected protocol minimum', async () => {
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    await wrapper.find('[data-testid="protocol-quick-check"]').trigger('click');
+    await flushPromises();
+
+    const range = document.body.querySelector('[data-testid="measurement-duration"]') as HTMLInputElement;
+    expect(range.getAttribute('aria-label')).toBe('Measurement duration');
+    expect(range.min).toBe('120');
+    expect(range.value).toBe('120');
+    expect(range.getAttribute('aria-valuetext')).toBe('2 minutes');
+
+    wrapper.unmount();
+  });
+
+  it('keeps development diagnostics out of normal test and production UI', async () => {
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    (wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring = true;
+    await wrapper.vm.$nextTick();
+
+    expect(document.body.textContent).not.toContain('Show Debug');
+    wrapper.unmount();
+  });
+
+  it('offers recovery actions after a measurement cannot produce clean beats', async () => {
+    const wrapper = mount(LabTab);
+    const vm = wrapper.vm as unknown as {
+      permissionError: string;
+      showRecoveryActions: boolean;
+    };
+    vm.permissionError = 'No detected pulse was received.';
+    vm.showRecoveryActions = true;
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.text()).toContain('No detected pulse was received.');
+    expect(wrapper.text()).toContain('Retry');
+    expect(wrapper.text()).toContain('Change sensor');
+    expect(wrapper.text()).toContain('Cancel');
   });
 
   it('shows mode toggle (Guided / Freeform)', () => {
@@ -127,8 +180,9 @@ describe('LabTab.vue', () => {
 
     expect(wrapper.find('[data-testid="sensor-selection"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('Camera');
-    expect(wrapper.text()).toContain('Chest (Beta)');
-    expect(wrapper.text()).toContain('Both (Beta)');
+    expect(wrapper.text()).toContain('Chest');
+    expect(wrapper.text()).toContain('Both');
+    expect(wrapper.text()).toContain('Beta');
   });
 
   it('shows RF assessment section with "Find My Resonance Frequency" button', () => {
@@ -183,7 +237,7 @@ describe('LabTab.vue', () => {
     });
 
     await wrapper.findAll('button').find((button) => button.text() === 'Freeform')!.trigger('click');
-    await wrapper.findAll('button').find((button) => button.text() === 'Both (Beta)')!.trigger('click');
+    await wrapper.get('[data-testid="sensor-dual"]').trigger('click');
     await wrapper.findAll('button').find((button) => button.text() === 'Start Measurement')!.trigger('click');
     await flushPromises();
     const startButton = Array.from(document.body.querySelectorAll('button')).find(
@@ -244,7 +298,7 @@ describe('LabTab.vue', () => {
     });
 
     await wrapper.findAll('button').find((button) => button.text() === 'Freeform')!.trigger('click');
-    await wrapper.findAll('button').find((button) => button.text() === 'Camera')!.trigger('click');
+    await wrapper.get('[data-testid="sensor-camera"]').trigger('click');
     await wrapper.findAll('button').find((button) => button.text() === 'Start Measurement')!.trigger('click');
     await flushPromises();
     const startButton = Array.from(document.body.querySelectorAll('button')).find(

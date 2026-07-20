@@ -76,25 +76,25 @@ describe('ResonanceAssessment', () => {
       const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
       expect(sensorSection.exists()).toBe(true);
       expect(sensorSection.text()).toContain('Heart Rate Measurement');
+      expect(sensorSection.text()).toContain('Camera Pulse (Recommended)');
       expect(sensorSection.text()).toContain('Manual Scoring');
-      expect(sensorSection.text()).toContain('Dual Sensor (Best Accuracy)');
-      expect(sensorSection.text()).toContain('Camera Only (Finger PPG)');
-      expect(sensorSection.text()).toContain('Accelerometer Only (Chest)');
+      expect(sensorSection.text()).toContain('Camera + Chest (Beta)');
+      expect(sensorSection.text()).toContain('Chest Motion (Beta)');
     });
 
-    it('shows the dual sensor mode option in INTRO phase', () => {
+    it('shows experimental sensor modes without claiming best accuracy', () => {
       const wrapper = mount(ResonanceAssessment);
       const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
       const buttons = sensorSection.findAll('button');
       // 4 modes: none, dual, camera, accelerometer
       expect(buttons).toHaveLength(4);
-      expect(buttons[1].text()).toContain('Dual Sensor (Best Accuracy)');
+      expect(buttons[2].text()).toContain('Camera + Chest (Beta)');
+      expect(sensorSection.text()).not.toContain('Best Accuracy');
     });
 
-    it('defaults to none (Manual Scoring) sensor mode', () => {
+    it('defaults to the recommended camera pulse sensor mode', () => {
       const wrapper = mount(ResonanceAssessment);
       const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
-      // The first button (Manual Scoring) should have the selected class
       const buttons = sensorSection.findAll('button');
       expect(buttons[0].classes()).toContain('border-emerald-500');
       expect(buttons[1].classes()).not.toContain('border-emerald-500');

@@ -475,13 +475,29 @@ type SensorMode = 'none' | 'camera' | 'accelerometer' | 'dual';
 
 // ======================== Sensor Mode ========================
 
-const selectedSensorMode = ref<SensorMode>('none');
+const selectedSensorMode = ref<SensorMode>('camera');
 
 const sensorModes = [
-  { value: 'none' as const, label: 'Manual Scoring', description: 'Score trials manually using an external HRV app or subjective observation' },
-  { value: 'dual' as const, label: 'Dual Sensor (Best Accuracy)', description: 'Phone screen-down on chest, finger on rear camera \u2014 audio-only guidance' },
-  { value: 'camera' as const, label: 'Camera Only (Finger PPG)', description: 'Place finger over rear camera lens \u2014 audio-only guidance' },
-  { value: 'accelerometer' as const, label: 'Accelerometer Only (Chest)', description: 'Place phone flat on chest \u2014 audio-only guidance' },
+  {
+    value: 'camera' as const,
+    label: 'Camera Pulse (Recommended)',
+    description: 'Finger over the rear camera for automatic pulse-variability scoring',
+  },
+  {
+    value: 'none' as const,
+    label: 'Manual Scoring',
+    description: 'Use comfort ratings alone or compare with a validated external heart monitor',
+  },
+  {
+    value: 'dual' as const,
+    label: 'Camera + Chest (Beta)',
+    description: 'Experimental combined camera and chest-motion detection',
+  },
+  {
+    value: 'accelerometer' as const,
+    label: 'Chest Motion (Beta)',
+    description: 'Experimental phone-on-chest motion detection',
+  },
 ];
 
 // ======================== Scoring UI Options ========================

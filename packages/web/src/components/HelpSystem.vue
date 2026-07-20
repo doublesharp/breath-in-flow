@@ -16,8 +16,8 @@
     <!-- Help Modal -->
     <Teleport to="body">
       <Transition name="help-fade">
-        <div v-if="showHelp" class="help-modal-overlay" @click.self="showHelp = false">
-          <div class="help-modal">
+        <div v-if="showHelp" class="help-modal-overlay safe-area-top safe-area-bottom" @click.self="showHelp = false">
+          <div class="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-dialog-title">
             <!-- Header -->
             <div class="help-header">
               <div class="flex items-center gap-3">
@@ -40,11 +40,11 @@
                   </svg>
                 </div>
                 <div>
-                  <h2 class="text-xl font-bold text-white">Help & Guide</h2>
+                  <h2 id="help-dialog-title" class="text-xl font-bold text-white">Help & Guide</h2>
                   <p class="text-sm text-slate-400">Learn how to use {{ AppConfig.appName }}</p>
                 </div>
               </div>
-              <button @click="showHelp = false" class="help-close-btn">
+              <button @click="showHelp = false" class="help-close-btn" aria-label="Close help">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   class="w-6 h-6"
@@ -108,6 +108,7 @@
                   <h4 class="help-card-title">Navigation</h4>
                   <ul class="help-list">
                     <li><strong>Practice</strong> - Main breathing practice area</li>
+                    <li><strong>Lab</strong> - Optional pulse-variability measurements and resonance training</li>
                     <li><strong>History</strong> - View your past sessions</li>
                     <li><strong>Presets</strong> - Save and load breathing patterns</li>
                     <li><strong>Analytics</strong> - Track your progress with charts</li>
@@ -241,6 +242,48 @@
                 </div>
               </div>
 
+              <!-- Lab & Measurements -->
+              <div v-if="activeSection === 'lab'" class="help-section">
+                <h3 class="help-section-title">
+                  <span class="help-section-icon bg-emerald-500/20 text-emerald-400">♥</span>
+                  Lab & Measurements
+                </h3>
+
+                <div class="help-card">
+                  <h4 class="help-card-title">What the camera measures</h4>
+                  <p class="text-slate-300 text-sm">
+                    The camera estimates pulse timing from fingertip color changes. The app reports pulse variability,
+                    which can resemble ECG-derived HRV but is not an ECG or a medical measurement. Compare trends only
+                    when posture, time of day, sensor placement, and protocol are similar.
+                  </p>
+                </div>
+
+                <div class="help-card">
+                  <h4 class="help-card-title">Sensor choices</h4>
+                  <ul class="help-list">
+                    <li><strong>Camera Pulse</strong> - Recommended phone-only option; cover the rear lens gently and keep still.</li>
+                    <li><strong>Chest Motion</strong> - Experimental (Beta); phone motion can be mistaken for heart timing.</li>
+                    <li><strong>Camera + Chest</strong> - Experimental (Beta); requires both signals to remain steady.</li>
+                  </ul>
+                </div>
+
+                <div class="help-card">
+                  <h4 class="help-card-title">Why duration matters</h4>
+                  <p class="text-slate-300 text-sm">
+                    Short protocols can support basic time-domain trend metrics when enough clean beats are detected.
+                    Frequency-domain results require the full five minutes and appear as unavailable when the recording
+                    is too short or too noisy. The app never fills missing metrics with made-up values.
+                  </p>
+                </div>
+
+                <div class="help-tip warning">
+                  <p class="text-sm">
+                    Use Lab results for wellness training and personal trends, not diagnosis. Stop the measurement if
+                    you feel unwell and discuss health concerns with a qualified clinician.
+                  </p>
+                </div>
+              </div>
+
               <!-- Techniques -->
               <div v-if="activeSection === 'techniques'" class="help-section">
                 <h3 class="help-section-title">
@@ -293,13 +336,27 @@
 
                 <div class="help-card">
                   <h4 class="help-card-title">Coherent Breathing (5-5)</h4>
-                  <p class="text-slate-400 text-sm mb-2">Heart rate variability optimization</p>
+                  <p class="text-slate-400 text-sm mb-2">Even-paced breathing for a calm, steady practice</p>
                   <div class="help-pattern">
                     <span class="text-blue-400">5s inhale</span>
                     <span class="text-slate-500">→</span>
                     <span class="text-emerald-400">5s exhale</span>
                   </div>
                   <p class="text-slate-300 text-sm mt-2">Great for: Heart coherence, balance, daily practice</p>
+                </div>
+
+                <div class="help-card">
+                  <h4 class="help-card-title">Diaphragm Resistance Training</h4>
+                  <p class="text-slate-300 text-sm">
+                    Use the guided starter preset with a purpose-designed inspiratory resistance trainer. Begin with
+                    light resistance and controlled technique. Endurance work adds comfortable repetitions or sets;
+                    strengthening uses higher resistance only after technique is consistent.
+                  </p>
+                  <ul class="help-list mt-3">
+                    <li>Do not substitute a blocked airway or improvised restriction.</li>
+                    <li>Keep the shoulders and neck relaxed; do not strain or chase breathlessness.</li>
+                    <li>Stop for dizziness, faintness, chest pain, unusual shortness of breath, or loss of control.</li>
+                  </ul>
                 </div>
 
                 <div class="help-card">
@@ -584,6 +641,31 @@ const tabs = [
     },
   },
   {
+    id: 'lab',
+    label: 'Lab',
+    icon: {
+      render: () =>
+        h(
+          'svg',
+          {
+            xmlns: 'http://www.w3.org/2000/svg',
+            class: 'w-4 h-4',
+            fill: 'none',
+            viewBox: '0 0 24 24',
+            stroke: 'currentColor',
+          },
+          [
+            h('path', {
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              'stroke-width': '2',
+              d: 'M3 12h4l2-6 4 12 2-6h6',
+            }),
+          ]
+        ),
+    },
+  },
+  {
     id: 'techniques',
     label: 'Techniques',
     icon: {
@@ -683,7 +765,7 @@ defineExpose({ showHelp });
 }
 
 .help-close-btn {
-  @apply p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all;
+  @apply min-h-11 min-w-11 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all;
 }
 
 .help-tabs {
@@ -697,7 +779,7 @@ defineExpose({ showHelp });
 }
 
 .help-tab {
-  @apply flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-white/10 transition-all whitespace-nowrap;
+  @apply min-h-11 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-white/10 transition-all whitespace-nowrap;
 }
 
 .help-tab-active {

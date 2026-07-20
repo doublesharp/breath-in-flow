@@ -25,4 +25,34 @@ describe('HelpSystem.vue', () => {
       expect(document.body.querySelectorAll('.help-tab-active').length).toBeGreaterThanOrEqual(1);
     }
   });
+
+  it('explains pulse variability limits, experimental sensors, and diaphragm safety', async () => {
+    const wrapper = mount(HelpSystem);
+    await wrapper.find('button.help-trigger').trigger('click');
+    await wrapper.vm.$nextTick();
+
+    const labTab = Array.from(document.body.querySelectorAll('.help-tab')).find(
+      (button) => button.textContent?.includes('Lab')
+    ) as HTMLElement;
+    expect(labTab).toBeTruthy();
+    labTab.click();
+    await wrapper.vm.$nextTick();
+
+    expect(document.body.textContent).toContain('pulse variability');
+    expect(document.body.textContent).toContain('Chest Motion');
+    expect(document.body.textContent?.toLowerCase()).toContain('experimental');
+    expect(document.body.textContent).toContain('five minutes');
+
+    const techniquesTab = Array.from(document.body.querySelectorAll('.help-tab')).find(
+      (button) => button.textContent?.includes('Techniques')
+    ) as HTMLElement;
+    techniquesTab.click();
+    await wrapper.vm.$nextTick();
+
+    expect(document.body.textContent).toContain('Diaphragm Resistance Training');
+    expect(document.body.textContent).toContain('purpose-designed inspiratory resistance trainer');
+    expect(document.body.textContent).toContain('Stop for dizziness');
+
+    wrapper.unmount();
+  });
 });

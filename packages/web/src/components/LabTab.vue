@@ -3,7 +3,7 @@
     <!-- Section A: Standalone HRV Measurement -->
     <div class="space-y-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-bold text-white">HRV Measurement</h2>
+        <h2 class="text-lg font-bold text-white">Pulse Variability</h2>
         <div class="flex gap-1">
           <button
             @click="mode = 'guided'"
@@ -17,14 +17,21 @@
       </div>
 
       <!-- Sensor selector — compact row -->
-      <div class="flex gap-2" data-testid="sensor-selection">
+      <div class="grid grid-cols-3 gap-2" data-testid="sensor-selection" role="group" aria-label="Pulse sensor">
         <button
           v-for="s in sensorOptions"
           :key="s.value"
+          :data-testid="`sensor-${s.value}`"
           @click="selectedSensor = s.value"
-          :class="['flex-1 py-2 rounded-lg border text-center text-xs font-medium transition-all',
+          :aria-pressed="selectedSensor === s.value"
+          :class="['min-h-11 px-2 py-2 rounded-lg border text-center text-xs font-medium transition-all',
             selectedSensor === s.value ? 'border-emerald-500 bg-emerald-500/10 text-white' : 'border-white/10 bg-white/5 text-white/50']"
-        >{{ s.label }}</button>
+        >
+          <span class="block">{{ s.label }}</span>
+          <span v-if="s.badge" class="mt-0.5 block text-[9px] uppercase tracking-wide text-emerald-300/80">
+            {{ s.badge }}
+          </span>
+        </button>
       </div>
 
       <!-- Permission error -->
@@ -34,19 +41,34 @@
       <div v-if="measurementNotice" class="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-xs text-amber-300" role="status">
         {{ measurementNotice }}
       </div>
+      <div
+        v-if="showRecoveryActions"
+        class="rounded-xl border border-amber-400/20 bg-amber-500/5 p-3"
+        role="alert"
+      >
+        <p class="text-sm text-amber-100">Choose how you want to continue.</p>
+        <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <button class="btn-primary min-h-11 rounded-lg px-3" @click="retryMeasurement">Retry</button>
+          <button class="btn-secondary min-h-11 rounded-lg px-3" @click="chooseAnotherSensor">Change sensor</button>
+          <button class="min-h-11 rounded-lg px-3 text-white/60 hover:bg-white/5" @click="dismissRecovery">Cancel</button>
+        </div>
+      </div>
 
       <!-- Guided protocols — compact single-line cards -->
       <div v-if="mode === 'guided'" class="space-y-2">
         <button
           v-for="p in protocols"
           :key="p.id"
+          :data-testid="`protocol-${p.id}`"
           @click="showPrepScreen(p)"
           class="flex items-center gap-3 w-full p-3 rounded-xl text-left transition-all bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/30 active:scale-[0.98]"
         >
           <span class="text-xl shrink-0">{{ p.icon }}</span>
           <div class="flex-1 min-w-0">
             <div class="font-semibold text-white text-sm">{{ p.name }}</div>
-            <div class="text-xs text-white/40 truncate">{{ p.description }}</div>
+            <div :data-testid="`protocol-description-${p.id}`" class="mt-0.5 text-xs leading-relaxed text-white/45">
+              {{ p.description }}
+            </div>
           </div>
           <span class="text-xs text-white/30 shrink-0">{{ formatDuration(p.duration) }}</span>
         </button>
@@ -70,20 +92,27 @@
 
           <!-- Duration slider -->
           <div v-if="prepProtocol" class="w-full max-w-xs mb-6">
+            <label for="measurement-duration" class="mb-2 block text-xs font-medium text-white/60">
+              Measurement duration
+            </label>
             <div class="flex justify-between items-baseline mb-1">
               <span class="text-lg font-bold text-white">{{ formatDuration(customDuration) }}</span>
               <span v-if="customDuration < 60" class="text-[10px] text-amber-400/70">Longer = more accurate</span>
             </div>
             <input
+              id="measurement-duration"
+              data-testid="measurement-duration"
               type="range"
               v-model.number="customDuration"
-              :min="30"
+              :min="minimumProtocolDuration"
               :max="prepProtocol.id === 'full-analysis' ? 600 : 300"
               step="30"
+              aria-label="Measurement duration"
+              :aria-valuetext="formatDuration(customDuration)"
               class="w-full h-1.5 rounded-full appearance-none bg-white/10 accent-emerald-500"
             />
             <div class="flex justify-between text-[9px] text-white/20 mt-1">
-              <span>30s</span>
+              <span>{{ formatDuration(minimumProtocolDuration) }}</span>
               <span>{{ formatDuration(prepProtocol.id === 'full-analysis' ? 600 : 300) }}</span>
             </div>
           </div>
@@ -147,8 +176,8 @@
         </div>
 
         <!-- Bottom buttons -->
-        <div class="px-6 pb-6 space-y-3">
-          <button @click="confirmStart" class="w-full btn-primary py-4 rounded-2xl font-bold text-lg">
+        <div data-testid="prep-actions" class="mobile-action-dock px-6 pt-3 space-y-3">
+          <button @click="confirmStart" class="w-full btn-primary min-h-11 py-4 rounded-2xl font-bold text-lg">
             Start
           </button>
           <button @click="showPrep = false; prepProtocol = null" class="w-full py-3 rounded-xl font-medium text-white/40 hover:text-white/60">
@@ -202,8 +231,8 @@
               <div class="text-xs text-white/40 mb-1">Heart Rate</div>
               <HrTachogram :hr-data="hrDataPoints" :duration="Math.min(60, Math.max(15, elapsedSeconds))" :height="100" />
             </div>
-            <div v-else class="rounded-xl bg-white/5 p-4 text-center text-sm text-white/30">
-              Waiting for heart rate data...
+            <div v-else class="min-h-20 rounded-xl bg-white/5 p-4 text-center text-sm text-white/50" role="status">
+              {{ signalGuidance }}
             </div>
 
             <!-- Raw sensor signal -->
@@ -213,16 +242,16 @@
             </div>
 
             <!-- Debug toggle + log -->
-            <button @click="showDebug = !showDebug" class="text-[10px] text-white/15 hover:text-white/30 w-full text-center">
+            <button v-if="debugControlsEnabled" @click="showDebug = !showDebug" class="text-[10px] text-white/15 hover:text-white/30 w-full text-center">
               {{ showDebug ? 'Hide' : 'Show' }} Debug
             </button>
-            <div v-if="showDebug" class="rounded-lg bg-black/50 border border-white/5 p-2 max-h-32 overflow-y-auto font-mono text-[9px] text-white/40 space-y-px">
+            <div v-if="debugControlsEnabled && showDebug" class="rounded-lg bg-black/50 border border-white/5 p-2 max-h-32 overflow-y-auto font-mono text-[9px] text-white/40 space-y-px">
               <div v-for="(line, i) in debugLog" :key="i">{{ line }}</div>
             </div>
           </div>
 
           <!-- Stop button — pinned to bottom -->
-          <button @click="stopMeasurement" class="mt-3 w-full btn-danger py-3 rounded-xl font-semibold shrink-0">
+          <button @click="stopMeasurement" class="mobile-action-dock mt-3 w-full btn-danger min-h-11 pt-3 rounded-xl font-semibold shrink-0">
             Stop Measurement
           </button>
         </div>
@@ -311,7 +340,7 @@
           <div class="text-xs text-white/50">{{ formatDate(m.completedAt) }}</div>
         </div>
         <div class="text-right">
-          <div class="text-sm text-white">HR {{ m.analysis.timeDomain.meanHR.toFixed(0) }} BPM</div>
+          <div class="text-sm text-white">Pulse {{ m.analysis.timeDomain.meanHR.toFixed(0) }} BPM</div>
           <div class="text-xs text-white/50">RMSSD {{ m.analysis.timeDomain.rmssd.toFixed(1) }}ms</div>
         </div>
       </div>
@@ -320,7 +349,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import HrTachogram from './hrv/HrTachogram.vue';
@@ -361,15 +390,33 @@ interface Protocol {
 }
 
 const protocols: Protocol[] = [
-  { id: 'quick-check', name: 'Quick Check', duration: 120, description: 'Basic HRV snapshot — RMSSD, SDNN, heart rate', icon: '\u26A1' },
-  { id: 'full-analysis', name: 'Full Analysis', duration: 300, description: 'Comprehensive HRV — all metrics, frequency analysis, Poincar\u00E9', icon: '\uD83D\uDD2C' },
-  { id: 'morning-readiness', name: 'Morning Readiness', duration: 180, description: 'Daily baseline check — track your readiness over time', icon: '\u2600\uFE0F' },
+  {
+    id: 'quick-check',
+    name: 'Quick Check',
+    duration: 120,
+    description: 'Short pulse-variability trend with time-domain metrics when enough clean beats are detected',
+    icon: '\u26A1',
+  },
+  {
+    id: 'full-analysis',
+    name: 'Full Analysis',
+    duration: 300,
+    description: 'Five-minute protocol for time, frequency, and Poincar\u00E9 metrics when the signal supports them',
+    icon: '\uD83D\uDD2C',
+  },
+  {
+    id: 'morning-readiness',
+    name: 'Morning Readiness',
+    duration: 180,
+    description: 'Repeatable three-minute pulse-variability baseline for personal trend tracking',
+    icon: '\u2600\uFE0F',
+  },
 ];
 
 const sensorOptions = [
-  { value: 'camera' as const, label: 'Camera' },
-  { value: 'accelerometer' as const, label: 'Chest (Beta)' },
-  { value: 'dual' as const, label: 'Both (Beta)' },
+  { value: 'camera' as const, label: 'Camera', badge: 'Recommended' },
+  { value: 'accelerometer' as const, label: 'Chest', badge: 'Beta' },
+  { value: 'dual' as const, label: 'Both', badge: 'Beta' },
 ];
 
 const hrvStorage = useHrvStorage();
@@ -406,6 +453,19 @@ const hrDataPoints = ref<Array<{ time: number; hr: number; quality: number }>>([
 const rawSignalData = ref<Array<{ time: number; value: number }>>([]);
 const debugLog = ref<string[]>([]);
 const showDebug = ref(false);
+const debugControlsEnabled = import.meta.env.DEV && import.meta.env.MODE !== 'test';
+const showRecoveryActions = ref(false);
+const minimumProtocolDuration = computed(() => prepProtocol.value?.duration ?? 30);
+const signalGuidance = computed(() => {
+  if (hrDataPoints.value.length === 0 && sensorQuality.value <= 0) return 'Waiting for a pulse';
+  if (sensorQuality.value < 0.35) {
+    return selectedSensor.value === 'accelerometer'
+      ? 'Too much movement — keep the phone still on your chest'
+      : 'Signal is weak — reposition your finger over the camera';
+  }
+  if (sensorQuality.value < 0.6) return 'Reposition your finger or phone for a steadier signal';
+  return 'Pulse detected — keep still';
+});
 
 const RAW_SIGNAL_MAX_POINTS = 200; // ~6-7 seconds at 30fps
 const DEBUG_LOG_MAX = 100;
@@ -435,6 +495,7 @@ async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementSt
         permissionError.value = measurementSession?.getResult().errorMessage ??
           'No detected heart beats were received. Reposition the sensor and try again.';
         isMeasuring.value = false;
+        showRecoveryActions.value = true;
         void disableKeepAwake();
       }
     },
@@ -720,6 +781,7 @@ async function showPrepScreen(protocol: Protocol | null) {
   prepProtocol.value = protocol;
   customDuration.value = protocol?.duration ?? 120;
   permissionError.value = null;
+  showRecoveryActions.value = false;
   showPrep.value = true;
 
   // Load available cameras when camera sensor is selected
@@ -783,11 +845,13 @@ async function startProtocol(protocol: Protocol) {
   measurementStartTime.value = new Date();
   currentEligibility.value = null;
   currentSampleProvenance.value = [];
+  showRecoveryActions.value = false;
 
   addDebugLine(`Starting ${protocol.name} with ${selectedSensor.value} sensor`);
   const outcome = await startSensor(protocol.id as MeasurementProtocol);
   if (!outcome.ok) {
     permissionError.value = outcome.message ?? 'Unable to start the selected sensor.';
+    showRecoveryActions.value = true;
     return;
   }
   if (outcome.degradedSources?.length) {
@@ -814,10 +878,12 @@ async function startFreeform() {
   measurementStartTime.value = new Date();
   currentEligibility.value = null;
   currentSampleProvenance.value = [];
+  showRecoveryActions.value = false;
 
   const outcome = await startSensor('freeform');
   if (!outcome.ok) {
     permissionError.value = outcome.message ?? 'Unable to start the selected sensor.';
+    showRecoveryActions.value = true;
     return;
   }
   if (outcome.degradedSources?.length) {
@@ -860,6 +926,7 @@ function stopMeasurement() {
 
   if (sessionResult?.eligibility && !sessionResult.eligibility.eligible) {
     permissionError.value = measurementEligibilityMessage(sessionResult.eligibility.reasons);
+    showRecoveryActions.value = true;
     addDebugLine(`Measurement unavailable: ${sessionResult.eligibility.reasons.join(', ')}`);
   } else if (ibis.length >= 10) {
     const analysis = analyzeHRV(ibis);
@@ -870,7 +937,28 @@ function stopMeasurement() {
     soundService.playCompletionChime();
   } else {
     addDebugLine(`Not enough IBIs after trimming: ${ibis.length} (need >= 10)`);
+    permissionError.value = 'There were not enough clean pulse beats for a reliable result. Reposition the sensor and try again.';
+    showRecoveryActions.value = true;
   }
+}
+
+async function retryMeasurement() {
+  const protocol = selectedProtocol.value;
+  permissionError.value = null;
+  showRecoveryActions.value = false;
+  await showPrepScreen(protocol);
+}
+
+function chooseAnotherSensor() {
+  permissionError.value = null;
+  showRecoveryActions.value = false;
+  mode.value = 'freeform';
+}
+
+function dismissRecovery() {
+  permissionError.value = null;
+  measurementNotice.value = null;
+  showRecoveryActions.value = false;
 }
 
 function measurementEligibilityMessage(reasons: string[]): string {
