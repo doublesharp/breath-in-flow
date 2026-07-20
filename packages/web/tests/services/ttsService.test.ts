@@ -42,6 +42,7 @@ const utteranceCtor = vi.fn(function (this: SpeechSynthesisUtterance, text: stri
 type TtsServiceInternals = {
   voicesCache: SpeechSynthesisVoice[];
   nativeVoicesCache: SpeechSynthesisVoice[];
+  nativeVoiceIndexByUri: Map<string, number>;
   loadingPromise: Promise<SpeechSynthesisVoice[]> | null;
   hasWebSpeech: boolean;
   hasNativeTts: boolean;
@@ -52,6 +53,7 @@ function resetServiceState() {
   const service = ttsService as unknown as TtsServiceInternals;
   service.voicesCache = [];
   service.nativeVoicesCache = [];
+  service.nativeVoiceIndexByUri = new Map();
   service.loadingPromise = null;
   service.hasWebSpeech = false;
   service.hasNativeTts = false;
@@ -131,6 +133,7 @@ describe('ttsService', () => {
   });
 
   it('waits for asynchronously published web voices and removes its listener', async () => {
+    vi.useFakeTimers();
     getVoicesMock.mockReturnValue([]);
     const pendingVoices = ttsService.loadVoices();
     const handler = addEventListenerMock.mock.calls[0]?.[1] as (() => void) | undefined;
@@ -142,6 +145,7 @@ describe('ttsService', () => {
     await expect(pendingVoices).resolves.toEqual(mockVoices);
     expect(removeEventListenerMock).toHaveBeenCalledWith('voiceschanged', handler);
     expect(ttsService.voicesReady.value).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('resolves an empty web voice list when the browser never publishes voices', async () => {
@@ -203,6 +207,22 @@ describe('ttsService', () => {
         category: 'ambient',
       })
     );
+  });
+
+  it('preserves the native plugin index when duplicate voices are hidden from the picker', async () => {
+    vi.stubGlobal('speechSynthesis', undefined);
+    vi.stubGlobal('SpeechSynthesisUtterance', undefined);
+    nativeGetVoicesMock.mockResolvedValue({
+      voices: [mockVoices[0], mockVoices[0], mockVoices[1]],
+    });
+    nativeSpeakMock.mockResolvedValue(undefined);
+    ttsService.setEnabled(true);
+    await ttsService.loadVoices();
+    ttsService.setVoiceByUri('voice-es');
+
+    await ttsService.speak('Respira');
+
+    expect(nativeSpeakMock).toHaveBeenCalledWith(expect.objectContaining({ voice: 2 }));
   });
 
   it('contains native playback failures and leaves the exercise running', async () => {

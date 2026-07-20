@@ -10,6 +10,7 @@ class TtsService {
   private selectedVoiceUri: string | null = null;
   private voicesCache: SpeechSynthesisVoice[] = [];
   private nativeVoicesCache: SpeechSynthesisVoice[] = [];
+  private nativeVoiceIndexByUri = new Map<string, number>();
   private loadingPromise: Promise<SpeechSynthesisVoice[]> | null = null;
   public voicesReady = ref(false);
   private hasWebSpeech = false;
@@ -68,7 +69,14 @@ class TtsService {
     if (!this.hasWebSpeech) {
       try {
         const { voices } = await TextToSpeech.getSupportedVoices();
-        this.nativeVoicesCache = this.dedupeVoices(voices ?? []);
+        const nativeVoices = voices ?? [];
+        this.nativeVoiceIndexByUri.clear();
+        nativeVoices.forEach((voice, index) => {
+          if (voice.voiceURI && !this.nativeVoiceIndexByUri.has(voice.voiceURI)) {
+            this.nativeVoiceIndexByUri.set(voice.voiceURI, index);
+          }
+        });
+        this.nativeVoicesCache = this.dedupeVoices(nativeVoices);
         this.hasNativeTts = true;
         this.voicesReady.value = true;
         return this.nativeVoicesCache;
@@ -92,7 +100,15 @@ class TtsService {
 
     if (this.loadingPromise) return this.loadingPromise;
 
+    const immediateVoices = synth.getVoices();
+    if (immediateVoices && immediateVoices.length > 0) {
+      this.voicesCache = this.dedupeVoices(immediateVoices);
+      this.voicesReady.value = true;
+      return this.voicesCache;
+    }
+
     this.loadingPromise = new Promise<SpeechSynthesisVoice[]>((resolve) => {
+      let fallbackTimeout: ReturnType<typeof setTimeout> | null = null;
       const resolveWithVoices = () => {
         const voices = synth.getVoices();
         if (voices && voices.length > 0) {
@@ -105,14 +121,12 @@ class TtsService {
       };
 
       const cleanup = () => {
+        if (fallbackTimeout !== null) {
+          clearTimeout(fallbackTimeout);
+          fallbackTimeout = null;
+        }
         this.loadingPromise = null;
       };
-
-      // Try immediately
-      if (resolveWithVoices()) {
-        cleanup();
-        return;
-      }
 
       const handler = () => {
         if (resolveWithVoices()) {
@@ -124,7 +138,7 @@ class TtsService {
       synth.addEventListener('voiceschanged', handler);
 
       // Fallback timeout in case event never fires
-      setTimeout(() => {
+      fallbackTimeout = setTimeout(() => {
         synth.removeEventListener('voiceschanged', handler);
         if (!resolveWithVoices()) {
           resolve([]);
@@ -197,9 +211,11 @@ class TtsService {
     try {
       const voices = this.nativeVoicesCache;
       const voiceIndex = this.selectedVoiceUri
-        ? voices.findIndex((v) => v.voiceURI === this.selectedVoiceUri)
+        ? (this.nativeVoiceIndexByUri.get(this.selectedVoiceUri) ?? -1)
         : -1;
-      const selectedVoice = voiceIndex >= 0 ? voices[voiceIndex] : undefined;
+      const selectedVoice = this.selectedVoiceUri
+        ? voices.find((voice) => voice.voiceURI === this.selectedVoiceUri)
+        : undefined;
 
       await TextToSpeech.speak({
         text,
