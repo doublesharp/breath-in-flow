@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { analyzeHRV } from '../../src/hrv/index.js';
 import { preprocessIBI } from '../../src/hrv/preprocessing.js';
 
 function makeTimestamps(intervals: number[]): number[] {
@@ -96,5 +97,26 @@ describe('preprocessIBI', () => {
     const result = preprocessIBI(intervals, timestamps);
     expect(result.artifactIndices).toContain(4);
     expect(result.cleanedIntervals[4]).not.toBe(100);
+  });
+});
+
+describe('analyzeHRV input normalization', () => {
+  it('sorts IBI samples and drops duplicate or invalid timestamps before metrics', () => {
+    const result = analyzeHRV([
+      { timestamp: 3000, interval: 1000, quality: 0.8 },
+      { timestamp: 1000, interval: 1000, quality: 0.9 },
+      { timestamp: 2000, interval: 1000, quality: 0.7 },
+      { timestamp: 2000, interval: 900, quality: 0.6 },
+      { timestamp: Number.NaN, interval: 1000, quality: 1 },
+      { timestamp: 4000, interval: 1000, quality: 2 },
+    ]);
+
+    expect(result.raw.timestamps).toEqual([1000, 2000, 3000, 4000]);
+    expect(result.raw.rrIntervals).toEqual([1000, 1000, 1000, 1000]);
+    expect(result.quality.totalSamples).toBe(6);
+    expect(result.quality.artifactsDetected).toBe(2);
+    expect(result.quality.artifactPercentage).toBeCloseTo((2 / 6) * 100);
+    expect(result.quality.meanSignalQuality).toBeCloseTo((0.9 + 0.7 + 0.8 + 1) / 4);
+    expect(result.frequencyDomain.spectrum.length).toBeGreaterThan(0);
   });
 });

@@ -57,6 +57,7 @@ export {
   formatTimeSimple,
   calculateTotalCycleTime,
   calculateSetTime,
+  calculateSessionTime,
 } from './timer.js';
 
 export type { BreathingTimerCallbacks } from './timer.js';
