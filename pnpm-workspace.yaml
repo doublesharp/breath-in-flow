@@ -2,6 +2,8 @@ packages:
   - packages/*
 
 overrides:
+  '@hono/node-server': ^1.19.13
+  esbuild: ^0.28.1
   electron-builder-squirrel-windows: 26.15.3
 
 onlyBuiltDependencies:
