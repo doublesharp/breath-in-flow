@@ -1,24 +1,21 @@
 packages:
   - packages/*
 
+overrides:
+  electron-builder-squirrel-windows: 26.15.3
+
 onlyBuiltDependencies:
-  - ' '
-  - /
-  - '@'
-  - a
-  - b
-  - c
-  - d
-  - e
+  - '@prisma/client'
+  - '@prisma/engines'
+  - better-sqlite3
   - electron
   - electron-winstaller
-  - g
-  - i
-  - l
-  - m
-  - n
-  - p
-  - r
-  - s
-  - t
-  - u
+  - esbuild
+  - prisma
+
+allowBuilds:
+  '@prisma/engines': true
+  better-sqlite3: true
+  electron-winstaller: true
+  esbuild: true
+  prisma: true

@@ -9,7 +9,8 @@ import type {
   SoundTheme,
   AssessmentResult,
 } from '@breath-in-flow/shared';
-import { DEFAULT_BREATHING_CONFIG } from '@breath-in-flow/shared';
+import { DEFAULT_BREATHING_CONFIG, SoundThemeSchema } from '@breath-in-flow/shared';
+import { parseJsonWithDateFields } from '@/utils/storageSerialization';
 
 // Simple in-memory storage for now (can be replaced with IndexedDB or API calls)
 const configs = ref<BreathingConfig[]>([]);
@@ -17,49 +18,51 @@ const sessions = ref<Session[]>([]);
 const soundTheme = ref<SoundTheme>('wood');
 const assessments = ref<AssessmentResult[]>([]);
 
+const STORAGE_DATE_FIELDS = ['startedAt', 'completedAt', 'createdAt', 'updatedAt'] as const;
+
+function loadJsonFromStorage<T>(key: string): T | undefined {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? parseJsonWithDateFields<T>(stored, STORAGE_DATE_FIELDS) : undefined;
+  } catch (e) {
+    console.error(`Failed to load ${key} from storage:`, e);
+    return undefined;
+  }
+}
+
+function loadStringFromStorage(key: string): string | undefined {
+  try {
+    return localStorage.getItem(key) ?? undefined;
+  } catch (e) {
+    console.error(`Failed to load ${key} from storage:`, e);
+    return undefined;
+  }
+}
+
 // Load from localStorage on init
 function loadFromStorage() {
-  try {
-    const storedConfigs = localStorage.getItem('breath-in-flow-configs');
-    if (storedConfigs) {
-      configs.value = JSON.parse(storedConfigs).map((c: BreathingConfig) => ({
-        ...DEFAULT_BREATHING_CONFIG,
-        ...c,
-      }));
-    }
+  const storedConfigs = loadJsonFromStorage<BreathingConfig[]>('breath-in-flow-configs');
+  if (storedConfigs) {
+    configs.value = storedConfigs.map((c) => ({
+      ...DEFAULT_BREATHING_CONFIG,
+      ...c,
+    }));
+  }
 
-    const storedSessions = localStorage.getItem('breath-in-flow-sessions');
-    if (storedSessions) {
-      sessions.value = JSON.parse(storedSessions, (key, value) => {
-        // Convert date strings back to Date objects
-        if (
-          key === 'startedAt' ||
-          key === 'completedAt' ||
-          key === 'createdAt' ||
-          key === 'updatedAt'
-        ) {
-          return value ? new Date(value) : value;
-        }
-        return value;
-      });
-    }
+  const storedSessions = loadJsonFromStorage<Session[]>('breath-in-flow-sessions');
+  if (storedSessions) {
+    sessions.value = storedSessions;
+  }
 
-    const storedTheme = localStorage.getItem('breath-in-flow-sound-theme');
-    if (storedTheme) {
-      soundTheme.value = storedTheme as SoundTheme;
-    }
+  const storedTheme = loadStringFromStorage('breath-in-flow-sound-theme');
+  if (storedTheme) {
+    const parsedTheme = SoundThemeSchema.safeParse(storedTheme);
+    soundTheme.value = parsedTheme.success ? parsedTheme.data : 'wood';
+  }
 
-    const storedAssessments = localStorage.getItem('breath-in-flow-assessments');
-    if (storedAssessments) {
-      assessments.value = JSON.parse(storedAssessments, (key, value) => {
-        if (key === 'completedAt') {
-          return value ? new Date(value) : value;
-        }
-        return value;
-      });
-    }
-  } catch (e) {
-    console.error('Failed to load from storage:', e);
+  const storedAssessments = loadJsonFromStorage<AssessmentResult[]>('breath-in-flow-assessments');
+  if (storedAssessments) {
+    assessments.value = storedAssessments;
   }
 }
 

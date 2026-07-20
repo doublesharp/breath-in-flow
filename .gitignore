@@ -1,11 +1,14 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Build outputs
 dist/
 packages/web/dist/
 packages/web/dist-electron/
 packages/web/release/
+*.tsbuildinfo
+*.d.ts.map
 
 # Environment
 .env

@@ -377,6 +377,7 @@ describe('useHrvStorage', () => {
       const results = await getAssessments();
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe(a.id);
+      expect(results[0].completedAt).toBeInstanceOf(Date);
     });
 
     it('does nothing when localStorage key is absent', async () => {

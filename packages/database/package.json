@@ -23,13 +23,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "better-sqlite3": "^12.11.1",
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
-    "@types/node": "^20.19.27",
-    "prisma": "^5.22.0",
-    "typescript": "^5.3.3",
-    "vitest": "^1.6.1",
-    "@vitest/coverage-v8": "^1.6.1"
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.0.1",
+    "@vitest/coverage-v8": "^4.1.9",
+    "prisma": "^7.8.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

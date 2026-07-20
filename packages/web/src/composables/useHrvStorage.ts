@@ -1,4 +1,5 @@
 import type { HRVAnalysis, AssessmentResult } from '@breath-in-flow/shared';
+import { parseJsonWithDateFields } from '@/utils/storageSerialization';
 
 export interface HrvMeasurement {
   id: string;
@@ -32,6 +33,7 @@ interface MeasurementStats {
 
 const DB_NAME = 'breath-in-flow-hrv';
 const DB_VERSION = 1;
+const HRV_DATE_FIELDS = ['startedAt', 'completedAt'] as const;
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -240,11 +242,13 @@ async function getLatestAssessment(): Promise<AssessmentResult | null> {
 }
 
 async function migrateFromLocalStorage(): Promise<void> {
+  if (typeof localStorage === 'undefined') return;
+
   const stored = localStorage.getItem('breath-in-flow-assessments');
   if (!stored) return;
 
   try {
-    const assessments = JSON.parse(stored);
+    const assessments = parseJsonWithDateFields<AssessmentResult[]>(stored, HRV_DATE_FIELDS);
     const db = await openDB();
     const tx = db.transaction('assessments', 'readwrite');
     for (const assessment of assessments) {

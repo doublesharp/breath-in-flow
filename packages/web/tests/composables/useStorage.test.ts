@@ -56,10 +56,23 @@ function createTestConfigInput(
   };
 }
 
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rng: () => number, min: number, max: number): number {
+  return Math.floor(rng() * (max - min + 1)) + min;
+}
+
 describe('useStorage', () => {
   const originalLocalStorage = globalThis.localStorage;
 
   beforeEach(() => {
+    resetStorageForTesting();
     localStorageMock.clear();
     vi.clearAllMocks();
   });
@@ -73,6 +86,20 @@ describe('useStorage', () => {
   });
 
   describe('Configuration Operations', () => {
+    it('creates in-memory state that should not leak into the next test', () => {
+      const storage = useStorage();
+
+      storage.createConfig(createTestConfigInput({ name: 'Isolation Seed' }));
+
+      expect(storage.getAllConfigs()).toHaveLength(1);
+    });
+
+    it('starts each test with empty in-memory configs after localStorage is cleared', () => {
+      const storage = useStorage();
+
+      expect(storage.getAllConfigs()).toHaveLength(0);
+    });
+
     it('should create a new config', () => {
       const storage = useStorage();
       const input = createTestConfigInput();
@@ -187,6 +214,20 @@ describe('useStorage', () => {
       expect(session.sets).toEqual([]);
       expect(session.completedSets).toBe(0);
       expect(session.startedAt).toBeInstanceOf(Date);
+    });
+
+    it('should keep session config snapshots independent from later config mutations', () => {
+      const storage = useStorage();
+      const session = storage.createSession(testConfig);
+
+      testConfig.name = 'Mutated Config';
+      testConfig.inhaleTime = 60;
+      testConfig.soundTheme = 'chimes';
+
+      const storedSession = storage.getSession(session.id!)!;
+      expect(storedSession.configSnapshot.name).toBe('Session Test Config');
+      expect(storedSession.configSnapshot.inhaleTime).toBe(4);
+      expect(storedSession.configSnapshot.soundTheme).toBe('wood');
     });
 
     it('should get a session by id', () => {
@@ -422,6 +463,71 @@ describe('useStorage', () => {
       expect(typeof storage.stats.value.totalSessions).toBe('number');
       expect(typeof storage.stats.value.avgHoldTime).toBe('number');
     });
+
+    it('fuzzes stats aggregation across completed and incomplete sessions', () => {
+      const rng = createRng(0x57a7526);
+      const storage = useStorage();
+      const config = storage.createConfig(
+        createTestConfigInput({
+          name: 'Stats Fuzz',
+          extendedHoldEnabled: true,
+        })
+      );
+      let expectedSessions = 0;
+      let expectedSets = 0;
+      let expectedHolds = 0;
+      let totalHoldDuration = 0;
+      let maxHoldDuration = 0;
+
+      for (let sessionIndex = 0; sessionIndex < 14; sessionIndex++) {
+        const session = storage.createSession(config);
+        const willComplete = sessionIndex % 3 !== 0;
+        const setCount = randomInt(rng, 1, 4);
+        const sessionHolds: number[] = [];
+
+        for (let setIndex = 0; setIndex < setCount; setIndex++) {
+          const holdCount = randomInt(rng, 0, 3);
+          const extendedHolds: ExtendedHoldRecord[] = Array.from({ length: holdCount }, () => {
+            const actualDuration = randomInt(rng, 5, 120);
+            sessionHolds.push(actualDuration);
+            return {
+              type: rng() < 0.5 ? 'INHALE' : 'EXHALE',
+              mode: rng() < 0.5 ? 'TIMED' : 'TOLERANCE',
+              targetDuration: randomInt(rng, 0, 120),
+              actualDuration,
+              completedAt: new Date(),
+            };
+          });
+
+          storage.addSetToSession(session.id!, {
+            setNumber: setIndex + 1,
+            completedRepetitions: randomInt(rng, 1, config.repetitions),
+            startedAt: new Date(),
+            completedAt: new Date(),
+            extendedHolds,
+          });
+        }
+
+        if (willComplete) {
+          storage.completeSession(session.id!);
+          expectedSessions++;
+          expectedSets += setCount;
+          expectedHolds += sessionHolds.length;
+          totalHoldDuration += sessionHolds.reduce((sum, duration) => sum + duration, 0);
+          maxHoldDuration = Math.max(maxHoldDuration, ...sessionHolds, 0);
+        }
+      }
+
+      const stats = storage.stats.value;
+      expect(stats.totalSessions).toBe(expectedSessions);
+      expect(stats.totalSets).toBe(expectedSets);
+      expect(stats.totalExtendedHolds).toBe(expectedHolds);
+      expect(stats.avgHoldTime).toBeCloseTo(
+        expectedHolds > 0 ? totalHoldDuration / expectedHolds : 0,
+        10
+      );
+      expect(stats.maxHoldTime).toBe(maxHoldDuration);
+    });
   });
 
   describe('Default Config', () => {
@@ -551,6 +657,46 @@ describe('useStorage', () => {
       expect(sessions[0].completedAt).toBeInstanceOf(Date);
     });
 
+    it('backfills stored config defaults and restores config date fields', async () => {
+      vi.resetModules();
+
+      const now = new Date();
+      const storedConfigs = [
+        {
+          id: crypto.randomUUID(),
+          name: 'Stored Partial Config',
+          inhaleTime: 5,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        },
+      ];
+
+      const mockLS = {
+        getItem: vi.fn((key: string) => {
+          if (key === 'breath-in-flow-configs') return JSON.stringify(storedConfigs);
+          return null;
+        }),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: mockLS,
+      });
+
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+
+      const configs = storage.getAllConfigs();
+      expect(configs).toHaveLength(1);
+      expect(configs[0].inhaleTime).toBe(5);
+      expect(configs[0].exhaleTime).toBe(DEFAULT_BREATHING_CONFIG.exhaleTime);
+      expect(configs[0].ttsEnabled).toBe(DEFAULT_BREATHING_CONFIG.ttsEnabled);
+      expect(configs[0].createdAt).toBeInstanceOf(Date);
+      expect(configs[0].updatedAt).toBeInstanceOf(Date);
+    });
+
     it('handles localStorage.getItem throwing (load failure) without throwing', async () => {
       vi.resetModules();
 
@@ -598,6 +744,51 @@ describe('useStorage', () => {
       const storage = mod.useStorage();
 
       expect(storage.getAllConfigs().length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('continues loading other storage buckets when one bucket is corrupt', async () => {
+      vi.resetModules();
+
+      const now = new Date();
+      const storedSessions = [
+        {
+          id: crypto.randomUUID(),
+          configId: undefined,
+          configSnapshot: { ...DEFAULT_BREATHING_CONFIG, name: 'Snapshot' },
+          status: 'COMPLETED',
+          sets: [],
+          targetSets: 0,
+          completedSets: 0,
+          startedAt: now.toISOString(),
+          completedAt: now.toISOString(),
+        },
+      ];
+
+      const mockLS = {
+        getItem: vi.fn((key: string) => {
+          if (key === 'breath-in-flow-configs') return '{invalid json}';
+          if (key === 'breath-in-flow-sessions') return JSON.stringify(storedSessions);
+          if (key === 'breath-in-flow-sound-theme') return 'chimes';
+          return null;
+        }),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: mockLS,
+      });
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+
+      expect(storage.getAllSessions()).toHaveLength(1);
+      expect(storage.getAllSessions()[0].startedAt).toBeInstanceOf(Date);
+      expect(storage.getSoundTheme()).toBe('chimes');
+
+      consoleErrorSpy.mockRestore();
     });
 
     it('handles invalid JSON in localStorage for sessions', async () => {
@@ -918,6 +1109,16 @@ describe('useStorage', () => {
       const storage = mod.useStorage();
 
       expect(storage.getSoundTheme()).toBe('chimes');
+    });
+
+    it('should ignore invalid stored sound themes', async () => {
+      localStorageMock.setItem('breath-in-flow-sound-theme', 'invalid-theme');
+
+      vi.resetModules();
+      const mod = await import('../../src/composables/useStorage');
+      const storage = mod.useStorage();
+
+      expect(storage.getSoundTheme()).toBe('wood');
     });
 
     it('should expose soundTheme as reactive ref', () => {
