@@ -21,6 +21,13 @@ npmRebuild: false
 
 mac:
   category: public.app-category.healthcare-fitness
+  hardenedRuntime: true
+  gatekeeperAssess: true
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+  extendInfo:
+    NSCameraUsageDescription: Breath in Flow uses the camera and torch to estimate pulse during optional biometric sessions.
+    NSMotionUsageDescription: Breath in Flow uses motion sensor data to estimate heart timing during optional resonance assessments.
   target:
     - target: dmg
       arch:
@@ -28,8 +35,6 @@ mac:
     - target: zip
       arch:
         - arm64
-  hardenedRuntime: false
-  gatekeeperAssess: false
 
 dmg:
   title: Breath in Flow

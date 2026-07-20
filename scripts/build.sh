@@ -181,7 +181,7 @@ build_android() {
     
     cd "$WEB_DIR"
     pnpm build
-    npx cap sync android
+    pnpm exec cap sync android
     
     cd "$WEB_DIR/android"
     ./gradlew assembleDebug
@@ -205,7 +205,7 @@ build_ios() {
     
     cd "$WEB_DIR"
     pnpm build
-    npx cap sync ios
+    pnpm exec cap sync ios
     
     # Copy iOS project reference to dist
     rm -rf "$DIST_DIR/ios/"*
@@ -220,7 +220,7 @@ The iOS project has been synced and is ready for building in Xcode.
 To build and archive for distribution:
 
 1. Open the Xcode project:
-   cd packages/web && npx cap open ios
+   cd packages/web && pnpm exec cap open ios
 
 2. In Xcode:
    - Select your team in Signing & Capabilities

@@ -74,12 +74,13 @@ async function createWindow() {
     // Open with Cmd+Option+I on macOS
   }
 
-  // Add keyboard shortcut to toggle DevTools
-  mainWindow.webContents.on('before-input-event', (_event, input) => {
-    if (input.meta && input.alt && input.key.toLowerCase() === 'i') {
-      mainWindow?.webContents.toggleDevTools();
-    }
-  });
+  if (process.env.VITE_DEV_SERVER_URL) {
+    mainWindow.webContents.on('before-input-event', (_event, input) => {
+      if (input.meta && input.alt && input.key.toLowerCase() === 'i') {
+        mainWindow?.webContents.toggleDevTools();
+      }
+    });
+  }
 }
 
 // This method will be called when Electron has finished

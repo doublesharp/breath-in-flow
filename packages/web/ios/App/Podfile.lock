@@ -1,40 +1,40 @@
 PODS:
-  - Capacitor (8.2.0):
+  - Capacitor (8.4.2):
     - CapacitorCordova
-  - CapacitorCommunityKeepAwake (8.0.0):
+  - CapacitorCommunityKeepAwake (8.0.1):
     - Capacitor
-  - CapacitorCommunityTextToSpeech (8.0.0):
+  - CapacitorCommunityTextToSpeech (8.0.2):
     - Capacitor
-  - CapacitorCordova (8.2.0)
+  - CapacitorCordova (8.4.2)
   - CapawesomeCapacitorTorch (8.0.1):
     - Capacitor
 
 DEPENDENCIES:
-  - "Capacitor (from `../../../../node_modules/.pnpm/@capacitor+ios@8.2.0_@capacitor+core@8.2.0/node_modules/@capacitor/ios`)"
-  - "CapacitorCommunityKeepAwake (from `../../../../node_modules/.pnpm/@capacitor-community+keep-awake@8.0.0_@capacitor+core@8.2.0/node_modules/@capacitor-community/keep-awake`)"
-  - "CapacitorCommunityTextToSpeech (from `../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@8.0.0_@capacitor+core@8.2.0/node_modules/@capacitor-community/text-to-speech`)"
-  - "CapacitorCordova (from `../../../../node_modules/.pnpm/@capacitor+ios@8.2.0_@capacitor+core@8.2.0/node_modules/@capacitor/ios`)"
-  - "CapawesomeCapacitorTorch (from `../../../../node_modules/.pnpm/@capawesome+capacitor-torch@8.0.1_@capacitor+core@8.2.0/node_modules/@capawesome/capacitor-torch`)"
+  - "Capacitor (from `../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios`)"
+  - "CapacitorCommunityKeepAwake (from `../../../../node_modules/.pnpm/@capacitor-community+keep-awake@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor-community/keep-awake`)"
+  - "CapacitorCommunityTextToSpeech (from `../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@8.0.2_@capacitor+core@8.4.2/node_modules/@capacitor-community/text-to-speech`)"
+  - "CapacitorCordova (from `../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios`)"
+  - "CapawesomeCapacitorTorch (from `../../../../node_modules/.pnpm/@capawesome+capacitor-torch@8.0.1_@capacitor+core@8.4.2/node_modules/@capawesome/capacitor-torch`)"
 
 EXTERNAL SOURCES:
   Capacitor:
-    :path: "../../../../node_modules/.pnpm/@capacitor+ios@8.2.0_@capacitor+core@8.2.0/node_modules/@capacitor/ios"
+    :path: "../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios"
   CapacitorCommunityKeepAwake:
-    :path: "../../../../node_modules/.pnpm/@capacitor-community+keep-awake@8.0.0_@capacitor+core@8.2.0/node_modules/@capacitor-community/keep-awake"
+    :path: "../../../../node_modules/.pnpm/@capacitor-community+keep-awake@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor-community/keep-awake"
   CapacitorCommunityTextToSpeech:
-    :path: "../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@8.0.0_@capacitor+core@8.2.0/node_modules/@capacitor-community/text-to-speech"
+    :path: "../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@8.0.2_@capacitor+core@8.4.2/node_modules/@capacitor-community/text-to-speech"
   CapacitorCordova:
-    :path: "../../../../node_modules/.pnpm/@capacitor+ios@8.2.0_@capacitor+core@8.2.0/node_modules/@capacitor/ios"
+    :path: "../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios"
   CapawesomeCapacitorTorch:
-    :path: "../../../../node_modules/.pnpm/@capawesome+capacitor-torch@8.0.1_@capacitor+core@8.2.0/node_modules/@capawesome/capacitor-torch"
+    :path: "../../../../node_modules/.pnpm/@capawesome+capacitor-torch@8.0.1_@capacitor+core@8.4.2/node_modules/@capawesome/capacitor-torch"
 
 SPEC CHECKSUMS:
-  Capacitor: 49a454e1cdbd520bc106a220adca7913536a4933
-  CapacitorCommunityKeepAwake: 332bf035bbdf0b1c244fd492b35a8a06c8802111
-  CapacitorCommunityTextToSpeech: 43cd3c04174f38b8766f160830ee474cd5596439
-  CapacitorCordova: a9ac88d84a1f5280f33b349fe50fce1902683ac0
+  Capacitor: 52f999235b8bd6a7d01694753f4f4d54d182e3a3
+  CapacitorCommunityKeepAwake: d41922812644562e94a79acaf7f41e6d9413af8c
+  CapacitorCommunityTextToSpeech: a9f7c5bcdc424197d11bb7ae3e9010b415e931b0
+  CapacitorCordova: 345eacdc4c8282415446aea4acd8c77d82480bd4
   CapawesomeCapacitorTorch: d118c3fe55e7472061f02d4775f08899fde73a32
 
-PODFILE CHECKSUM: 4471fa043df36fc9972a56072260ff1ca01e24c9
+PODFILE CHECKSUM: e24405645129a94cf8712eeaa2aa7193f1c73b8a
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.17.0

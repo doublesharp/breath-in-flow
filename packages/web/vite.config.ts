@@ -2,11 +2,11 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
 import electron from 'vite-plugin-electron';
-import renderer from 'vite-plugin-electron-renderer';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const isElectron = process.env.BUILD_TARGET === 'electron';
+const isProduction = process.env.NODE_ENV === 'production';
 const configDir = dirname(fileURLToPath(import.meta.url));
 
 // https://vitejs.dev/config/
@@ -60,7 +60,6 @@ export default defineConfig({
               },
             },
           ]),
-          renderer(),
         ]
       : []),
   ],
@@ -74,7 +73,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: !isProduction,
     // Electron-specific build settings
     ...(isElectron && {
       rollupOptions: {
