@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
-import ResonanceAssessment from '../../src/components/ResonanceAssessment.vue';
+import ResonanceAssessment, {
+  buildAssessmentTrials,
+  RESONANCE_TRIAL_DURATION_SECONDS,
+} from '../../src/components/ResonanceAssessment.vue';
+import { ASSESSMENT_TRIALS } from '@breath-in-flow/shared';
 import { ppgService } from '../../src/services/ppgService';
 
 const { saveAssessment, requestSensorPermissions, getPermissionDeniedMessage } = vi.hoisted(() => ({
@@ -79,6 +83,70 @@ describe('ResonanceAssessment', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('builds every configured trial to last at least two minutes', () => {
+    const trials = buildAssessmentTrials(ASSESSMENT_TRIALS, RESONANCE_TRIAL_DURATION_SECONDS);
+
+    expect(trials).toHaveLength(ASSESSMENT_TRIALS.length);
+    for (const trial of trials) {
+      const cycleSeconds = trial.inhaleTime + trial.exhaleTime;
+      expect(trial.repetitions).toBe(Math.ceil(RESONANCE_TRIAL_DURATION_SECONDS / cycleSeconds));
+      expect(trial.repetitions * cycleSeconds).toBeGreaterThanOrEqual(
+        RESONANCE_TRIAL_DURATION_SECONDS
+      );
+    }
+  });
+
+  it('does not render general frequency-domain power for short resonance trials', async () => {
+    const wrapper = mount(ResonanceAssessment);
+
+    await wrapper.vm.setPhaseForTesting('RESULT');
+    await wrapper.vm.setTrialAnalysisForTesting(0, {
+      timeDomain: {
+        meanRR: 1_000,
+        sdnn: 20,
+        rmssd: 18,
+        pnn50: 5,
+        meanHR: 60,
+        minHR: 55,
+        maxHR: 68,
+        hrRange: 13,
+      },
+      frequencyDomain: {
+        available: true,
+        value: {
+          lfPowerNorm: 70,
+          hfPowerNorm: 30,
+          lfHfRatio: 2.3,
+          lfPeak: 0.1,
+          hfPeak: 0.25,
+          spectrum: [{ frequency: 0.1, power: 100 }],
+        },
+      },
+      poincare: { available: false, reason: 'protocol-not-supported' },
+      resonance: {
+        available: true,
+        value: {
+          peakToTroughAmplitude: 12,
+          waveformSmoothness: 0.8,
+          phaseSynchrony: 0.7,
+          lfPeakCount: 1,
+          lfPeakAmplitude: 80,
+        },
+      },
+      quality: {
+        totalSamples: 120,
+        artifactsDetected: 0,
+        artifactPercentage: 0,
+        meanSignalQuality: 0.9,
+      },
+      raw: { rrIntervals: [], timestamps: [], instantaneousHR: [] },
+    });
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.findComponent({ name: 'FrequencySpectrum' }).exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('LF Power');
   });
 
   it('renders INTRO phase by default', () => {

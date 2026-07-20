@@ -85,7 +85,7 @@ describe('LabInsights', () => {
       props: { measurements: [], latestAssessment: null },
     });
     expect(wrapper.find('[data-testid="no-data-card"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('Take a few more HRV measurements');
+    expect(wrapper.text()).toContain('three comparable Pulse Variability measurements');
   });
 
   it('shows "no data" with exactly 2 measurements', () => {
@@ -156,8 +156,7 @@ describe('LabInsights', () => {
     expect(wrapper.find('[data-testid="insight-card-rf-recommendation"]').exists()).toBe(false);
   });
 
-  it('shows RMSSD trend insight when recent RMSSD improved >10%', () => {
-    // 14 measurements: last 7 days high (50ms), prev 7 days low (30ms) => ~67% improvement
+  it('shows a higher within-person RMSSD comparison', () => {
     const recent = Array.from({ length: 7 }, (_, i) => makeMeasurement({ daysAgo: i, rmssd: 50 }));
     const previous = Array.from({ length: 7 }, (_, i) =>
       makeMeasurement({ daysAgo: i + 7, rmssd: 30 })
@@ -170,12 +169,12 @@ describe('LabInsights', () => {
       },
     });
 
-    const card = wrapper.find('[data-testid="insight-card-rmssd-trend"]');
+    const card = wrapper.find('[data-testid="insight-card-rmssd-comparison"]');
     expect(card.exists()).toBe(true);
-    expect(wrapper.text()).toContain('improv');
+    expect(wrapper.text()).toContain('higher than your recent comparable measurements');
   });
 
-  it('shows RMSSD declined insight when RMSSD dropped >10%', () => {
+  it('shows a lower within-person RMSSD comparison', () => {
     const recent = Array.from({ length: 7 }, (_, i) => makeMeasurement({ daysAgo: i, rmssd: 20 }));
     const previous = Array.from({ length: 7 }, (_, i) =>
       makeMeasurement({ daysAgo: i + 7, rmssd: 50 })
@@ -188,12 +187,12 @@ describe('LabInsights', () => {
       },
     });
 
-    const card = wrapper.find('[data-testid="insight-card-rmssd-trend"]');
+    const card = wrapper.find('[data-testid="insight-card-rmssd-comparison"]');
     expect(card.exists()).toBe(true);
-    expect(wrapper.text()).toContain('declin');
+    expect(wrapper.text()).toContain('lower than your recent comparable measurements');
   });
 
-  it('shows RMSSD stable insight when change is within ±10%', () => {
+  it('shows a neutral comparison when RMSSD is within ten percent', () => {
     const all = Array.from(
       { length: 14 },
       (_, i) => makeMeasurement({ daysAgo: i, rmssd: 35 + (i % 2) }) // tiny variation
@@ -206,9 +205,9 @@ describe('LabInsights', () => {
       },
     });
 
-    const card = wrapper.find('[data-testid="insight-card-rmssd-trend"]');
+    const card = wrapper.find('[data-testid="insight-card-rmssd-comparison"]');
     expect(card.exists()).toBe(true);
-    expect(wrapper.text()).toContain('stable');
+    expect(wrapper.text()).toContain('close to your recent comparable measurements');
   });
 
   it('shows measurement streak with consecutive daily measurements', () => {
@@ -248,9 +247,7 @@ describe('LabInsights', () => {
     expect(wrapper.exists()).toBe(true);
   });
 
-  it('shows best time of day insight when >10 measurements across time periods', () => {
-    // 8 morning measurements (higher RMSSD) + 4 evening measurements (lower RMSSD)
-    // This ensures 2 distinct periods exist, so the insight shows
+  it('does not label the time with higher RMSSD as medically best', () => {
     const morningMeasurements = Array.from({ length: 8 }, (_, i) => {
       const completedAt = new Date();
       completedAt.setDate(completedAt.getDate() - i);
@@ -272,8 +269,8 @@ describe('LabInsights', () => {
     });
 
     const card = wrapper.find('[data-testid="insight-card-best-time"]');
-    expect(card.exists()).toBe(true);
-    expect(wrapper.text()).toContain('morning');
+    expect(card.exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Best Time');
   });
 
   it('does not show best time of day with fewer than 10 measurements', () => {
@@ -293,5 +290,23 @@ describe('LabInsights', () => {
     });
     expect(wrapper.exists()).toBe(true);
     expect(wrapper.find('[data-testid="insight-card-rf-recommendation"]').exists()).toBe(false);
+  });
+
+  it('describes eligible within-person comparisons without recovery or causation claims', () => {
+    const measurements = [
+      makeMeasurement({ daysAgo: 3, rmssd: 30 }),
+      makeMeasurement({ daysAgo: 2, rmssd: 32 }),
+      makeMeasurement({ daysAgo: 1, rmssd: 50 }),
+    ];
+    const wrapper = mount(LabInsights, {
+      props: { measurements, latestAssessment: null },
+    });
+
+    expect(wrapper.find('[data-testid="insight-card-rmssd-comparison"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('higher than your recent comparable measurements');
+    expect(wrapper.text()).toContain('same protocol, duration, sensor, and conditions');
+    expect(wrapper.text()).not.toContain('recovery');
+    expect(wrapper.text()).not.toContain('paying off');
+    expect(wrapper.text()).not.toContain('Best Time');
   });
 });

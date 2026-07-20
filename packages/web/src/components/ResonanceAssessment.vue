@@ -200,7 +200,7 @@
                 <HrOscillation
                   :hr-data="getHrDataForTrial(index)"
                   :breathing-rate-b-p-m="trial.rate"
-                  :trial-duration-seconds="120"
+                  :trial-duration-seconds="trial.repetitions * (trial.inhaleTime + trial.exhaleTime)"
                   :peak-to-trough-amplitude="resonanceValueAt(index)!.peakToTroughAmplitude"
                   :waveform-smoothness="resonanceValueAt(index)!.waveformSmoothness"
                   :height="150"
@@ -350,20 +350,6 @@
             </p>
           </div>
 
-          <!-- HRV Trial Comparison (when sensor data available) -->
-          <template v-if="hasAnyHrvData">
-            <TrialComparison :trials="trialComparisonData" :selected-rate="selectedRate" />
-
-            <template v-if="selectedTrialAnalysis">
-              <FrequencySpectrum
-                v-if="selectedTrialAnalysis.frequencyDomain.available"
-                :spectrum="selectedTrialAnalysis.frequencyDomain.value.spectrum"
-                :lf-peak="selectedTrialAnalysis.frequencyDomain.value.lfPeak"
-                :hf-peak="selectedTrialAnalysis.frequencyDomain.value.hfPeak"
-              />
-            </template>
-          </template>
-
           <!-- All Trial Scores -->
           <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
             <button
@@ -433,14 +419,33 @@
   </div>
 </template>
 
+<script lang="ts">
+export const RESONANCE_TRIAL_DURATION_SECONDS = 120;
+
+interface AssessmentTrialTiming {
+  readonly rate: number;
+  readonly inhaleTime: number;
+  readonly exhaleTime: number;
+}
+
+export function buildAssessmentTrials(
+  trialTimings: readonly AssessmentTrialTiming[],
+  durationSeconds = RESONANCE_TRIAL_DURATION_SECONDS
+) {
+  return trialTimings.map((trial) => ({
+    ...trial,
+    repetitions: Math.ceil(durationSeconds / (trial.inhaleTime + trial.exhaleTime)),
+    symptoms: [],
+  }));
+}
+</script>
+
 <script setup lang="ts">
 import { ref, reactive, computed, onUnmounted } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
 import HrOscillation from './hrv/HrOscillation.vue';
-import TrialComparison from './hrv/TrialComparison.vue';
-import FrequencySpectrum from './hrv/FrequencySpectrum.vue';
 import SignalQualityIndicator from './hrv/SignalQualityIndicator.vue';
 import { useBreathingTimer } from '../composables/useBreathingTimer';
 import { useHrvStorage } from '../composables/useHrvStorage';
@@ -468,7 +473,11 @@ import { ppgService } from '../services/ppgService';
 import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
 import type { FusedIBISample } from '../services/sensorFusion';
-import { MeasurementSession, type MeasurementStartOutcome } from '../services/measurementSession';
+import {
+  limitAnalysisToEligibility,
+  MeasurementSession,
+  type MeasurementStartOutcome,
+} from '../services/measurementSession';
 import { getPermissionDeniedMessage, requestSensorPermissions } from '../services/permissionService';
 import { ttsService } from '../services/ttsService';
 import { scoreTrial, findSuggestedRate } from '../utils/assessmentScoring';
@@ -556,13 +565,7 @@ const assessmentConfig = reactive<AssessmentConfig>({
 });
 
 // Build trials with computed repetitions
-const trials = ref<AssessmentTrial[]>(
-  ASSESSMENT_TRIALS.map((t) => ({
-    ...t,
-    repetitions: Math.round(120 / (t.inhaleTime + t.exhaleTime)),
-    symptoms: [],
-  }))
-);
+const trials = ref<AssessmentTrial[]>(buildAssessmentTrials(ASSESSMENT_TRIALS));
 
 // Reactive timer config — mutated between phases
 const timerConfig = reactive<BreathingConfig>({
@@ -618,24 +621,6 @@ const trialScores = computed(() =>
     score: scoreTrial(t),
   }))
 );
-
-const hasAnyHrvData = computed(() => trialAnalyses.value.some((a) => a !== null));
-
-const trialComparisonData = computed(() =>
-  trials.value
-    .map((t, i) => {
-      const analysis = trialAnalyses.value[i];
-      if (!analysis) return null;
-      return { rate: t.rate, analysis };
-    })
-    .filter((x): x is { rate: number; analysis: HRVAnalysis } => x !== null)
-);
-
-const selectedTrialAnalysis = computed(() => {
-  const idx = trials.value.findIndex((t) => t.rate === selectedRate.value);
-  if (idx < 0) return null;
-  return trialAnalyses.value[idx];
-});
 
 const sensorInstructions = computed(() => {
   switch (selectedSensorMode.value) {
@@ -777,7 +762,7 @@ function stopSensorAndAnalyze() {
   if (sessionResult?.eligibility?.eligible && currentTrialIBIs.value.length >= 10) {
     const trial = trials.value[currentTrialIndex.value];
     const analysis = analyzeHRV(currentTrialIBIs.value, trial.rate);
-    trialAnalyses.value[currentTrialIndex.value] = analysis;
+    trialAnalyses.value[currentTrialIndex.value] = limitAnalysisToEligibility(analysis, sessionResult.eligibility);
   } else if (sessionResult?.eligibility && !sessionResult.eligibility.eligible) {
     sensorStatusMessage.value =
       'This trial did not produce enough clean detected beats for automatic HRV scoring. Use the comfort and waveform questions to score it manually.';
@@ -830,7 +815,7 @@ async function startAssessment() {
 
   void enableKeepAwake();
   const warmupTrial = ASSESSMENT_TRIALS.find((t) => t.rate === assessmentConfig.warmupRate) ?? ASSESSMENT_TRIALS[1];
-  const warmupReps = Math.round(
+  const warmupReps = Math.ceil(
     assessmentConfig.warmupDurationSeconds / (warmupTrial.inhaleTime + warmupTrial.exhaleTime)
   );
   timerConfig.inhaleTime = warmupTrial.inhaleTime;
@@ -1035,7 +1020,12 @@ async function saveResult() {
 function setPhaseForTesting(p: AssessmentPhase) {
   phase.value = p;
 }
-defineExpose({ setPhaseForTesting });
+
+function setTrialAnalysisForTesting(index: number, analysis: HRVAnalysis) {
+  trialAnalyses.value[index] = analysis;
+}
+
+defineExpose({ setPhaseForTesting, setTrialAnalysisForTesting });
 
 // ======================== Cleanup ========================
 

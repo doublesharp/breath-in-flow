@@ -192,4 +192,21 @@ describe('HrvTrends', () => {
     });
     expect(wrapper.find('[data-testid="readiness-chart-container"]').exists()).toBe(false);
   });
+
+  it('uses within-person comparison guidance without generic targets or recovery claims', () => {
+    const wrapper = mount(HrvTrends, {
+      props: {
+        measurements: [
+          makeMeasurement({ daysAgo: 3 }),
+          makeMeasurement({ daysAgo: 2 }),
+          makeMeasurement({ daysAgo: 1 }),
+        ],
+      },
+    });
+
+    expect(wrapper.text()).toContain('same protocol, duration, sensor, and conditions');
+    expect(wrapper.text()).not.toContain('Target:');
+    expect(wrapper.text()).not.toContain('Lower = better recovery');
+    expect(wrapper.text()).not.toContain('training effect');
+  });
 });

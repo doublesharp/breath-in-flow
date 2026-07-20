@@ -400,12 +400,26 @@
       </div>
     </Teleport>
 
-    <!-- Section C: Recent Results -->
+    <!-- Section C: Trends and Insights -->
+    <div class="space-y-3">
+      <h2 class="text-xl font-bold text-white">Trends</h2>
+      <HrvTrends :measurements="measurements" />
+    </div>
+
+    <div class="space-y-3">
+      <h2 class="text-xl font-bold text-white">Insights</h2>
+      <LabInsights :measurements="measurements" :latest-assessment="latestAssessment" />
+    </div>
+
+    <!-- Section D: Recent Results -->
     <div class="space-y-3">
       <h2 class="text-xl font-bold text-white">Recent Results</h2>
 
       <div v-if="recentMeasurements.length === 0" class="text-sm text-white/30 py-4 text-center">
-        No measurements yet. Start a measurement above to see results here.
+        <template v-if="latestAssessment"
+          >No standalone measurements yet. Your resonance assessment appears above.</template
+        >
+        <template v-else>No measurements yet. Start a measurement above to see results here.</template>
       </div>
 
       <div
@@ -436,6 +450,8 @@ import HrvMetricsDashboard from './hrv/HrvMetricsDashboard.vue';
 import FrequencySpectrum from './hrv/FrequencySpectrum.vue';
 import PoincarePlot from './hrv/PoincarePlot.vue';
 import ResonanceAssessment from './ResonanceAssessment.vue';
+import HrvTrends from './HrvTrends.vue';
+import LabInsights from './LabInsights.vue';
 import { ppgService, listCameras } from '../services/ppgService';
 import type { PPGCallbacks } from '../services/ppgService';
 import { soundService } from '../services/soundService';
@@ -448,7 +464,7 @@ import {
 } from '../services/measurementSession';
 import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
 import { analyzeHRV, finalizeMeasurement, MAX_PLAUSIBLE_IBI_MS } from '@breath-in-flow/shared';
-import { useHrvStorage } from '../composables/useHrvStorage';
+import { useHrvStorage, type HrvMeasurement } from '../composables/useHrvStorage';
 import { useAppLifecycle } from '../composables/useAppLifecycle';
 import type {
   AssessmentResult,
@@ -522,14 +538,8 @@ const measurementNotes = ref('');
 const measurementStartTime = ref<Date>(new Date());
 const currentEligibility = ref<MeasurementEligibility | null>(null);
 const currentSampleProvenance = ref<SampleProvenance[]>([]);
-const recentMeasurements = ref<
-  Array<{
-    id: string;
-    type: string;
-    completedAt: Date;
-    analysis: HRVAnalysis;
-  }>
->([]);
+const measurements = ref<HrvMeasurement[]>([]);
+const recentMeasurements = computed(() => measurements.value.slice(0, 5));
 const latestAssessment = ref<AssessmentResult | null>(null);
 const hrDataPoints = ref<Array<{ time: number; hr: number; quality: number }>>([]);
 const rawSignalData = ref<Array<{ time: number; value: number }>>([]);
@@ -1169,8 +1179,7 @@ function onAssessmentComplete() {
 // Data loading
 async function loadRecentResults() {
   try {
-    const results = await hrvStorage.getMeasurements({ limit: 5 });
-    recentMeasurements.value = results;
+    measurements.value = await hrvStorage.getMeasurements();
   } catch {
     // IndexedDB may not be available in tests
   }

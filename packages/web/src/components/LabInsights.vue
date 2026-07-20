@@ -2,7 +2,7 @@
   <div class="lab-insights space-y-3" data-testid="lab-insights">
     <!-- No data state -->
     <div
-      v-if="measurements.length < 3"
+      v-if="measurementInsights.length === 0"
       class="glass rounded-xl p-4 border-l-4 border-blue-500"
       data-testid="no-data-card"
     >
@@ -10,13 +10,16 @@
         <span class="text-blue-400 text-lg">ℹ</span>
         <div>
           <p class="text-sm font-medium text-slate-200">Getting started</p>
-          <p class="text-sm text-slate-400 mt-0.5">Take a few more HRV measurements to start seeing insights</p>
+          <p class="text-sm text-slate-400 mt-0.5">
+            Complete at least three comparable Pulse Variability measurements using the same protocol, duration, sensor,
+            and conditions.
+          </p>
         </div>
       </div>
     </div>
 
     <!-- Insight cards -->
-    <template v-if="measurements.length >= 3">
+    <template v-if="visibleInsights.length > 0">
       <div
         v-for="insight in visibleInsights"
         :key="insight.id"
@@ -65,6 +68,7 @@
 import { ref, computed } from 'vue';
 import type { AssessmentResult } from '@breath-in-flow/shared';
 import type { HrvMeasurement } from '../composables/useHrvStorage';
+import { buildWithinPersonInsights, type WellnessInsight } from '../utils/measurementTrends';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +85,7 @@ interface Insight {
   message: string;
   action?: InsightAction;
   dismissible: boolean;
+  direction?: WellnessInsight['direction'];
 }
 
 // ─── Props & Emits ────────────────────────────────────────────────────────────
@@ -104,24 +109,18 @@ function dismiss(id: string) {
 
 // ─── Insight computation ──────────────────────────────────────────────────────
 
-function avgRmssd(ms: HrvMeasurement[]): number {
-  if (ms.length === 0) return 0;
-  return ms.reduce((sum, m) => sum + m.analysis.timeDomain.rmssd, 0) / ms.length;
-}
+const measurementInsights = computed(() => buildWithinPersonInsights(props.measurements));
 
 const insights = computed<Insight[]>(() => {
   const cards: Insight[] = [];
-  const now = Date.now();
-  const msPerDay = 86400000;
 
-  // 1. RF Recommendation
   if (props.latestAssessment) {
     const rate = props.latestAssessment.selectedRate;
     cards.push({
       id: 'rf-recommendation',
       type: 'recommendation',
       title: 'Resonance Frequency Found',
-      message: `Based on your assessment, ${rate.toFixed(1)} BPM produced the strongest resonance. Apply as your default?`,
+      message: `${rate.toFixed(1)} BPM was selected from your assessment. Apply it as your default paced-breathing rate?`,
       action: {
         label: 'Apply',
         event: 'apply-rf',
@@ -131,48 +130,14 @@ const insights = computed<Insight[]>(() => {
     });
   }
 
-  // 2. RMSSD Trend Insight
-  if (props.measurements.length >= 7) {
-    const recent = props.measurements.filter((m) => new Date(m.completedAt).getTime() >= now - 7 * msPerDay);
-    const previous = props.measurements.filter((m) => {
-      const t = new Date(m.completedAt).getTime();
-      return t >= now - 14 * msPerDay && t < now - 7 * msPerDay;
+  for (const insight of measurementInsights.value) {
+    cards.push({
+      ...insight,
+      type: 'trend',
+      dismissible: false,
     });
-
-    if (recent.length >= 2 && previous.length >= 2) {
-      const recentAvg = avgRmssd(recent);
-      const prevAvg = avgRmssd(previous);
-      const changePct = prevAvg > 0 ? ((recentAvg - prevAvg) / prevAvg) * 100 : 0;
-
-      if (changePct > 10) {
-        cards.push({
-          id: 'rmssd-trend',
-          type: 'trend',
-          title: 'HRV Improving',
-          message: `Your RMSSD has improved ${Math.round(changePct)}% over the last week`,
-          dismissible: false,
-        });
-      } else if (changePct < -10) {
-        cards.push({
-          id: 'rmssd-trend',
-          type: 'trend',
-          title: 'HRV Declined',
-          message: `Your RMSSD has declined ${Math.round(Math.abs(changePct))}% — consider more recovery time`,
-          dismissible: false,
-        });
-      } else {
-        cards.push({
-          id: 'rmssd-trend',
-          type: 'trend',
-          title: 'HRV Stable',
-          message: 'Your HRV is stable — consistent practice is paying off',
-          dismissible: false,
-        });
-      }
-    }
   }
 
-  // 3. Measurement Streak
   if (props.measurements.length >= 2) {
     const days = new Set(
       props.measurements.map((m) => {
@@ -182,6 +147,7 @@ const insights = computed<Insight[]>(() => {
     );
 
     let streak = 0;
+    const msPerDay = 86400000;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -200,57 +166,7 @@ const insights = computed<Insight[]>(() => {
         id: 'measurement-streak',
         type: 'streak',
         title: 'Measurement Streak',
-        message: `You've measured HRV ${streak} day${streak !== 1 ? 's' : ''} in a row — keep it up!`,
-        dismissible: false,
-      });
-    }
-  }
-
-  // 4. Best Time of Day
-  if (props.measurements.length >= 10) {
-    const byHour: Record<number, number[]> = {};
-    for (const m of props.measurements) {
-      const hour = new Date(m.completedAt).getHours();
-      if (!byHour[hour]) byHour[hour] = [];
-      byHour[hour].push(m.analysis.timeDomain.rmssd);
-    }
-
-    // Group into periods
-    let morningTotal = 0,
-      morningCount = 0;
-    let afternoonTotal = 0,
-      afternoonCount = 0;
-    let eveningTotal = 0,
-      eveningCount = 0;
-
-    for (const [hourStr, values] of Object.entries(byHour)) {
-      const hour = parseInt(hourStr, 10);
-      const sum = values.reduce((a, b) => a + b, 0);
-      if (hour >= 5 && hour < 12) {
-        morningTotal += sum;
-        morningCount += values.length;
-      } else if (hour >= 12 && hour < 18) {
-        afternoonTotal += sum;
-        afternoonCount += values.length;
-      } else {
-        eveningTotal += sum;
-        eveningCount += values.length;
-      }
-    }
-
-    const periods: { name: string; avg: number; count: number }[] = [];
-    if (morningCount > 0) periods.push({ name: 'morning', avg: morningTotal / morningCount, count: morningCount });
-    if (afternoonCount > 0)
-      periods.push({ name: 'afternoon', avg: afternoonTotal / afternoonCount, count: afternoonCount });
-    if (eveningCount > 0) periods.push({ name: 'evening', avg: eveningTotal / eveningCount, count: eveningCount });
-
-    if (periods.length > 1) {
-      const best = periods.reduce((a, b) => (a.avg > b.avg ? a : b));
-      cards.push({
-        id: 'best-time',
-        type: 'info',
-        title: 'Best Time to Measure',
-        message: `Your HRV tends to be highest in the ${best.name}`,
+        message: `You've collected Pulse Variability readings ${streak} day${streak !== 1 ? 's' : ''} in a row.`,
         dismissible: false,
       });
     }
@@ -268,9 +184,9 @@ function borderColorClass(insight: Insight): string {
     case 'recommendation':
       return 'border-emerald-500';
     case 'trend':
-      return insight.message.toLowerCase().includes('declin')
+      return insight.direction === 'lower'
         ? 'border-amber-500'
-        : insight.message.toLowerCase().includes('improv')
+        : insight.direction === 'higher'
           ? 'border-emerald-500'
           : 'border-slate-500';
     case 'streak':
@@ -287,7 +203,7 @@ function iconColorClass(insight: Insight): string {
     case 'recommendation':
       return 'text-emerald-400';
     case 'trend':
-      return insight.message.toLowerCase().includes('declin') ? 'text-amber-400' : 'text-emerald-400';
+      return insight.direction === 'lower' ? 'text-amber-400' : 'text-emerald-400';
     case 'streak':
       return 'text-emerald-400';
     case 'info':
@@ -302,11 +218,7 @@ function insightIcon(insight: Insight): string {
     case 'recommendation':
       return '★';
     case 'trend':
-      return insight.message.toLowerCase().includes('declin')
-        ? '↓'
-        : insight.message.toLowerCase().includes('improv')
-          ? '↑'
-          : '→';
+      return insight.direction === 'lower' ? '↓' : insight.direction === 'higher' ? '↑' : '→';
     case 'streak':
       return '🔥';
     case 'info':

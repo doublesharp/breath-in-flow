@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { enableAutoUnmount, flushPromises, mount, shallowMount } from '@vue/test-utils';
 import LabTab from '@/components/LabTab.vue';
+import HrvTrends from '@/components/HrvTrends.vue';
+import LabInsights from '@/components/LabInsights.vue';
 import { ppgService } from '@/services/ppgService';
 import { sensorFusionService } from '@/services/sensorFusion';
+import type { HrvMeasurement } from '@/composables/useHrvStorage';
 import type { HRVAnalysis, IBISample, PoincareUnavailableReason } from '@breath-in-flow/shared';
 
 enableAutoUnmount(afterEach);
@@ -510,6 +513,42 @@ describe('LabTab.vue', () => {
 
     expect(wrapper.text()).toContain('Recent Results');
     expect(wrapper.text()).toContain('No measurements yet');
+  });
+
+  it('loads full measurement history and mounts trends and insights', async () => {
+    const history = Array.from({ length: 7 }, (_, index) => ({
+      id: `measurement-${index}`,
+      type: 'quick-check',
+      startedAt: new Date(2026, 6, index + 1, 7, 58),
+      completedAt: new Date(2026, 6, index + 1, 8),
+      durationSeconds: 120,
+      sensorMode: 'camera',
+      analysis: analysisWithPoincareUnavailable('protocol-not-supported'),
+    })) as HrvMeasurement[];
+    hrvStorageMock.getMeasurements.mockResolvedValueOnce(history);
+
+    const wrapper = shallowMount(LabTab);
+    await flushPromises();
+
+    expect(hrvStorageMock.getMeasurements).toHaveBeenCalledWith();
+    expect(wrapper.findComponent(HrvTrends).props('measurements')).toHaveLength(7);
+    expect(wrapper.findComponent(LabInsights).props('measurements')).toHaveLength(7);
+  });
+
+  it('does not show the first-use measurement CTA when an assessment already exists', async () => {
+    hrvStorageMock.getLatestAssessment.mockResolvedValueOnce({
+      id: crypto.randomUUID(),
+      trials: [],
+      selectedRate: 5.5,
+      completedAt: new Date('2026-07-20T08:00:00Z'),
+      config: { warmupDurationSeconds: 120, warmupRate: 6, restDurationSeconds: 120 },
+    });
+
+    const wrapper = shallowMount(LabTab);
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('No measurements yet. Start a measurement above');
+    expect(wrapper.text()).toContain('No standalone measurements yet');
   });
 
   it('collects only the fused beat in dual-sensor mode', async () => {

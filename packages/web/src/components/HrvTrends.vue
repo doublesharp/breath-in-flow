@@ -18,13 +18,17 @@
       </button>
     </div>
 
+    <p class="mb-4 text-xs text-slate-400" data-testid="comparison-guidance">
+      Compare readings collected with the same protocol, duration, sensor, and conditions.
+    </p>
+
     <!-- Charts -->
     <div class="space-y-4">
       <!-- RMSSD Trend -->
       <div class="glass rounded-xl p-4" data-testid="rmssd-chart-container">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">RMSSD Trend</h3>
-          <span class="text-xs text-slate-500">Target: &gt;40ms</span>
+          <span class="text-xs text-slate-500">Within-person history</span>
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="rmssdCanvas" class="w-full h-full" data-testid="rmssd-canvas" />
@@ -41,7 +45,7 @@
       <div class="glass rounded-xl p-4" data-testid="lf-power-chart-container">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Normalized LF Trend</h3>
-          <span class="text-xs text-slate-500">Resonance training effect</span>
+          <span class="text-xs text-slate-500">Eligible five-minute recordings</span>
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="lfPowerCanvas" class="w-full h-full" data-testid="lf-power-canvas" />
@@ -58,7 +62,7 @@
       <div class="glass rounded-xl p-4" data-testid="hr-chart-container">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Resting Heart Rate</h3>
-          <span class="text-xs text-slate-500">Lower = better recovery</span>
+          <span class="text-xs text-slate-500">Within-person history</span>
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="hrCanvas" class="w-full h-full" data-testid="hr-canvas" />
@@ -74,8 +78,8 @@
       <!-- Morning Readiness Score -->
       <div v-if="morningReadinessData.length > 0" class="glass rounded-xl p-4" data-testid="readiness-chart-container">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Morning Readiness</h3>
-          <span class="text-xs text-slate-500">0–100 score</span>
+          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Morning Protocol RMSSD</h3>
+          <span class="text-xs text-slate-500">Comparable readings</span>
         </div>
         <div class="relative" style="height: 160px">
           <canvas ref="readinessCanvas" class="w-full h-full" data-testid="readiness-canvas" />
@@ -88,6 +92,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import type { HrvMeasurement } from '../composables/useHrvStorage';
+import { getComparableMeasurements } from '../utils/measurementTrends';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -121,10 +126,20 @@ const readinessCanvas = ref<HTMLCanvasElement | null>(null);
 
 // ─── Filtered data ────────────────────────────────────────────────────────────
 
+const comparableMeasurements = computed(() => {
+  const anchor = [...props.measurements]
+    .filter(
+      (measurement) =>
+        Number.isFinite(measurement.analysis.timeDomain.rmssd) &&
+        (!measurement.eligibility ||
+          (measurement.eligibility.eligible && measurement.eligibility.availableMetrics.includes('rmssd')))
+    )
+    .sort((left, right) => right.completedAt.getTime() - left.completedAt.getTime())[0];
+  return anchor ? getComparableMeasurements(props.measurements, anchor) : [];
+});
+
 const filteredMeasurements = computed(() => {
-  const sorted = [...props.measurements].sort(
-    (a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
-  );
+  const sorted = comparableMeasurements.value;
   if (selectedDays.value === 0) return sorted;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - selectedDays.value);
@@ -137,13 +152,9 @@ const morningReadinessData = computed(() => {
   const morningMeasurements = filteredMeasurements.value.filter((m) => m.type === 'morning-readiness');
   if (morningMeasurements.length === 0) return [];
 
-  // Compute a baseline RMSSD from all measurements for percentile scoring
-  const allRmssds = props.measurements.map((m) => m.analysis.timeDomain.rmssd);
-  const baselineRmssd = allRmssds.reduce((a, b) => a + b, 0) / (allRmssds.length || 1);
-
   return morningMeasurements.map((m) => ({
     date: new Date(m.completedAt),
-    value: Math.min(100, Math.max(0, (m.analysis.timeDomain.rmssd / (baselineRmssd || 1)) * 50)),
+    value: m.analysis.timeDomain.rmssd,
   }));
 });
 
@@ -430,11 +441,6 @@ function drawAllCharts() {
         fillColor: 'rgba(74, 222, 128, 0.15)',
         showMovingAvg: true,
         movingAvgWindow: 7,
-        zones: [
-          { min: 40, max: Infinity, color: 'rgba(74, 222, 128, 0.06)' },
-          { min: 20, max: 40, color: 'rgba(250, 204, 21, 0.06)' },
-          { min: -Infinity, max: 20, color: 'rgba(239, 68, 68, 0.06)' },
-        ],
         yLabel: 'ms',
         formatValue: (v) => `${Math.round(v)}`,
       });
@@ -515,12 +521,7 @@ function drawAllCharts() {
         height,
         lineColor: '#a78bfa',
         fillColor: 'rgba(167, 139, 250, 0.15)',
-        zones: [
-          { min: 70, max: 100, color: 'rgba(74, 222, 128, 0.06)' },
-          { min: 40, max: 70, color: 'rgba(250, 204, 21, 0.06)' },
-          { min: 0, max: 40, color: 'rgba(239, 68, 68, 0.06)' },
-        ],
-        yLabel: 'Score',
+        yLabel: 'ms',
         formatValue: (v) => String(Math.round(v)),
       });
     }
