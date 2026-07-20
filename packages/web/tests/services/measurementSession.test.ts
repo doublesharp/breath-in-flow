@@ -56,6 +56,27 @@ describe('MeasurementSession', () => {
     expect(camera.stop).not.toHaveBeenCalled();
   });
 
+  it('rejects a second start and supplies a fallback when no sensors are requested', async () => {
+    const camera = sensor({ ok: true });
+    const started = new MeasurementSession({ protocol: 'quick-check', now: () => nowMs });
+    await started.start({ ppg: camera });
+
+    await expect(started.start({ ppg: camera })).resolves.toEqual({
+      ok: false,
+      message: 'Measurement session has already started.',
+    });
+
+    const empty = new MeasurementSession({ protocol: 'quick-check', now: () => nowMs });
+    await expect(empty.start({})).resolves.toEqual({
+      ok: false,
+      message: 'No sensor could be started.',
+    });
+    expect(empty.getResult()).toMatchObject({
+      state: 'failed',
+      errorMessage: 'No sensor could be started.',
+    });
+  });
+
   it('moves to no-data and stops the sensor after five seconds without a detected beat', async () => {
     const camera = sensor({ ok: true });
     const session = new MeasurementSession({
@@ -105,6 +126,49 @@ describe('MeasurementSession', () => {
     expect(session.getResult().estimates).toHaveLength(1);
     expect(session.getResult().samples).toHaveLength(1);
     expect(session.getResult().state).toBe('measuring');
+  });
+
+  it('ignores samples and estimates outside acquisition plus invalid detected samples', async () => {
+    const camera = sensor({ ok: true });
+    const session = new MeasurementSession({ protocol: 'quick-check', now: () => nowMs });
+    const estimate = {
+      timestamp: 500,
+      bpm: 60,
+      quality: 0.8,
+      source: 'ppg' as const,
+      method: 'autocorrelation-estimate' as const,
+    };
+
+    session.addDetectedSample(detectedSample(0));
+    session.addHeartRateEstimate(estimate);
+    await session.start({ ppg: camera });
+    session.addDetectedSample({
+      ...detectedSample(1_000),
+      provenance: { source: 'ppg', method: 'autocorrelation-estimate' },
+    });
+    session.addDetectedSample({ ...detectedSample(2_000), timestamp: Number.NaN });
+    session.addDetectedSample({ ...detectedSample(3_000), interval: Number.POSITIVE_INFINITY });
+    session.addDetectedSample({ ...detectedSample(4_000), quality: Number.NaN });
+
+    expect(session.getResult()).toMatchObject({ samples: [], estimates: [] });
+
+    session.stop();
+    session.addDetectedSample(detectedSample(5_000));
+    session.addHeartRateEstimate(estimate);
+    expect(session.getResult()).toMatchObject({ samples: [], estimates: [] });
+  });
+
+  it('completes an empty capture with zero observed duration', async () => {
+    const camera = sensor({ ok: true });
+    const session = new MeasurementSession({ protocol: 'quick-check', now: () => nowMs });
+    await session.start({ ppg: camera });
+
+    const result = session.stop();
+
+    expect(result.state).toBe('complete');
+    expect(result.samples).toEqual([]);
+    expect(result.eligibility?.observedDurationSeconds).toBe(0);
+    expect(result.eligibility?.eligible).toBe(false);
   });
 
   it('refreshes the no-data watchdog after every accepted detected beat', async () => {
@@ -299,5 +363,23 @@ describe('MeasurementSession', () => {
       reason: 'protocol-not-supported',
     });
     expect(limited.resonance.available).toBe(true);
+  });
+
+  it('uses the bounded fallback reason when an ineligible contract has no reasons', () => {
+    const samples = Array.from({ length: 70 }, (_, index) => detectedSample(index * 1_000));
+    const analysis = analyzeHRV(samples);
+    const eligibility = evaluateMeasurementEligibility(samples, 'quick-check', 70);
+
+    const limited = limitAnalysisToEligibility(analysis, {
+      ...eligibility,
+      eligible: false,
+      reasons: [],
+      availableMetrics: [],
+    });
+
+    expect(limited.frequencyDomain).toEqual({
+      available: false,
+      reason: 'insufficient-data',
+    });
   });
 });

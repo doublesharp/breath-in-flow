@@ -99,6 +99,42 @@ describe('permissionService', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('reports camera permission unknown when media capture is unavailable', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: undefined,
+      configurable: true,
+    });
+
+    await expect(requestSensorPermissions('camera')).resolves.toEqual({
+      camera: 'unknown',
+      motion: 'unknown',
+    });
+  });
+
+  it('still grants camera permission when acquired-track teardown throws', async () => {
+    const stop = vi.fn(() => {
+      throw new Error('track already ended');
+    });
+    mockMediaDevices(
+      vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] } as unknown as MediaStream)
+    );
+
+    await expect(requestSensorPermissions('camera')).resolves.toEqual({
+      camera: 'granted',
+      motion: 'unknown',
+    });
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a non-Error camera rejection distinct from denial', async () => {
+    mockMediaDevices(vi.fn().mockRejectedValue('camera unavailable'));
+
+    await expect(requestSensorPermissions('camera')).resolves.toEqual({
+      camera: 'unknown',
+      motion: 'unknown',
+    });
+  });
+
   it('grants motion permission on native Capacitor platforms', async () => {
     capacitorState.isNativePlatform.mockReturnValue(true);
 
@@ -119,6 +155,42 @@ describe('permissionService', () => {
 
     expect(result).toEqual({ camera: 'unknown', motion: 'denied' });
     expect(requestPermission).toHaveBeenCalledOnce();
+
+    Object.defineProperty(globalThis, 'DeviceMotionEvent', {
+      value: originalDeviceMotionEvent,
+      configurable: true,
+    });
+  });
+
+  it('marks a rejected browser motion permission request denied', async () => {
+    const originalDeviceMotionEvent = globalThis.DeviceMotionEvent;
+    Object.defineProperty(globalThis, 'DeviceMotionEvent', {
+      value: { requestPermission: vi.fn().mockRejectedValue(new Error('request failed')) },
+      configurable: true,
+    });
+
+    await expect(requestSensorPermissions('accelerometer')).resolves.toEqual({
+      camera: 'unknown',
+      motion: 'denied',
+    });
+
+    Object.defineProperty(globalThis, 'DeviceMotionEvent', {
+      value: originalDeviceMotionEvent,
+      configurable: true,
+    });
+  });
+
+  it('uses browser motion events that do not require an explicit request', async () => {
+    const originalDeviceMotionEvent = globalThis.DeviceMotionEvent;
+    Object.defineProperty(globalThis, 'DeviceMotionEvent', {
+      value: class DeviceMotionEvent {},
+      configurable: true,
+    });
+
+    await expect(requestSensorPermissions('accelerometer')).resolves.toEqual({
+      camera: 'unknown',
+      motion: 'granted',
+    });
 
     Object.defineProperty(globalThis, 'DeviceMotionEvent', {
       value: originalDeviceMotionEvent,

@@ -4,7 +4,7 @@ import ResonanceAssessment, {
   buildAssessmentTrials,
   RESONANCE_TRIAL_DURATION_SECONDS,
 } from '../../src/components/ResonanceAssessment.vue';
-import { ASSESSMENT_TRIALS } from '@breath-in-flow/shared';
+import { ASSESSMENT_TRIALS, type HRVAnalysis } from '@breath-in-flow/shared';
 import { ppgService } from '../../src/services/ppgService';
 
 enableAutoUnmount(afterEach);
@@ -72,6 +72,46 @@ vi.mock('../../src/services/sensorFusion', () => ({
     getQuality: vi.fn(() => 0),
   },
 }));
+
+function resonanceAnalysis(available = true): HRVAnalysis {
+  return {
+    timeDomain: {
+      meanRR: 1_000,
+      sdnn: 20,
+      rmssd: 18,
+      pnn50: 5,
+      meanHR: 60,
+      minHR: 55,
+      maxHR: 68,
+      hrRange: 13,
+    },
+    frequencyDomain: { available: false, reason: 'protocol-not-supported' },
+    poincare: { available: false, reason: 'protocol-not-supported' },
+    resonance: available
+      ? {
+          available: true,
+          value: {
+            peakToTroughAmplitude: 12,
+            waveformSmoothness: 0.8,
+            phaseSynchrony: 0.7,
+            lfPeakCount: 1,
+            lfPeakAmplitude: 80,
+          },
+        }
+      : { available: false, reason: 'protocol-not-supported' },
+    quality: {
+      totalSamples: 120,
+      artifactsDetected: 0,
+      artifactPercentage: 0,
+      meanSignalQuality: 0.9,
+    },
+    raw: {
+      rrIntervals: [1_000, 980, 1_020],
+      timestamps: [0, 1_000, 1_980],
+      instantaneousHR: [60, 61.2, 58.8],
+    },
+  };
+}
 
 describe('ResonanceAssessment', () => {
   beforeEach(() => {
@@ -475,6 +515,106 @@ describe('ResonanceAssessment', () => {
       await smooth!.trigger('click');
       expect(smooth!.classes()).toContain('bg-purple-500/20');
     });
+
+    it('expands available pulse-variability details and explains unavailable analysis', async () => {
+      const wrapper = mount(ResonanceAssessment);
+      await wrapper.vm.setTrialAnalysisForTesting(0, resonanceAnalysis());
+      await wrapper.vm.setTrialAnalysisForTesting(1, resonanceAnalysis(false));
+      await wrapper.vm.setPhaseForTesting('SCORING');
+      await wrapper.vm.$nextTick();
+
+      const toggles = wrapper
+        .findAll('button')
+        .filter((button) => button.text() === 'Show pulse variability data');
+      await toggles[0].trigger('click');
+      expect(wrapper.text()).toContain('LF Peak Share');
+      expect(wrapper.text()).toContain('80.0%');
+      expect(wrapper.text()).toContain('12.0 BPM');
+      expect(wrapper.text()).toContain('0.80');
+
+      await toggles[1].trigger('click');
+      expect(wrapper.text()).toContain(
+        'Automatic breathing-response metrics were unavailable for this trial.'
+      );
+    });
+
+    it('calculates a result only after every trial has a comfort rating', async () => {
+      const wrapper = mount(ResonanceAssessment);
+      await wrapper.vm.setPhaseForTesting('SCORING');
+      await wrapper.vm.$nextTick();
+
+      const calculate = wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Calculate Result')!;
+      expect(calculate.attributes('disabled')).toBeDefined();
+
+      for (const card of wrapper.findAll('[data-testid="trial-card"]')) {
+        await card
+          .findAll('button')
+          .find((button) => button.text() === '5')!
+          .trigger('click');
+      }
+      expect(calculate.attributes('disabled')).toBeUndefined();
+      await calculate.trigger('click');
+
+      expect(wrapper.text()).toContain('Suggested Rate');
+      const alternativeRate = wrapper
+        .findAll('button')
+        .find((button) => button.text().includes('6.5 BPM'))!;
+      await alternativeRate.trigger('click');
+      expect(alternativeRate.classes()).toContain('ring-2');
+    });
+  });
+
+  it('renders trial and rest guidance and supports pausing either phase', async () => {
+    const wrapper = mount(ResonanceAssessment);
+    await wrapper.vm.setPhaseForTesting('TRIAL_BREATHING');
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.text()).toContain('Keep your finger covering the camera lens');
+    const trialPause = wrapper.findAll('button').find((button) => button.text() === 'Pause')!;
+    await trialPause.trigger('click');
+    expect(wrapper.text()).toContain('Resume');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Resume')!
+      .trigger('click');
+
+    await wrapper.vm.setPhaseForTesting('TRIAL_REST');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('Rest Quietly');
+    expect(wrapper.text()).toContain('Next trial:');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Pause')!
+      .trigger('click');
+    expect(wrapper.text()).toContain('Resume');
+  });
+
+  it('advances a manual assessment through warmup, trial, rest, and the next trial', async () => {
+    const wrapper = mount(ResonanceAssessment);
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Manual Scoring'))!
+      .trigger('click');
+    await wrapper.get('[data-testid="start-btn"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Warmup');
+    expect(requestSensorPermissions).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(130_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('Trial 1/5');
+    expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(140_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('Rest Quietly');
+
+    await vi.advanceTimersByTimeAsync(121_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('Trial 2/5');
   });
 
   describe('Result phase', () => {

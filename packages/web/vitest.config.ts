@@ -35,20 +35,30 @@ export default defineConfig({
         functions: 75,
         'src/services/{measurementSession,permissionService,ppgService,scgService,sensorFusion}.ts':
           {
-            statements: 80,
-            lines: 80,
-            branches: 70,
+            statements: 90,
+            lines: 90,
+            branches: 80,
             functions: 85,
             perFile: true,
           },
         'src/components/{LabTab,ResonanceAssessment}.vue': {
-          statements: 40,
-          lines: 45,
+          statements: 75,
+          lines: 75,
           branches: 40,
           functions: 35,
           perFile: true,
         },
-        'src/utils/measurementTrends.ts': {
+        'src/composables/{useAppLifecycle,useModalIsolation}.ts': {
+          lines: 100,
+          functions: 100,
+          perFile: true,
+        },
+        'src/services/adaptiveMotionGate.ts': {
+          lines: 100,
+          functions: 100,
+          perFile: true,
+        },
+        'src/utils/{hrvAnalysisValidation,measurementTrends,storedRecordValidation}.ts': {
           lines: 100,
           functions: 100,
           perFile: true,

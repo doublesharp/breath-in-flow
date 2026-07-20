@@ -344,6 +344,60 @@ describe('ppgService', () => {
       expect(getUserMedia.mock.calls.length).toBe(callsBefore);
     });
 
+    it('accepts explicit start options without re-entering an active capture', async () => {
+      const callbacks = { onStatusChange: vi.fn() };
+      (ppgService as unknown as { status: PPGStatus }).status = 'capturing';
+
+      await expect(
+        ppgService.start({ cameraDeviceId: 'rear-camera', torchEnabled: false, callbacks })
+      ).resolves.toEqual({ ok: true });
+      await expect(ppgService.start({ callbacks })).resolves.toEqual({ ok: true });
+      await expect(ppgService.start({ torchEnabled: false })).resolves.toEqual({ ok: true });
+      await expect(ppgService.start(callbacks)).resolves.toEqual({ ok: true });
+
+      expect(
+        (ppgService as unknown as { callbacks: typeof callbacks }).callbacks.onStatusChange
+      ).toBe(callbacks.onStatusChange);
+    });
+
+    it('uses a requested camera and leaves torch disabled', async () => {
+      const track = makeMockTrack({ torchSupported: true });
+      mockGetUserMediaSuccess(makeMockStream(track));
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        if (tag === 'video') {
+          return {
+            srcObject: null,
+            playsInline: false,
+            muted: false,
+            readyState: 4,
+            videoWidth: 320,
+            videoHeight: 240,
+            style: {} as CSSStyleDeclaration,
+            setAttribute: vi.fn(),
+            parentNode: { removeChild: vi.fn() },
+            play: vi.fn().mockResolvedValue(undefined),
+          } as unknown as HTMLVideoElement;
+        }
+        if (tag === 'canvas') {
+          return {
+            width: 320,
+            height: 240,
+            getContext: vi.fn().mockReturnValue({ drawImage: vi.fn(), getImageData: vi.fn() }),
+          } as unknown as HTMLCanvasElement;
+        }
+        return document.createElement(tag);
+      });
+
+      await expect(
+        ppgService.start({ cameraDeviceId: 'rear-camera', torchEnabled: false })
+      ).resolves.toEqual({ ok: true });
+
+      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({
+        video: expect.objectContaining({ deviceId: { exact: 'rear-camera' } }),
+      });
+      expect(track.applyConstraints).not.toHaveBeenCalled();
+    });
+
     it('stop() from idle is a no-op', () => {
       expect(ppgService.getStatus()).toBe('idle');
       expect(() => ppgService.stop()).not.toThrow();
@@ -423,6 +477,38 @@ describe('ppgService', () => {
 
       expect(ppgService.getStatus()).toBe('error');
       expect(errors[0].message).toMatch(/in use/i);
+    });
+
+    it.each([
+      ['PermissionDeniedError', 'permission-denied', /permission/i],
+      ['DevicesNotFoundError', 'unavailable', /no camera/i],
+      ['TrackStartError', 'device-busy', /in use/i],
+    ] as const)(
+      'maps legacy %s camera errors to an actionable failure',
+      async (name, reason, messagePattern) => {
+        const error = new Error(name);
+        error.name = name;
+        mockGetUserMediaFailure(error);
+        const errors: Error[] = [];
+
+        const result = await ppgService.start({ onError: (reported) => errors.push(reported) });
+
+        expect(result).toMatchObject({ ok: false, reason });
+        expect(errors[0].message).toMatch(messagePattern);
+      }
+    );
+
+    it('normalizes a non-Error camera rejection into a start failure', async () => {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: { getUserMedia: vi.fn().mockRejectedValue('camera bridge failed') },
+      });
+      const errors: Error[] = [];
+
+      const result = await ppgService.start({ onError: (reported) => errors.push(reported) });
+
+      expect(result).toMatchObject({ ok: false, reason: 'start-failed' });
+      expect(errors[0].message).toBe('camera bridge failed');
     });
   });
 
@@ -1095,5 +1181,29 @@ describe('listCameras', () => {
       { deviceId: 'rear-camera', label: 'Rear camera' },
     ]);
     expect(getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it('supplies a stable fallback label for an unlabeled camera', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: vi
+          .fn()
+          .mockResolvedValue([{ kind: 'videoinput', deviceId: 'camera-identifier', label: '' }]),
+      },
+    });
+
+    await expect(listCameras()).resolves.toEqual([
+      { deviceId: 'camera-identifier', label: 'Camera camera-i' },
+    ]);
+  });
+
+  it('returns no cameras when device enumeration fails', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { enumerateDevices: vi.fn().mockRejectedValue(new Error('enumeration failed')) },
+    });
+
+    await expect(listCameras()).resolves.toEqual([]);
   });
 });

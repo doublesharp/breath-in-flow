@@ -4,11 +4,15 @@ import { validateStoredArray } from '../../src/utils/storedRecordValidation';
 type StoredRecord = { id: string; createdAt: Date; enabled: boolean };
 
 const RecordSchema = {
-  safeParse(value: unknown):
-    | { success: true; data: StoredRecord }
-    | { success: false; error: Error } {
+  safeParse(
+    value: unknown
+  ): { success: true; data: StoredRecord } | { success: false; error: Error } {
     const record = value as Partial<StoredRecord>;
-    if (typeof record?.id !== 'string' || !(record.createdAt instanceof Date) || Number.isNaN(+record.createdAt)) {
+    if (
+      typeof record?.id !== 'string' ||
+      !(record.createdAt instanceof Date) ||
+      Number.isNaN(+record.createdAt)
+    ) {
       return { success: false, error: new Error('invalid stored record') };
     }
     return {
@@ -34,6 +38,26 @@ describe('validateStoredArray', () => {
       })
     ).toEqual([]);
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses identity normalization by default', () => {
+    const record = { id: 'current', createdAt: new Date('2026-07-20T00:00:00.000Z') };
+
+    expect(
+      validateStoredArray({
+        key: 'records',
+        value: JSON.stringify([{ id: record.id, createdAt: record.createdAt.toISOString() }]),
+        schema: {
+          safeParse(value) {
+            const parsed = value as { id: string; createdAt: string };
+            return {
+              success: true as const,
+              data: { ...record, id: parsed.id, enabled: true },
+            };
+          },
+        },
+      })
+    ).toEqual([{ ...record, enabled: true }]);
   });
 
   it('keeps valid siblings in source order and normalizes legacy defaults before validation', () => {
@@ -82,5 +106,25 @@ describe('validateStoredArray', () => {
     expect(records).toHaveLength(1);
     expect(warn).toHaveBeenCalledTimes(4);
     expect(warn.mock.calls.at(-1)?.[0]).toContain('Skipped 4 invalid records');
+  });
+
+  it('skips a record when legacy normalization throws', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const records = validateStoredArray({
+      key: 'records',
+      value: JSON.stringify([{ id: 'throws' }]),
+      schema: RecordSchema,
+      normalize: () => {
+        throw new Error('legacy conversion failed');
+      },
+    });
+
+    expect(records).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      'Skipping invalid records record at index 0',
+      expect.objectContaining({ message: 'legacy conversion failed' })
+    );
+    expect(warn).toHaveBeenCalledWith('Skipped 1 invalid records from records');
   });
 });

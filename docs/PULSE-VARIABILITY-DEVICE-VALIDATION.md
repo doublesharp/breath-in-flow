@@ -15,6 +15,19 @@ Passing this matrix establishes product behavior on the tested hardware only. It
 
 Camera, flash/torch, and motion sampling remain capability-dependent even on a supported operating-system version. A device that cannot supply a required sensor must receive an actionable unavailable state rather than a false successful measurement.
 
+## Native build verification
+
+Build and synchronization evidence does not complete any physical-device check below.
+
+| Check                            | Result             | Evidence                                                                                                                                                                     |
+| -------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Capacitor Android/iOS sync       | Passed             | Four native plugins synchronized with no tracked native-project diff.                                                                                                        |
+| Android debug build              | Passed             | Java 21 and Gradle produced `app-debug.apk` (SHA-256 `85e16f7e7bb3f6b86ec4858e112ee232729e933133cf80ef02cd6acd60faeab2`).                                                    |
+| Repository iOS simulator command | Blocked externally | The configured `iPhone 16 Pro` target is not installed.                                                                                                                      |
+| Direct installed-simulator build | Blocked externally | Xcode 26.2 found the installed iPhone 15 Pro/iOS 17.5 simulator, but reported that the iOS 26.2 platform component is not installed and exposed no eligible App destination. |
+
+The iOS rows remain blocked and are not release passes. Install the matching iOS 26.2 platform/runtime (or use an Xcode installation compatible with the available iOS 17.5 simulator), then rerun the repository command with an installed target.
+
 ## Device matrix
 
 Use exact model, operating-system build, app commit, build identifier, and reference-device firmware in the evidence log.

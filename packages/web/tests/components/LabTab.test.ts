@@ -4,6 +4,7 @@ import LabTab from '@/components/LabTab.vue';
 import HrvTrends from '@/components/HrvTrends.vue';
 import LabInsights from '@/components/LabInsights.vue';
 import { ppgService } from '@/services/ppgService';
+import { scgService } from '@/services/scgService';
 import { sensorFusionService } from '@/services/sensorFusion';
 import { requestSensorPermissions } from '@/services/permissionService';
 import type { HrvMeasurement } from '@/composables/useHrvStorage';
@@ -665,6 +666,70 @@ describe('LabTab.vue', () => {
     wrapper.unmount();
   });
 
+  it('captures chest-sensor beats and surfaces signal feedback before stopping', async () => {
+    const wrapper = mount(LabTab, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          HrTachogram: true,
+          SignalQualityIndicator: true,
+          HrvMetricsDashboard: true,
+          FrequencySpectrum: true,
+          PoincarePlot: true,
+          ResonanceAssessment: true,
+        },
+      },
+    });
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Freeform')!
+      .trigger('click');
+    await wrapper.get('[data-testid="sensor-accelerometer"]').trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Start Measurement')!
+      .trigger('click');
+    await flushPromises();
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Start')!
+      .click();
+    await flushPromises();
+
+    const callbacks = vi.mocked(scgService.setCallbacks).mock.calls.at(-1)![0] as {
+      onIBI: (sample: IBISample) => void;
+      onHeartRateEstimate: (estimate: { timestamp: number; bpm: number; quality: number }) => void;
+      onQualityChange: (quality: number) => void;
+      onError: (error: Error) => void;
+    };
+    expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
+    callbacks.onIBI({
+      timestamp: 1_000,
+      interval: 800,
+      quality: 0.9,
+      provenance: { source: 'scg', method: 'peak-detected' },
+    });
+    expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
+    callbacks.onHeartRateEstimate({ timestamp: 1_100, bpm: 75, quality: 0.8 });
+    expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
+    callbacks.onQualityChange(0.8);
+    expect((wrapper.vm as unknown as { isMeasuring: boolean }).isMeasuring).toBe(true);
+    callbacks.onError(new Error('movement detected'));
+    await wrapper.vm.$nextTick();
+
+    expect((wrapper.vm as unknown as { signalGuidance: string }).signalGuidance).toBe(
+      'Pulse detected — keep still'
+    );
+    expect(document.body.querySelector('hr-tachogram-stub')).not.toBeNull();
+
+    Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Stop Measurement')!
+      .click();
+    await wrapper.vm.$nextTick();
+    expect(scgService.stop).toHaveBeenCalledOnce();
+    expect(document.body.textContent).toContain('This recording was too short');
+  });
+
   it('does not begin measurement when the sensor fails to start', async () => {
     vi.mocked(ppgService.start).mockResolvedValueOnce({
       ok: false,
@@ -958,5 +1023,37 @@ describe('LabTab.vue', () => {
     expect(vm.prepProtocol).toBeNull();
     expect(vm.isStartPending).toBe(false);
     wrapper.unmount();
+  });
+
+  it('formats measurement metadata defensively for the results list', () => {
+    const wrapper = shallowMount(LabTab);
+    const vm = wrapper.vm as unknown as {
+      formatDuration: (seconds: number) => string;
+      formatTimer: (seconds: number) => string;
+      formatDate: (date: Date) => string;
+      formatType: (type: string) => string;
+      measurementEligibilityMessage: (reasons: string[]) => string;
+      poincareUnavailableMessage: (reason: PoincareUnavailableReason) => string;
+    };
+
+    expect(vm.formatDuration(60)).toBe('1 minute');
+    expect(vm.formatDuration(120)).toBe('2 minutes');
+    expect(vm.formatTimer(65)).toBe('1:05');
+    expect(vm.formatDate(new Date('invalid'))).toBe('');
+    expect(vm.formatDate(new Date(2026, 6, 20))).not.toBe('');
+    expect(vm.formatType('quick-check')).toBe('Quick Check');
+    expect(vm.formatType('custom-protocol')).toBe('custom-protocol');
+    expect(vm.measurementEligibilityMessage(['low-signal-quality'])).toContain(
+      'Signal quality was too low'
+    );
+    expect(vm.measurementEligibilityMessage(['insufficient-beats'])).toContain(
+      'not enough clean detected beats'
+    );
+    expect(vm.poincareUnavailableMessage('low-signal-quality')).toContain(
+      'Signal quality was not stable enough'
+    );
+    expect(vm.poincareUnavailableMessage('sensor-error')).toContain(
+      'did not provide a valid interval series'
+    );
   });
 });

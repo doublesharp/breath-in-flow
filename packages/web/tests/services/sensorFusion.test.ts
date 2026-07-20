@@ -71,6 +71,18 @@ describe('SensorFusionService', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('rejects SCG samples carrying PPG provenance', () => {
+    const service = createSensorFusionService();
+    const emitted: FusedIBISample[] = [];
+    service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    service.addSCGSample(makeSample(1_000, 800, 0.8, 'ppg'));
+    vi.advanceTimersByTime(200);
+
+    expect(emitted).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('keeps an unmatched event through the offset-discovery horizon', () => {
     const service = createSensorFusionService();
     const emitted: FusedIBISample[] = [];
@@ -165,6 +177,18 @@ describe('SensorFusionService', () => {
     expect(emitted[0].interval).toBeCloseTo(803.33, 1);
     expect(emitted[0].ppgInterval).toBe(800);
     expect(emitted[0].scgInterval).toBe(810);
+  });
+
+  it('uses the unweighted mean when both matched samples have zero quality', () => {
+    const emitted: FusedIBISample[] = [];
+    sensorFusionService.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    sensorFusionService.addPPGSample(makeSample(1_000, 800, 0, 'ppg'));
+    sensorFusionService.addSCGSample(makeSample(1_020, 820, 0, 'scg'));
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].interval).toBe(810);
+    expect(emitted[0].confidence).toBe(0);
   });
 
   it('uses higher-quality source when intervals disagree', () => {
@@ -270,6 +294,18 @@ describe('SensorFusionService', () => {
       interval: 790,
       provenance: { source: 'ppg', method: 'peak-detected' },
     });
+  });
+
+  it('keeps the closest candidate when multiple beats fall inside the pairing window', () => {
+    const emitted: FusedIBISample[] = [];
+    sensorFusionService.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    sensorFusionService.addPPGSample(makeSample(1_000, 800, 0.8, 'ppg'));
+    sensorFusionService.addPPGSample(makeSample(1_100, 790, 0.75, 'ppg'));
+    sensorFusionService.addSCGSample(makeSample(1_010, 805, 0.7, 'scg'));
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({ source: 'fused', timestamp: 1_005, ppgInterval: 800 });
   });
 
   it('increases confidence after consecutive matches', () => {
