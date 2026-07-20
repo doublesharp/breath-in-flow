@@ -7,6 +7,18 @@ import {
   createBandpassFilter,
 } from '../../src/dsp/filters.js';
 
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rng: () => number, min: number, max: number): number {
+  return Math.floor(rng() * (max - min + 1)) + min;
+}
+
 /**
  * Generate a composite sinusoidal signal.
  * Returns N samples at the given sample rate combining multiple frequency components.
@@ -188,5 +200,39 @@ describe('createBandpassFilter', () => {
     expect(filteredRms).toBeGreaterThan(0.3 * bandRms);
     // But should be significantly less than the full 3-component signal
     expect(filteredRms).toBeLessThan(0.8 * rms(signal.slice(1000)));
+  });
+});
+
+describe('filter fuzz invariants', () => {
+  it('keeps randomized valid filter outputs finite and repeatable after reset', () => {
+    const rng = createRng(0xf1172026);
+
+    for (let trial = 0; trial < 50; trial++) {
+      const sampleRateHz = randomInt(rng, 120, 1_200);
+      const lowHz = randomInt(rng, 1, Math.floor(sampleRateHz / 10));
+      const highHz = randomInt(rng, lowHz + 1, Math.floor(sampleRateHz / 3));
+      const order = [2, 4, 6][randomInt(rng, 0, 2)];
+      const signal = Array.from({ length: randomInt(rng, 64, 240) }, () => rng() * 4 - 2);
+      const filters = [
+        createLowpassFilter(highHz, sampleRateHz, order),
+        createHighpassFilter(lowHz, sampleRateHz, order),
+        createBandpassFilter(lowHz, highHz, sampleRateHz, order),
+      ];
+
+      for (const filter of filters) {
+        const firstPass = filter.filterBatch(signal);
+        filter.reset();
+        const secondPass = filter.filterBatch(signal);
+
+        expect(firstPass).toHaveLength(signal.length);
+        expect(secondPass).toHaveLength(signal.length);
+
+        firstPass.forEach((value, index) => {
+          expect(Number.isFinite(value)).toBe(true);
+          expect(Math.abs(value)).toBeLessThan(1_000_000);
+          expect(value).toBeCloseTo(secondPass[index], 10);
+        });
+      }
+    }
   });
 });

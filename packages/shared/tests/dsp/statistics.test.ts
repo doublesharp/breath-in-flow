@@ -8,6 +8,18 @@ import {
   movingStandardDeviation,
 } from '../../src/dsp/statistics.js';
 
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rng: () => number, min: number, max: number): number {
+  return Math.floor(rng() * (max - min + 1)) + min;
+}
+
 describe('mean', () => {
   it('computes the mean of a simple array', () => {
     expect(mean([1, 2, 3, 4, 5])).toBeCloseTo(3);
@@ -121,5 +133,68 @@ describe('movingStandardDeviation', () => {
 
   it('returns empty array for empty input', () => {
     expect(movingStandardDeviation([], 3)).toEqual([]);
+  });
+});
+
+describe('statistical fuzz invariants', () => {
+  it('keeps aggregate results finite and inside expected bounds', () => {
+    const rng = createRng(0x57a72026);
+
+    for (let trial = 0; trial < 100; trial++) {
+      const data = Array.from({ length: randomInt(rng, 1, 80) }, () => rng() * 2_000 - 1_000);
+      const min = Math.min(...data);
+      const max = Math.max(...data);
+      const avg = mean(data);
+      const med = median(data);
+      const std = standardDeviation(data);
+      const rootMeanSquare = rms(data);
+
+      expect(Number.isFinite(avg)).toBe(true);
+      expect(Number.isFinite(med)).toBe(true);
+      expect(Number.isFinite(std)).toBe(true);
+      expect(Number.isFinite(rootMeanSquare)).toBe(true);
+      expect(avg).toBeGreaterThanOrEqual(min);
+      expect(avg).toBeLessThanOrEqual(max);
+      expect(med).toBeGreaterThanOrEqual(min);
+      expect(med).toBeLessThanOrEqual(max);
+      expect(std).toBeGreaterThanOrEqual(0);
+      expect(rootMeanSquare).toBeGreaterThanOrEqual(Math.abs(avg) - 1e-9);
+    }
+  });
+
+  it('preserves translation invariants for location and spread', () => {
+    const rng = createRng(0x7a1e2026);
+
+    for (let trial = 0; trial < 80; trial++) {
+      const offset = rng() * 200 - 100;
+      const data = Array.from({ length: randomInt(rng, 2, 70) }, () => rng() * 500 - 250);
+      const shifted = data.map((value) => value + offset);
+
+      expect(mean(shifted)).toBeCloseTo(mean(data) + offset, 10);
+      expect(median(shifted)).toBeCloseTo(median(data) + offset, 10);
+      expect(standardDeviation(shifted)).toBeCloseTo(standardDeviation(data), 10);
+    }
+  });
+
+  it('keeps moving-window outputs aligned and finite', () => {
+    const rng = createRng(0x6d0a2026);
+
+    for (let trial = 0; trial < 80; trial++) {
+      const data = Array.from({ length: randomInt(rng, 1, 90) }, () => rng() * 200 - 100);
+      const windowSize = randomInt(rng, 1, 25);
+      const averages = movingAverage(data, windowSize);
+      const deviations = movingStandardDeviation(data, windowSize);
+
+      expect(averages).toHaveLength(data.length);
+      expect(deviations).toHaveLength(data.length);
+      averages.forEach((value) => expect(Number.isFinite(value)).toBe(true));
+      deviations.forEach((value) => {
+        expect(Number.isFinite(value)).toBe(true);
+        expect(value).toBeGreaterThanOrEqual(0);
+      });
+    }
+
+    expect(movingAverage([1, 2, 3], 0)).toEqual([]);
+    expect(movingStandardDeviation([1, 2, 3], 0)).toEqual([]);
   });
 });

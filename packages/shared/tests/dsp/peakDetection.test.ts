@@ -35,6 +35,18 @@ function addNoise(signal: number[], amplitude: number, seed = 42): number[] {
   return signal.map((val) => val + amplitude * rand());
 }
 
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rng: () => number, min: number, max: number): number {
+  return Math.floor(rng() * (max - min + 1)) + min;
+}
+
 describe('detectPeaks (batch)', () => {
   it('detects peaks in a simple sine wave', () => {
     // 1 Hz sine at 100 Hz sample rate → 100 samples per period
@@ -364,5 +376,58 @@ describe('StreamingPeakDetector', () => {
 
     // Both should find a similar number of peaks (adaptive learns from the signal)
     expect(Math.abs(peaksFixed.length - peaksAdaptive.length)).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('peak detection fuzz invariants', () => {
+  it('detects randomized impulse trains without violating refractory distance', () => {
+    const rng = createRng(0x9eae2026);
+
+    for (let trial = 0; trial < 40; trial++) {
+      const length = randomInt(rng, 180, 520);
+      const minPeakDistance = randomInt(rng, 10, 36);
+      const signal = Array.from({ length }, () => rng() * 0.1 - 0.05);
+
+      for (
+        let index = randomInt(rng, 5, minPeakDistance);
+        index < length - 5;
+        index += minPeakDistance + randomInt(rng, 4, minPeakDistance)
+      ) {
+        signal[index - 1] += 0.75 + rng() * 0.4;
+        signal[index] += 2 + rng() * 2;
+        signal[index + 1] += 0.75 + rng() * 0.4;
+      }
+
+      const opts = {
+        minPeakDistance,
+        thresholdFactor: 0,
+        adaptiveWindow: Math.max(8, minPeakDistance),
+        minProminence: 0,
+      };
+      const peaks = detectPeaks(signal, opts);
+
+      expect(peaks.length).toBeGreaterThan(0);
+      for (let i = 0; i < peaks.length; i++) {
+        expect(Number.isInteger(peaks[i].index)).toBe(true);
+        expect(peaks[i].index).toBeGreaterThanOrEqual(0);
+        expect(peaks[i].index).toBeLessThan(signal.length);
+        expect(Number.isFinite(peaks[i].amplitude)).toBe(true);
+        if (i > 0) {
+          expect(peaks[i].index - peaks[i - 1].index).toBeGreaterThanOrEqual(minPeakDistance);
+        }
+      }
+
+      const detector = new StreamingPeakDetector(opts);
+      const streamingPeaks = signal
+        .map((value, index) => detector.addSample(value, index))
+        .filter((peak) => peak !== null);
+
+      expect(streamingPeaks.length).toBeGreaterThan(0);
+      for (let i = 1; i < streamingPeaks.length; i++) {
+        expect(streamingPeaks[i]!.index - streamingPeaks[i - 1]!.index).toBeGreaterThanOrEqual(
+          minPeakDistance
+        );
+      }
+    }
   });
 });
