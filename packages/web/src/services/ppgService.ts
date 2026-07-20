@@ -53,11 +53,17 @@ export interface PPGStartOptions {
 }
 
 interface CandidateCaptureResources {
+  generation: number;
   stream: MediaStream | null;
   video: HTMLVideoElement | null;
   canvas: HTMLCanvasElement | null;
   ctx: CanvasRenderingContext2D | null;
   torchEnabled: boolean;
+  torchIntent: {
+    native: boolean;
+    web: boolean;
+  };
+  nativeTorchDisableRequested: boolean;
 }
 
 /**
@@ -85,6 +91,8 @@ class PPGService {
   private callbacks: PPGCallbacks = {};
   private startGeneration = 0;
   private pendingStartPromise: Promise<SensorStartResult> | null = null;
+  private pendingCandidate: CandidateCaptureResources | null = null;
+  private nativeTorchDesiredGeneration: number | null = null;
 
   // Signal processing
   private bandpassFilter: SOSFilter;
@@ -155,20 +163,31 @@ class PPGService {
   /**
    * Enable torch using native Capacitor plugin (Android/iOS) or WebView fallback (desktop).
    */
-  private async enableTorchFor(stream: MediaStream | null, generation?: number): Promise<boolean> {
-    const canContinue = () => generation === undefined || this.ownsStart(generation);
+  private async enableTorchFor(
+    stream: MediaStream | null,
+    generation?: number,
+    candidate?: CandidateCaptureResources
+  ): Promise<boolean> {
+    const canContinue = () =>
+      generation === undefined ||
+      (candidate ? this.ownsCandidate(candidate) : this.ownsStart(generation));
     // Strategy 1: Native Capacitor torch plugin (most reliable on mobile)
     if (Capacitor.isNativePlatform()) {
       try {
         const { available } = await Torch.isAvailable();
         if (!canContinue()) return false;
         if (available) {
+          if (candidate) {
+            candidate.torchIntent.native = true;
+            this.nativeTorchDesiredGeneration = candidate.generation;
+          }
           await Torch.enable();
           if (!canContinue()) {
-            try {
-              await Torch.disable();
-            } catch {
-              // Candidate stream cleanup remains the final fallback.
+            if (candidate && this.nativeTorchDesiredGeneration === candidate.generation) {
+              this.nativeTorchDesiredGeneration = null;
+            }
+            if (!candidate || !this.hasNewerNativeTorchOwner(candidate.generation)) {
+              await this.disableNativeTorchForGeneration(generation ?? this.startGeneration);
             }
             return false;
           }
@@ -176,9 +195,13 @@ class PPGService {
           return true;
         }
       } catch (e) {
+        if (candidate && this.nativeTorchDesiredGeneration === candidate.generation) {
+          this.nativeTorchDesiredGeneration = null;
+        }
         debugWarn('PPG: Native torch plugin failed:', e);
       }
     }
+    if (!canContinue()) return false;
 
     // Strategy 2: WebView MediaStream torch constraint (Chrome desktop, some Android)
     if (stream) {
@@ -188,6 +211,7 @@ class PPGService {
         try {
           const capabilities = track.getCapabilities?.() as Record<string, unknown> | undefined;
           if (capabilities?.torch) {
+            if (candidate) candidate.torchIntent.web = true;
             await track.applyConstraints({
               advanced: [{ torch: true } as MediaTrackConstraintSet],
             });
@@ -198,9 +222,11 @@ class PPGService {
         } catch {
           // Fall through
         }
+        if (!canContinue()) return false;
 
         // Blind attempt — some devices support it without reporting in capabilities
         try {
+          if (candidate) candidate.torchIntent.web = true;
           await track.applyConstraints({
             advanced: [{ torch: true } as MediaTrackConstraintSet],
           });
@@ -226,15 +252,24 @@ class PPGService {
    */
   private async disableTorch(): Promise<void> {
     if (!this.torchEnabled) return;
+    const cleanupGeneration = this.startGeneration;
 
     if (Capacitor.isNativePlatform()) {
-      try {
-        await Torch.disable();
-      } catch {
-        // Ignore — stream stopping will also release the torch
+      const generation = this.nativeTorchDesiredGeneration;
+      this.nativeTorchDesiredGeneration = null;
+      if (generation === null) {
+        try {
+          await Torch.disable();
+        } catch {
+          // Ignore — stream stopping will also release the torch
+        }
+      } else {
+        await this.disableNativeTorchForGeneration(generation);
       }
     }
-    this.torchEnabled = false;
+    if (this.startGeneration === cleanupGeneration) {
+      this.torchEnabled = false;
+    }
   }
 
   public start(callbacksOrOptions?: PPGCallbacks | PPGStartOptions): Promise<SensorStartResult> {
@@ -276,11 +311,17 @@ class PPGService {
     options: PPGStartOptions
   ): Promise<SensorStartResult> {
     const candidate: CandidateCaptureResources = {
+      generation,
       stream: null,
       video: null,
       canvas: null,
       ctx: null,
       torchEnabled: false,
+      torchIntent: {
+        native: false,
+        web: false,
+      },
+      nativeTorchDisableRequested: false,
     };
     const useTorch = options.torchEnabled !== false;
 
@@ -303,7 +344,8 @@ class PPGService {
       }
 
       candidate.stream = await mediaDevices.getUserMedia({ video: videoConstraints });
-      if (!this.ownsStart(generation)) return await this.cancelCandidate(candidate);
+      if (!this.ownsStart(generation)) return this.cancelCandidate(candidate);
+      this.pendingCandidate = candidate;
 
       candidate.video = document.createElement('video');
       candidate.video.srcObject = candidate.stream;
@@ -337,14 +379,14 @@ class PPGService {
 
       // Start video playback — must happen before torch and canvas setup
       await candidate.video.play();
-      if (!this.ownsStart(generation)) return await this.cancelCandidate(candidate);
+      if (!this.ownsCandidate(candidate)) return this.cancelCandidate(candidate);
       debugLog('PPG: Video playing, readyState:', candidate.video.readyState);
 
       await new Promise<void>((resolve) => {
         let attempts = 0;
         const checkReady = () => {
           attempts++;
-          if (!this.ownsStart(generation)) {
+          if (!this.ownsCandidate(candidate)) {
             resolve();
           } else if (candidate.video!.videoWidth > 0 && candidate.video!.videoHeight > 0) {
             debugLog(
@@ -361,7 +403,7 @@ class PPGService {
         };
         checkReady();
       });
-      if (!this.ownsStart(generation)) return await this.cancelCandidate(candidate);
+      if (!this.ownsCandidate(candidate)) return this.cancelCandidate(candidate);
 
       const vw = candidate.video.videoWidth || 320;
       const vh = candidate.video.videoHeight || 240;
@@ -372,12 +414,14 @@ class PPGService {
       candidate.ctx = candidate.canvas.getContext('2d', { willReadFrequently: true });
 
       if (useTorch) {
-        candidate.torchEnabled = await this.enableTorchFor(candidate.stream, generation);
-        if (!this.ownsStart(generation)) return await this.cancelCandidate(candidate);
+        candidate.torchEnabled = await this.enableTorchFor(candidate.stream, generation, candidate);
+        if (!this.ownsCandidate(candidate)) return this.cancelCandidate(candidate);
       } else {
         debugLog('PPG: Torch disabled by user');
       }
 
+      if (!this.ownsCandidate(candidate)) return this.cancelCandidate(candidate);
+      this.pendingCandidate = null;
       this.stream = candidate.stream;
       this.video = candidate.video;
       this.canvas = candidate.canvas;
@@ -389,7 +433,7 @@ class PPGService {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       const hadCandidateStream = candidate.stream !== null;
-      await this.cleanupCandidateResources(candidate);
+      this.disposeCandidate(candidate);
       if (!this.ownsStart(generation)) {
         return sensorStartFailure('start-failed', 'Camera startup was cancelled.');
       }
@@ -421,29 +465,80 @@ class PPGService {
     return generation === this.startGeneration && this.status === 'initializing';
   }
 
-  private async cancelCandidate(candidate: CandidateCaptureResources): Promise<SensorStartResult> {
-    await this.cleanupCandidateResources(candidate);
+  private ownsCandidate(candidate: CandidateCaptureResources): boolean {
+    return this.pendingCandidate === candidate && this.ownsStart(candidate.generation);
+  }
+
+  private hasNewerNativeTorchOwner(generation: number): boolean {
+    return (
+      this.nativeTorchDesiredGeneration !== null && this.nativeTorchDesiredGeneration > generation
+    );
+  }
+
+  private async disableNativeTorchForGeneration(generation: number): Promise<void> {
+    try {
+      await Torch.disable();
+    } catch {
+      return;
+    }
+
+    const desiredGeneration = this.nativeTorchDesiredGeneration;
+    if (desiredGeneration === null || desiredGeneration <= generation) return;
+
+    try {
+      await Torch.enable();
+    } catch {
+      if (this.nativeTorchDesiredGeneration === desiredGeneration) {
+        this.nativeTorchDesiredGeneration = null;
+        this.torchEnabled = false;
+        this.callbacks.onError?.(
+          new Error(
+            'Camera torch could not be restored after an interrupted camera operation. Restart the measurement.'
+          )
+        );
+      }
+      return;
+    }
+
+    if (this.nativeTorchDesiredGeneration !== desiredGeneration) {
+      await this.disableNativeTorchForGeneration(desiredGeneration);
+    }
+  }
+
+  private cancelCandidate(candidate: CandidateCaptureResources): SensorStartResult {
+    this.disposeCandidate(candidate);
     return sensorStartFailure('start-failed', 'Camera startup was cancelled.');
   }
 
-  private async cleanupCandidateResources(candidate: CandidateCaptureResources): Promise<void> {
-    if (candidate.torchEnabled && Capacitor.isNativePlatform()) {
-      try {
-        await Torch.disable();
-      } catch {
-        // Stopping the candidate stream below still releases the camera torch.
-      }
-    }
-    candidate.torchEnabled = false;
-    candidate.stream?.getTracks().forEach((track) => track.stop());
+  private disposeCandidate(candidate: CandidateCaptureResources): void {
+    if (this.pendingCandidate === candidate) this.pendingCandidate = null;
+
+    const stream = candidate.stream;
     candidate.stream = null;
-    if (candidate.video) {
-      candidate.video.srcObject = null;
-      candidate.video.parentNode?.removeChild(candidate.video);
-      candidate.video = null;
+    stream?.getTracks().forEach((track) => track.stop());
+
+    const video = candidate.video;
+    candidate.video = null;
+    if (video) {
+      video.srcObject = null;
+      video.parentNode?.removeChild(video);
     }
+
     candidate.canvas = null;
     candidate.ctx = null;
+
+    if (
+      candidate.torchIntent.native &&
+      !candidate.nativeTorchDisableRequested &&
+      Capacitor.isNativePlatform()
+    ) {
+      candidate.nativeTorchDisableRequested = true;
+      if (this.nativeTorchDesiredGeneration === candidate.generation) {
+        this.nativeTorchDesiredGeneration = null;
+      }
+      void this.disableNativeTorchForGeneration(candidate.generation);
+    }
+    candidate.torchEnabled = false;
   }
 
   private scheduleNextFrame(generation = this.startGeneration): void {
@@ -770,8 +865,19 @@ class PPGService {
   }
 
   public stop(): void {
-    if (this.status === 'idle' && this.pendingStartPromise === null) return;
+    if (
+      this.status === 'idle' &&
+      this.pendingStartPromise === null &&
+      this.pendingCandidate === null
+    ) {
+      return;
+    }
     this.startGeneration += 1;
+    this.pendingStartPromise = null;
+
+    if (this.pendingCandidate) {
+      this.disposeCandidate(this.pendingCandidate);
+    }
 
     // Cancel animation frame loop
     if (this.animFrameId !== null) {

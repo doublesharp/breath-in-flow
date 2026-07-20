@@ -89,6 +89,8 @@ function resetService() {
   (ppgService as unknown as Record<string, unknown>).callbacks = {};
   (ppgService as unknown as Record<string, unknown>).startGeneration = 0;
   (ppgService as unknown as Record<string, unknown>).pendingStartPromise = null;
+  (ppgService as unknown as Record<string, unknown>).pendingCandidate = null;
+  (ppgService as unknown as Record<string, unknown>).nativeTorchDesiredGeneration = null;
   (ppgService as unknown as Record<string, unknown>).rawBuffer = [];
   (ppgService as unknown as Record<string, unknown>).normBuffer = [];
   (ppgService as unknown as Record<string, unknown>).lastPeakTimestamp = null;
@@ -213,6 +215,170 @@ describe('ppgService', () => {
       ppgService.processSignalSample(100, 0);
       expect(ownerCallbacks.onRawSignal).toHaveBeenCalledOnce();
       expect(competingCallbacks.onRawSignal).not.toHaveBeenCalled();
+    });
+
+    it('releases an acquired candidate immediately while video playback is pending', async () => {
+      let resolvePlay!: () => void;
+      const track = makeMockTrack({ torchSupported: false });
+      const stream = makeMockStream(track);
+      mockGetUserMediaSuccess(stream);
+      const removeChild = vi.fn();
+      const play = vi.fn(() => new Promise<void>((resolve) => (resolvePlay = resolve)));
+      const video = {
+        srcObject: null as unknown,
+        playsInline: false,
+        muted: false,
+        readyState: 4,
+        videoWidth: 320,
+        videoHeight: 240,
+        style: {} as CSSStyleDeclaration,
+        setAttribute: vi.fn(),
+        parentNode: { removeChild },
+        play,
+      };
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        if (tag === 'video') return video as unknown as HTMLVideoElement;
+        return document.createElement(tag);
+      });
+      const ownerCallbacks = { onRawSignal: vi.fn() };
+
+      const pending = ppgService.start({ callbacks: ownerCallbacks, torchEnabled: false });
+      await vi.waitFor(() => expect(play).toHaveBeenCalledOnce());
+      ppgService.stop();
+
+      expect(track.stop).toHaveBeenCalledOnce();
+      expect(removeChild).toHaveBeenCalledOnce();
+      expect(video.srcObject).toBeNull();
+      expect(ppgService.getStatus()).toBe('idle');
+      expect((ppgService as unknown as { callbacks: typeof ownerCallbacks }).callbacks).toBe(
+        ownerCallbacks
+      );
+
+      resolvePlay();
+      await expect(pending).resolves.toMatchObject({ ok: false, reason: 'start-failed' });
+      expect(track.stop).toHaveBeenCalledOnce();
+      expect(removeChild).toHaveBeenCalledOnce();
+      expect(ppgService.getStatus()).toBe('idle');
+    });
+
+    it('allows a new callback owner after stopping a hung video startup', async () => {
+      let resolveOldPlay!: () => void;
+      const oldTrack = makeMockTrack({ torchSupported: false });
+      const newTrack = makeMockTrack({ torchSupported: false });
+      const getUserMedia = vi
+        .fn()
+        .mockResolvedValueOnce(makeMockStream(oldTrack))
+        .mockResolvedValueOnce(makeMockStream(newTrack));
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: { getUserMedia },
+      });
+      const oldVideo = {
+        srcObject: null as unknown,
+        playsInline: false,
+        muted: false,
+        readyState: 4,
+        videoWidth: 320,
+        videoHeight: 240,
+        style: {} as CSSStyleDeclaration,
+        setAttribute: vi.fn(),
+        parentNode: { removeChild: vi.fn() },
+        play: vi.fn(() => new Promise<void>((resolve) => (resolveOldPlay = resolve))),
+      };
+      const newVideo = {
+        ...oldVideo,
+        parentNode: { removeChild: vi.fn() },
+        play: vi.fn().mockResolvedValue(undefined),
+      };
+      let videoCount = 0;
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        if (tag === 'video') {
+          return (videoCount++ === 0 ? oldVideo : newVideo) as unknown as HTMLVideoElement;
+        }
+        if (tag === 'canvas') {
+          return {
+            width: 320,
+            height: 240,
+            getContext: vi.fn().mockReturnValue({}),
+          } as unknown as HTMLCanvasElement;
+        }
+        return document.createElement(tag);
+      });
+      const oldCallbacks = { onRawSignal: vi.fn() };
+      const newCallbacks = { onRawSignal: vi.fn() };
+
+      const oldPending = ppgService.start({ callbacks: oldCallbacks, torchEnabled: false });
+      await vi.waitFor(() => expect(oldVideo.play).toHaveBeenCalledOnce());
+      ppgService.stop();
+      const retry = ppgService.start({ callbacks: newCallbacks, torchEnabled: false });
+      const retryOwnsANewGeneration = retry !== oldPending;
+
+      resolveOldPlay();
+      const [oldResult, retryResult] = await Promise.all([oldPending, retry]);
+
+      expect(retryOwnsANewGeneration).toBe(true);
+      expect(oldResult).toMatchObject({ ok: false, reason: 'start-failed' });
+      expect(retryResult).toEqual({ ok: true });
+      expect(getUserMedia).toHaveBeenCalledTimes(2);
+      expect(oldTrack.stop).toHaveBeenCalledOnce();
+      expect(newTrack.stop).not.toHaveBeenCalled();
+      expect(ppgService.getStatus()).toBe('capturing');
+      expect((ppgService as unknown as { callbacks: typeof newCallbacks }).callbacks).toBe(
+        newCallbacks
+      );
+    });
+
+    it('releases an acquired candidate immediately while web torch activation is pending', async () => {
+      let resolveTorch!: () => void;
+      const track = makeMockTrack({ torchSupported: true });
+      vi.mocked(track.applyConstraints).mockImplementationOnce(
+        () => new Promise<void>((resolve) => (resolveTorch = resolve))
+      );
+      const stream = makeMockStream(track);
+      mockGetUserMediaSuccess(stream);
+      const removeChild = vi.fn();
+      const video = {
+        srcObject: null as unknown,
+        playsInline: false,
+        muted: false,
+        readyState: 4,
+        videoWidth: 320,
+        videoHeight: 240,
+        style: {} as CSSStyleDeclaration,
+        setAttribute: vi.fn(),
+        parentNode: { removeChild },
+        play: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        if (tag === 'video') return video as unknown as HTMLVideoElement;
+        if (tag === 'canvas') {
+          return {
+            width: 320,
+            height: 240,
+            getContext: vi.fn().mockReturnValue({}),
+          } as unknown as HTMLCanvasElement;
+        }
+        return document.createElement(tag);
+      });
+      const ownerCallbacks = { onRawSignal: vi.fn() };
+
+      const pending = ppgService.start({ callbacks: ownerCallbacks });
+      await vi.waitFor(() => expect(track.applyConstraints).toHaveBeenCalledOnce());
+      ppgService.stop();
+
+      expect(track.stop).toHaveBeenCalledOnce();
+      expect(removeChild).toHaveBeenCalledOnce();
+      expect(video.srcObject).toBeNull();
+      expect(ppgService.getStatus()).toBe('idle');
+      expect((ppgService as unknown as { callbacks: typeof ownerCallbacks }).callbacks).toBe(
+        ownerCallbacks
+      );
+
+      resolveTorch();
+      await expect(pending).resolves.toMatchObject({ ok: false, reason: 'start-failed' });
+      expect(track.stop).toHaveBeenCalledOnce();
+      expect(removeChild).toHaveBeenCalledOnce();
+      expect(ppgService.getStatus()).toBe('idle');
     });
 
     it('transitions idle → initializing → capturing on successful start', async () => {
