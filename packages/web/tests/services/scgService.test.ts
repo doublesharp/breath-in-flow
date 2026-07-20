@@ -606,44 +606,21 @@ describe('scgService', () => {
   // ─── 6. Motion detection & quality ────────────────────────────────────────
 
   describe('motion detection', () => {
-    it.skip('drops quality to 0 when high-variance motion is detected', async () => {
+    it('drops quality to 0 when a stable resting signal is interrupted by motion', async () => {
       await scgService.start();
 
-      const SAMPLE_RATE = 100;
-      const INTERVAL_MS = 10;
-
-      // Phase 1: feed a clean SCG signal so the service detects beats and
-      // raises quality above 0.
-      const { samples: cleanSamples } = generateSCGSequence(60, 6, SAMPLE_RATE);
-      for (const s of cleanSamples) {
-        dispatchMotionEvent(s, INTERVAL_MS);
+      // The adaptive gate needs 12 samples to learn a baseline. After 20
+      // accepted samples the service reports a moderate acquisition quality.
+      for (let index = 0; index < 21; index++) {
+        dispatchMotionEvent({ x: 0, y: 0, z: 9.8 });
       }
-
-      // Quality may or may not have risen depending on peak detection with magnitude signal.
-      // The important test is that vigorous shaking drives quality to 0.
+      expect(scgService.getQuality()).toBe(0.3);
       qualityChanges.length = 0;
 
-      // Phase 2: simulate vigorous shaking — alternating high/low magnitude
-      // to create large variance in the magnitude signal
-      const MOTION_SAMPLES = SAMPLE_RATE * 2; // 2 seconds
-      for (let i = 0; i < MOTION_SAMPLES; i++) {
-        // Alternate between near-zero and very high acceleration to create
-        // large variance in the magnitude (sqrt(x²+y²+z²)) signal
-        const intensity = i % 4 < 2 ? 15 : 0.1;
-        const sign = () => (Math.random() > 0.5 ? 1 : -1);
-        dispatchMotionEvent(
-          {
-            x: sign() * intensity * Math.random(),
-            y: sign() * intensity * Math.random(),
-            z: sign() * intensity * Math.random(),
-          },
-          INTERVAL_MS
-        );
-      }
+      dispatchMotionEvent({ x: 0, y: 0, z: 20 });
 
-      // The service should have emitted a quality=0 change event
-      const hasZeroQuality = qualityChanges.some((q) => q === 0);
-      expect(hasZeroQuality).toBe(true);
+      expect(qualityChanges).toEqual([0]);
+      expect(scgService.getQuality()).toBe(0);
     });
   });
 
