@@ -31,6 +31,7 @@ import {
 import type { SOSFilter } from '@breath-in-flow/shared';
 import { Capacitor } from '@capacitor/core';
 import { Motion } from '@capacitor/motion';
+import { AdaptiveMotionGate } from './adaptiveMotionGate';
 import { sensorStartFailure, type SensorStartResult } from './sensorTypes';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -170,6 +171,7 @@ class SCGService {
 
   // Quality
   private currentQuality = 0;
+  private motionGate = new AdaptiveMotionGate();
 
   // Bound event handler reference (needed for removeEventListener)
   private boundHandleMotion = this.handleMotion.bind(this);
@@ -286,6 +288,14 @@ class SCGService {
     this.lastIntervalMs = intervalMs;
     this.elapsedMs += intervalMs;
     this.sampleCount++;
+
+    const magnitude = this.getAccelerationMagnitude(event);
+    if (magnitude === null) return;
+    const motionDecision = this.motionGate.addSample(magnitude, this.elapsedMs);
+    if (!motionDecision.accepted) {
+      this.updateQuality(0);
+      return;
+    }
 
     // ── 2. Sample-rate estimation ──
     if (!this.rateEstimated) {
@@ -628,6 +638,22 @@ class SCGService {
     }
   }
 
+  private getAccelerationMagnitude(event: DeviceMotionEvent): number | null {
+    const acceleration = event.accelerationIncludingGravity ?? event.acceleration;
+    if (!acceleration) return null;
+
+    const x = acceleration.x ?? 0;
+    const y = acceleration.y ?? 0;
+    const z = acceleration.z ?? 0;
+    const magnitude = Math.sqrt(x * x + y * y + z * z);
+    if (!Number.isFinite(magnitude)) return Number.NaN;
+
+    // Gravity-bearing samples provide a stable device-scale reference. Browser
+    // fallbacks sometimes omit gravity; do not mistake their tiny cardiac-only
+    // signal for whole-device movement before it reaches the SCG detector.
+    return magnitude >= 2 ? magnitude : 0;
+  }
+
   private estimateSampleRateFromWallClock(): void {
     const timestamps = this.rateEstimationTimestamps;
     if (timestamps.length < 2) return;
@@ -841,6 +867,7 @@ class SCGService {
     this.recentIBIs = [];
     this.sampleCount = 0;
     this.currentQuality = 0;
+    this.motionGate = new AdaptiveMotionGate();
     this.template = null;
     this.templateMatchCount = 0;
     this.filteredHistory = [];

@@ -48,6 +48,7 @@ type TestSCGService = {
   } | null;
   rateEstimated: boolean;
   sampleRateHz: number;
+  motionGate: { addSample: (magnitude: number, timestamp: number) => { accepted: boolean } };
 };
 
 function generateSineWave(
@@ -335,6 +336,34 @@ describe('scgService', () => {
         provenance: { source: 'scg', method: 'peak-detected' },
       });
       expect(service.detectedPeakSampleIndices).toEqual([10, 20]);
+    });
+
+    it('does not send a rejected motion transient to the peak detector', () => {
+      const service = scgService as unknown as TestSCGService;
+      const identityFilter = { filter: (value: number) => value };
+      const peakDetector = {
+        addSample: vi.fn().mockReturnValue(null),
+      };
+
+      service.axisCalibrated = true;
+      service.rateEstimated = true;
+      service.sampleRateHz = 100;
+      service.hpFilter = identityFilter;
+      service.lpFilter = identityFilter;
+      service.peakDetector = peakDetector;
+      service.motionGate = {
+        addSample: vi
+          .fn()
+          .mockReturnValueOnce({ accepted: true })
+          .mockReturnValueOnce({ accepted: false })
+          .mockReturnValueOnce({ accepted: true }),
+      };
+
+      service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 1 }, 10));
+      service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 30 }, 10));
+      service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 1 }, 10));
+
+      expect(peakDetector.addSample).toHaveBeenCalledTimes(2);
     });
 
     it('reports autocorrelation as a heart-rate estimate without fabricating IBIs', () => {

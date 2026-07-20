@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sensorFusionService, type FusedIBISample } from '../../src/services/sensorFusion';
+import {
+  createSensorFusionService,
+  sensorFusionService,
+  type FusedIBISample,
+} from '../../src/services/sensorFusion';
 import type { IBISample } from '@breath-in-flow/shared';
 
 function makeSample(timestamp: number, interval: number, quality: number): IBISample {
@@ -44,6 +48,70 @@ describe('SensorFusionService', () => {
       source: 'fused',
       method: 'peak-detected',
     });
+  });
+
+  it.each([140, -120])('learns and applies a stable signed offset of %ims', (offset) => {
+    const service = createSensorFusionService();
+    const emitted: FusedIBISample[] = [];
+    service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    for (let index = 0; index < 4; index++) {
+      const scgTimestamp = 1_000 + index * 1_000;
+      service.addPPGSample(makeSample(scgTimestamp + offset, 800, 0.8));
+      service.addSCGSample(makeSample(scgTimestamp, 805, 0.8));
+    }
+
+    expect(emitted).toHaveLength(4);
+    expect(emitted.every((sample) => sample.source === 'fused')).toBe(true);
+    expect(service.getEstimatedOffset()).toBe(offset);
+  });
+
+  it('tracks gradual bounded offset drift without duplicating matched beats', () => {
+    const service = createSensorFusionService();
+    const emitted: FusedIBISample[] = [];
+    service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    [130, 140, 150, 160, 170].forEach((offset, index) => {
+      const scgTimestamp = 1_000 + index * 1_000;
+      service.addSCGSample(makeSample(scgTimestamp, 800, 0.8));
+      service.addPPGSample(makeSample(scgTimestamp + offset, 805, 0.8));
+    });
+    vi.runOnlyPendingTimers();
+
+    expect(emitted).toHaveLength(5);
+    expect(emitted.every((sample) => sample.source === 'fused')).toBe(true);
+    expect(service.getEstimatedOffset()).toBe(150);
+  });
+
+  it('pairs a reversed-arrival offset match exactly once after timers flush', () => {
+    const service = createSensorFusionService();
+    const emitted: FusedIBISample[] = [];
+    service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    service.addSCGSample(makeSample(1_000, 800, 0.8));
+    service.addPPGSample(makeSample(1_140, 805, 0.8));
+    vi.runOnlyPendingTimers();
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({ source: 'fused', ppgInterval: 805, scgInterval: 800 });
+  });
+
+  it('retains a newer candidate when an older unmatched sample times out', () => {
+    const service = createSensorFusionService();
+    const emitted: FusedIBISample[] = [];
+    service.setCallbacks({ onFusedIBI: (sample) => emitted.push(sample) });
+
+    service.addPPGSample(makeSample(1_000, 800, 0.8));
+    vi.advanceTimersByTime(50);
+    service.addSCGSample(makeSample(2_000, 800, 0.8));
+    vi.advanceTimersByTime(51);
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].source).toBe('ppg');
+
+    vi.advanceTimersByTime(50);
+    expect(emitted).toHaveLength(2);
+    expect(emitted[1].source).toBe('scg');
   });
 
   it('uses quality-weighted average when intervals agree within 30ms', () => {
@@ -258,7 +326,7 @@ describe('SensorFusionService', () => {
 
     for (let i = 0; i < 60; i++) {
       const baseTimestamp = 10_000 + i * 1_000;
-      const timestampOffset = randomInt(rng, -100, 100);
+      const timestampOffset = 60;
       const ppgInterval = randomInt(rng, 500, 1_200);
       const intervalsAgree = rng() < 0.65;
       const scgInterval =
