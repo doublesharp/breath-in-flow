@@ -98,7 +98,7 @@ class TtsService {
         if (voices && voices.length > 0) {
           this.voicesCache = this.dedupeVoices(voices);
           this.voicesReady.value = true;
-          resolve(voices);
+          resolve(this.voicesCache);
           return true;
         }
         return false;

@@ -3,6 +3,7 @@ import { soundService } from '../../src/services/soundService';
 
 class FakeOscillator {
   public frequency = {
+    value: 0,
     setValueAtTime: vi.fn(),
     exponentialRampToValueAtTime: vi.fn(),
     linearRampToValueAtTime: vi.fn(),
@@ -14,6 +15,7 @@ class FakeOscillator {
   constructor(public ctx: FakeAudioContext) {}
   connect(node: unknown) {
     this.connects.push(node);
+    return node;
   }
   start(_t?: number) {
     this.started = true;
@@ -35,6 +37,7 @@ class FakeGain {
   constructor(public ctx: FakeAudioContext) {}
   connect(node: unknown) {
     this.connects.push(node);
+    return node;
   }
 }
 
@@ -212,6 +215,34 @@ describe('soundService', () => {
     // Gain and filter nodes should have been created for reverb
     expect(ctx._gains.length).toBeGreaterThanOrEqual(2); // at least 1 for main + reverb nodes
     expect(ctx._filters.length).toBeGreaterThanOrEqual(1); // for reverb lowpass
+  });
+
+  it('plays the full three-note completion chime even when click sounds are disabled', async () => {
+    soundService.setEnabled(false);
+
+    soundService.playCompletionChime();
+    await Promise.resolve();
+
+    expect(FakeAudioContext.instances).toHaveLength(1);
+    const ctx = FakeAudioContext.instances[0];
+    expect(ctx._oscillators.map((oscillator) => oscillator.frequency.value)).toEqual([
+      523, 659, 784,
+    ]);
+    expect(ctx._started).toHaveLength(3);
+    expect(ctx._stopped).toHaveLength(3);
+    expect(ctx._gains).toHaveLength(3);
+  });
+
+  it('resumes a suspended context before scheduling the completion chime', async () => {
+    const context = new FakeAudioContext();
+    context.state = 'suspended';
+    (soundService as unknown as { audioContext: FakeAudioContext }).audioContext = context;
+
+    soundService.playCompletionChime();
+    await Promise.resolve();
+
+    expect(context.resumed).toBe(true);
+    expect(context._started).toHaveLength(3);
   });
 
   describe('SoundService Branches - Context & Audio Control', () => {

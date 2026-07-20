@@ -23,11 +23,13 @@ const pauseMock = vi.fn();
 const resumeMock = vi.fn();
 const stopMock = vi.fn();
 const nextSetMock = vi.fn();
+const endExtendedHoldMock = vi.fn();
 const isRunning = ref(false);
 const timerIsPaused = ref(false);
 const timerPhase = ref('IDLE');
 const timerCurrentTime = ref(0);
 const timerTotalPhaseTime = ref(0);
+const timerCurrentSet = ref(1);
 
 const createSessionMock = vi.fn();
 const addSetMock = vi.fn();
@@ -36,6 +38,14 @@ const completeSessionMock = vi.fn();
 const cancelSessionMock = vi.fn();
 const updateSessionMock = vi.fn();
 const createConfigMock = vi.fn();
+const deleteConfigMock = vi.fn();
+const deleteSessionMock = vi.fn();
+const getAllConfigsMock = vi.fn(() => [] as Array<{ id?: string; name: string }>);
+const getSessionMock = vi.fn(() => ({
+  id: 'test-session',
+  sets: [] as Array<{ setNumber: number }>,
+}));
+const setSoundThemeMock = vi.fn();
 
 let speakMock: ReturnType<typeof vi.fn>;
 let loadVoicesMock: ReturnType<typeof vi.fn>;
@@ -66,11 +76,13 @@ vi.mock('@/composables/useStorage', () => ({
     cancelSession: cancelSessionMock,
     updateSession: updateSessionMock,
     createConfig: createConfigMock,
+    deleteConfig: deleteConfigMock,
+    deleteSession: deleteSessionMock,
     getSoundTheme: vi.fn(() => 'wood'),
-    setSoundTheme: vi.fn(),
+    setSoundTheme: setSoundThemeMock,
     soundTheme: ref('wood'),
-    getAllConfigs: vi.fn(() => []),
-    getSession: vi.fn(() => ({ id: 'test-session', sets: [] })),
+    getAllConfigs: getAllConfigsMock,
+    getSession: getSessionMock,
   }),
 }));
 
@@ -97,13 +109,14 @@ vi.mock('@/composables/useBreathingTimer', () => {
         isRunning,
         breathingScale: ref(1.0),
         currentRepetition: ref(1),
-        currentSet: ref(1),
+        currentSet: timerCurrentSet,
         extendedHoldElapsed: ref(0),
         isFirstExtendedHold: ref(true),
         start: startMock,
         pause: pauseMock,
         resume: resumeMock,
         nextSet: nextSetMock,
+        endExtendedHold: endExtendedHoldMock,
         stop: stopMock,
         isPaused: timerIsPaused,
       };
@@ -160,6 +173,9 @@ describe('BreathingPractice.vue', () => {
     timerPhase.value = 'IDLE';
     timerCurrentTime.value = 0;
     timerTotalPhaseTime.value = 0;
+    timerCurrentSet.value = 1;
+    getAllConfigsMock.mockReturnValue([]);
+    getSessionMock.mockReturnValue({ id: 'test-session', sets: [] });
     keepAwakeMock.mockResolvedValue(undefined);
     allowSleepMock.mockResolvedValue(undefined);
   });
@@ -462,6 +478,150 @@ describe('BreathingPractice.vue', () => {
 
     expect((vm as { sessionNotes?: string }).sessionNotes).toBe('');
     wrapper.unmount();
+  });
+
+  it('blocks session creation when the current breathing settings are invalid', async () => {
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+    const vm = wrapper.vm as unknown as {
+      config: { inhaleTime: number };
+      configValidationError: string;
+      startExercise: () => void;
+    };
+    vm.config.inhaleTime = 0;
+    await nextTick();
+
+    vm.startExercise();
+
+    expect(vm.configValidationError).toContain('Inhale time');
+    expect(createSessionMock).not.toHaveBeenCalled();
+    expect(startMock).not.toHaveBeenCalled();
+  });
+
+  it('records repetitions, timed holds, completed sets, and session completion', async () => {
+    const session = { id: 'session-recording', sets: [] };
+    createSessionMock.mockReturnValue(session);
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+    const vm = wrapper.vm as unknown as {
+      config: { extendedHoldMode: string; extendedHoldDuration: number };
+      currentSetData: {
+        completedRepetitions: number;
+        extendedHolds: Array<Record<string, unknown>>;
+      };
+      startExercise: () => void;
+    };
+    vm.config.extendedHoldMode = 'TIMED';
+    vm.config.extendedHoldDuration = 25;
+    vm.startExercise();
+
+    const onRepetitionComplete = lastTimerOptions?.onRepetitionComplete as (rep: number) => void;
+    const onExtendedHoldEnd = lastTimerOptions?.onExtendedHoldEnd as (
+      duration: number,
+      type: string
+    ) => void;
+    const onSetComplete = lastTimerOptions?.onSetComplete as () => void;
+    const onSessionComplete = lastTimerOptions?.onSessionComplete as () => void;
+    onRepetitionComplete(4);
+    onExtendedHoldEnd(24.6, 'EXHALE');
+    onSetComplete();
+    onSessionComplete();
+
+    expect(vm.currentSetData.completedRepetitions).toBe(4);
+    expect(vm.currentSetData.extendedHolds[0]).toMatchObject({
+      type: 'EXHALE',
+      mode: 'TIMED',
+      targetDuration: 25,
+      actualDuration: 24.6,
+    });
+    expect(addSetMock).toHaveBeenCalledWith(
+      'session-recording',
+      expect.objectContaining({ completedRepetitions: 4 })
+    );
+    expect(completeSessionMock).toHaveBeenCalledWith('session-recording');
+  });
+
+  it('persists a partial set before marking an interrupted session cancelled', () => {
+    createSessionMock.mockReturnValue({ id: 'session-partial', sets: [] });
+    getSessionMock.mockReturnValue({ id: 'session-partial', sets: [] });
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+    const vm = wrapper.vm as unknown as {
+      currentSetData: { completedRepetitions: number };
+      startExercise: () => void;
+      saveIncompleteSession: () => void;
+    };
+    vm.startExercise();
+    vm.currentSetData.completedRepetitions = 2;
+
+    vm.saveIncompleteSession();
+
+    expect(addSetMock).toHaveBeenCalledWith(
+      'session-partial',
+      expect.objectContaining({ setNumber: 1, completedRepetitions: 2 })
+    );
+    expect(cancelSessionMock).toHaveBeenCalledWith('session-partial');
+    expect(stopMock).toHaveBeenCalled();
+  });
+
+  it('discards the session record when the user exits without saving', () => {
+    createSessionMock.mockReturnValue({ id: 'session-discarded', sets: [] });
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+    const vm = wrapper.vm as unknown as {
+      startExercise: () => void;
+      exitWithoutSavingSession: () => void;
+    };
+    vm.startExercise();
+
+    vm.exitWithoutSavingSession();
+
+    expect(deleteSessionMock).toHaveBeenCalledWith('session-discarded');
+    expect(cancelSessionMock).not.toHaveBeenCalled();
+    expect(stopMock).toHaveBeenCalled();
+  });
+
+  it('requires confirmation before replacing a preset with the same name', async () => {
+    getAllConfigsMock.mockReturnValue([{ id: 'preset-old', name: 'Evening Reset' }]);
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+    const vm = wrapper.vm as unknown as {
+      configName: string;
+      showOverwriteConfirmation: boolean;
+      saveConfig: () => void;
+      confirmOverwrite: () => void;
+    };
+    vm.configName = ' evening reset ';
+
+    vm.saveConfig();
+    expect(vm.showOverwriteConfirmation).toBe(true);
+    expect(createConfigMock).not.toHaveBeenCalled();
+
+    vm.confirmOverwrite();
+    expect(deleteConfigMock).toHaveBeenCalledWith('preset-old');
+    expect(createConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'evening reset' })
+    );
   });
 
   it('confirmExit does not stop session on cancel', async () => {
@@ -792,5 +952,23 @@ describe('BreathingPractice.vue', () => {
 
     expect(wrapper.text()).toContain('Find your resonance frequency');
     wrapper.unmount();
+  });
+
+  it('persists Lab CTA dismissal so it stays out of the training flow', async () => {
+    hasAnyMeasurementsMock.mockResolvedValue(false);
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+    await flushPromises();
+    const vm = wrapper.vm as unknown as { dismissLabCta: () => void; showLabCta: boolean };
+    expect(vm.showLabCta).toBe(true);
+
+    vm.dismissLabCta();
+
+    expect(vm.showLabCta).toBe(false);
+    expect(localStorage.getItem('lab-cta-dismissed')).toBe('true');
   });
 });

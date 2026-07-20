@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { readFileSync } from 'node:fs';
@@ -63,6 +63,42 @@ describe('App.vue', () => {
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     expect(css).toMatch(/\.animated-bg::before[\s\S]*animation:\s*none/);
     expect(css).toMatch(/\.animate-scale-in[\s\S]*animation:\s*none/);
+  });
+
+  it('hides the header while scrolling down and restores it while scrolling up', async () => {
+    const removeListener = vi.spyOn(window, 'removeEventListener');
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          BreathingPractice: true,
+          SessionHistory: true,
+          PracticePresets: true,
+          AnalyticsDashboard: true,
+          LabTab: true,
+          HelpSystem: true,
+        },
+      },
+    });
+    const setScrollY = (value: number) => {
+      Object.defineProperty(window, 'scrollY', { value, configurable: true });
+      window.dispatchEvent(new Event('scroll'));
+    };
+
+    setScrollY(100);
+    await nextTick();
+    expect(wrapper.find('header').classes()).toContain('-translate-y-full');
+
+    setScrollY(70);
+    await nextTick();
+    expect(wrapper.find('header').classes()).toContain('translate-y-0');
+
+    setScrollY(30);
+    await nextTick();
+    expect(wrapper.find('header').classes()).toContain('translate-y-0');
+
+    wrapper.unmount();
+    expect(removeListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+    removeListener.mockRestore();
   });
 
   it('switches between all tabs', async () => {
