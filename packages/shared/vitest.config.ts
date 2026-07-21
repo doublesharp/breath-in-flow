@@ -40,6 +40,10 @@ export default defineConfig({
           lines: 100,
           functions: 100,
         },
+        'src/familyTesting.ts': {
+          lines: 100,
+          functions: 100,
+        },
       },
     },
   },

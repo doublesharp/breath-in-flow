@@ -169,6 +169,47 @@ export type SessionSet = z.infer<typeof SessionSetSchema>;
 export const SessionStatusSchema = z.enum(['IN_PROGRESS', 'COMPLETED', 'CANCELLED']);
 export type SessionStatus = z.infer<typeof SessionStatusSchema>;
 
+// ============================================
+// User Preferences and Check-In Schemas
+// ============================================
+
+export const UserGoalSchema = z.enum([
+  'RELAX',
+  'TRAIN_DIAPHRAGM',
+  'BUILD_CONSISTENCY',
+  'EXPLORE_PULSE_VARIABILITY',
+]);
+export type UserGoal = z.infer<typeof UserGoalSchema>;
+
+export const UserPreferencesSchema = z
+  .object({ version: z.literal(1), goal: UserGoalSchema })
+  .strict();
+export type UserPreferences = z.infer<typeof UserPreferencesSchema>;
+
+export const FeelingScoreSchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+]);
+export type FeelingScore = z.infer<typeof FeelingScoreSchema>;
+
+export const SessionCheckInSchema = z
+  .object({
+    before: FeelingScoreSchema.optional(),
+    after: FeelingScoreSchema.optional(),
+    comment: z.string().trim().max(500).optional(),
+  })
+  .strict()
+  .refine(
+    (value) => value.before !== undefined || value.after !== undefined || Boolean(value.comment),
+    {
+      message: 'A check-in must contain at least one response',
+    }
+  );
+export type SessionCheckIn = z.infer<typeof SessionCheckInSchema>;
+
 export const SessionSchema = z.object({
   id: z.string().uuid().optional(),
   configId: z.string().uuid().optional(),
@@ -180,6 +221,7 @@ export const SessionSchema = z.object({
   startedAt: z.date(),
   completedAt: z.date().optional(),
   notes: z.string().max(1000).optional(),
+  checkIn: SessionCheckInSchema.optional(),
 });
 
 export type Session = z.infer<typeof SessionSchema>;

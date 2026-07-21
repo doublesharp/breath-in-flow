@@ -8,6 +8,10 @@ import {
   INITIAL_TIMER_STATE,
   MeasurementRecordMetadataSchema,
   AssessmentResultSchema,
+  UserGoalSchema,
+  UserPreferencesSchema,
+  SessionCheckInSchema,
+  SessionSchema,
 } from '../src/schemas';
 
 function createRng(seed: number): () => number {
@@ -481,5 +485,69 @@ describe('AssessmentResultSchema', () => {
     const value = validAssessment();
     mutate(value);
     expect(AssessmentResultSchema.safeParse(value).success).toBe(false);
+  });
+});
+
+describe('UserPreferencesSchema', () => {
+  it('parses a supported goal into a versioned preferences record', () => {
+    expect(UserPreferencesSchema.parse({ version: 1, goal: 'RELAX' })).toEqual({
+      version: 1,
+      goal: 'RELAX',
+    });
+  });
+
+  it('rejects goals outside the supported enum', () => {
+    expect(UserGoalSchema.safeParse('DIAGNOSE_ME').success).toBe(false);
+  });
+
+  it('rejects unexpected preference keys', () => {
+    expect(
+      UserPreferencesSchema.safeParse({ version: 1, goal: 'RELAX', extra: true }).success
+    ).toBe(false);
+  });
+});
+
+describe('SessionCheckInSchema', () => {
+  it('parses a complete before/after check-in with a trimmed comment', () => {
+    expect(
+      SessionCheckInSchema.parse({ before: 1, after: 5, comment: 'More comfortable' })
+    ).toEqual({
+      before: 1,
+      after: 5,
+      comment: 'More comfortable',
+    });
+  });
+
+  it('accepts a check-in with only a single response', () => {
+    expect(SessionCheckInSchema.safeParse({ after: 6 }).success).toBe(false);
+    expect(SessionCheckInSchema.safeParse({ before: 3 }).success).toBe(true);
+  });
+
+  it('rejects an empty check-in with no responses', () => {
+    expect(SessionCheckInSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('rejects comments longer than the allowed maximum', () => {
+    expect(SessionCheckInSchema.safeParse({ comment: 'x'.repeat(501) }).success).toBe(false);
+  });
+});
+
+describe('SessionSchema check-in', () => {
+  const validSession = {
+    configSnapshot: DEFAULT_BREATHING_CONFIG,
+    startedAt: new Date('2026-07-20T12:00:00.000Z'),
+  };
+
+  it('parses an optional check-in attached to a session', () => {
+    expect(
+      SessionSchema.parse({ ...validSession, checkIn: { before: 2, after: 4 } }).checkIn
+    ).toEqual({
+      before: 2,
+      after: 4,
+    });
+  });
+
+  it('parses a session without a check-in', () => {
+    expect(SessionSchema.parse(validSession).checkIn).toBeUndefined();
   });
 });

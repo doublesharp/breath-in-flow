@@ -12,6 +12,10 @@ export {
   ExtendedHoldRecordSchema,
   SessionSetSchema,
   SessionStatusSchema,
+  UserGoalSchema,
+  UserPreferencesSchema,
+  FeelingScoreSchema,
+  SessionCheckInSchema,
   SessionSchema,
   CreateSessionSchema,
   TimerStateSchema,
@@ -38,6 +42,10 @@ export type {
   ExtendedHoldRecord,
   SessionSet,
   SessionStatus,
+  UserGoal,
+  UserPreferences,
+  FeelingScore,
+  SessionCheckIn,
   Session,
   CreateSession,
   TimerState,
@@ -61,6 +69,15 @@ export {
 } from './timer.js';
 
 export type { BreathingTimerCallbacks } from './timer.js';
+
+// Family testing data contracts
+export {
+  BACKUP_FORMAT_VERSION,
+  MAX_BACKUP_BYTES,
+  BackupEnvelopeShapeSchema,
+} from './familyTesting.js';
+
+export type { BackupEnvelopeShape } from './familyTesting.js';
 
 // DSP utilities
 export * from './dsp/index.js';
