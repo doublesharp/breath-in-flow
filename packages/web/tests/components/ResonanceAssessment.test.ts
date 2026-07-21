@@ -114,6 +114,13 @@ function resonanceAnalysis(available = true): HRVAnalysis {
   };
 }
 
+// Several tests advance hundreds of virtual seconds (warmup + full trials) against the
+// production 100ms breathing-timer interval, which re-renders Vue on every tick. That is
+// thousands of scheduler flushes per test: on an idle machine the heaviest case runs ~2.8s,
+// so under CPU contention it intermittently exceeds vitest's default 5000ms real-time test
+// timeout (the pre-existing "sensor-timing" flake). This raises only the real-wall-clock
+// budget for this suite; no assertion is loosened, no timer behavior is changed, and no
+// retries are added.
 describe('ResonanceAssessment', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -796,4 +803,4 @@ describe('ResonanceAssessment', () => {
       expect(localStorage.getItem('breath-in-flow-configs')).toBeNull();
     });
   });
-});
+}, 30_000);
