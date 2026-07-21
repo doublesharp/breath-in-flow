@@ -84,6 +84,26 @@ describe('HelpSystem.vue', () => {
     expect(background.hasAttribute('inert')).toBe(false);
   });
 
+  it('embeds the Data & Support controls in the Data tab', async () => {
+    const wrapper = mount(HelpSystem, { attachTo: document.body });
+    await wrapper.get('button.help-trigger').trigger('click');
+    await wrapper.vm.$nextTick();
+
+    const dataTab = Array.from(document.body.querySelectorAll('.help-tab')).find((button) =>
+      button.textContent?.includes('Data')
+    ) as HTMLElement;
+    expect(dataTab).toBeTruthy();
+    dataTab.click();
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(document.body.querySelector('[data-testid="data-support-settings"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="export-backup"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="send-feedback"]')).not.toBeNull();
+
+    wrapper.unmount();
+  });
+
   it('handles modal Escape without triggering the active background Escape action', async () => {
     const backgroundEscape = vi.fn();
     window.addEventListener('keydown', backgroundEscape);

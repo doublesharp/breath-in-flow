@@ -111,10 +111,19 @@ importers:
       '@capacitor/core':
         specifier: ^8.4.2
         version: 8.4.2
+      '@capacitor/device':
+        specifier: ^8.0.3
+        version: 8.0.3(@capacitor/core@8.4.2)
+      '@capacitor/filesystem':
+        specifier: ^8.1.2
+        version: 8.1.2(@capacitor/core@8.4.2)
       '@capacitor/ios':
         specifier: ^8.4.2
         version: 8.4.2(@capacitor/core@8.4.2)
       '@capacitor/motion':
+        specifier: ^8.0.1
+        version: 8.0.1(@capacitor/core@8.4.2)
+      '@capacitor/share':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.4.2)
       '@capawesome/capacitor-torch':
@@ -239,6 +248,16 @@ packages:
   '@capacitor/core@8.4.2':
     resolution: {integrity: sha512-fQPRb3JXRaU2pnufDUvqOjhsrYxDQeFRZyaj/sHydIUxD2NxOGHKMpmKUdI+U4OOmKuGZyvRpi7TSJU+7Bjbmg==}
 
+  '@capacitor/device@8.0.3':
+    resolution: {integrity: sha512-rliPCCZwxtjU6200jJNDAsQhioyozV3fGgiP+NgRqtDOI7i+Jdz+DYNwEup+3MGZZ4NEmkuFaBeWLM3T01vJRg==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/filesystem@8.1.2':
+    resolution: {integrity: sha512-doaaMfGoFR2hWU6aV6u83I+5ZsGyJVq+Gz4r9lMpJzUKMm1eMu0hLnFdV1aXZlU9FlK/RndFrVD8oRZfNOqWgQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
   '@capacitor/ios@8.4.2':
     resolution: {integrity: sha512-ClVzIjK++yRjsRPOpdEzhsZfbHfoEc0f4M6vD0v7sWh0qcoF6NkxNAeHpWTn4OPJpJfpGGoYsq+IfEHrYyBiWA==}
     peerDependencies:
@@ -248,6 +267,14 @@ packages:
     resolution: {integrity: sha512-kON6AwzCzMmyw6A76G0zLF/Q7xVPMC66HSfTSCgpMNwoQkRMMMEDHQbfFxZYLmCcS/4apy3lzG/HTvE5coAZiw==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/share@8.0.1':
+    resolution: {integrity: sha512-3cSBKBCJVon54rKDROP2rqGyeGks4pBh9TbaEk9S375Kbek/ZHe72N50zIa0Vn9Eac/SuhwgehO/mmA4CsUOiw==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/synapse@1.0.4':
+    resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
 
   '@capawesome/capacitor-torch@8.0.1':
     resolution: {integrity: sha512-H6Qi3lTXXn6nl8zpDnkBo4+Whpu9HwByElGUOA/7zNz9HDU9o8wrUaP5ul1Ejtkkd4g9Fa/DCfTHYcftYOJfbQ==}
@@ -3112,6 +3139,15 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  '@capacitor/device@8.0.3(@capacitor/core@8.4.2)':
+    dependencies:
+      '@capacitor/core': 8.4.2
+
+  '@capacitor/filesystem@8.1.2(@capacitor/core@8.4.2)':
+    dependencies:
+      '@capacitor/core': 8.4.2
+      '@capacitor/synapse': 1.0.4
+
   '@capacitor/ios@8.4.2(@capacitor/core@8.4.2)':
     dependencies:
       '@capacitor/core': 8.4.2
@@ -3119,6 +3155,12 @@ snapshots:
   '@capacitor/motion@8.0.1(@capacitor/core@8.4.2)':
     dependencies:
       '@capacitor/core': 8.4.2
+
+  '@capacitor/share@8.0.1(@capacitor/core@8.4.2)':
+    dependencies:
+      '@capacitor/core': 8.4.2
+
+  '@capacitor/synapse@1.0.4': {}
 
   '@capawesome/capacitor-torch@8.0.1(@capacitor/core@8.4.2)':
     dependencies:

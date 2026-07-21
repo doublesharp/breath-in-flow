@@ -477,6 +477,9 @@
                     <li><strong>Quick Stats</strong> - Total sessions, sets, and averages</li>
                   </ul>
                 </div>
+
+                <h4 class="help-card-title mt-2">Data & Support</h4>
+                <DataSupportSettings />
               </div>
 
               <!-- Tips -->
@@ -574,6 +577,7 @@
 import { AppConfig } from '@breath-in-flow/shared';
 import { ref, h } from 'vue';
 import { useModalIsolation } from '../composables/useModalIsolation';
+import DataSupportSettings from './DataSupportSettings.vue';
 
 const showHelp = ref(false);
 const activeSection = ref('start');
