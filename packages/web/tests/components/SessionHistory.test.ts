@@ -50,6 +50,17 @@ const mockSessionWithoutHolds = {
   completedAt: new Date(),
 };
 
+const mockSessionWithCheckIn = {
+  id: 'session-4',
+  configSnapshot: { name: 'Reflected Practice', inhaleTime: 4, exhaleTime: 4, repetitions: 4 },
+  status: 'COMPLETED',
+  sets: [],
+  completedSets: 1,
+  startedAt: new Date(),
+  completedAt: new Date(),
+  checkIn: { before: 2, after: 4, comment: 'Felt easier by the end' },
+};
+
 describe('SessionHistory.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -161,6 +172,40 @@ describe('SessionHistory.vue', () => {
     expect(wrapper.text()).toContain('Simple Practice');
     expect(wrapper.text()).toContain('3s');
     expect(wrapper.text()).toContain('5'); // repetitions
+  });
+
+  it('renders submitted check-in values with comfort labels and comment', async () => {
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({
+        getAllSessions: () => [mockSessionWithCheckIn],
+        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
+        deleteSession: vi.fn(() => true),
+      }),
+    }));
+
+    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
+    const wrapper = mount(SessionHistoryComp);
+
+    expect(wrapper.text()).toContain('Check-In');
+    expect(wrapper.text()).toContain('Uncomfortable');
+    expect(wrapper.text()).toContain('Comfortable');
+    expect(wrapper.text()).toContain('Felt easier by the end');
+  });
+
+  it('renders no check-in section when a session has none', async () => {
+    vi.doMock('../../src/composables', () => ({
+      useStorage: () => ({
+        getAllSessions: () => [mockSessionWithoutHolds],
+        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
+        deleteSession: vi.fn(() => true),
+      }),
+    }));
+
+    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
+    const wrapper = mount(SessionHistoryComp);
+
+    expect(wrapper.find('[data-testid="session-checkin"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Check-In');
   });
 
   it('handles cancel delete action', async () => {

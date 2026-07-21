@@ -388,6 +388,66 @@ describe('useStorage', () => {
     });
   });
 
+  describe('Session Check-Ins', () => {
+    let testConfig: BreathingConfig;
+
+    beforeEach(() => {
+      const storage = useStorage();
+      testConfig = storage.createConfig(createTestConfigInput({ name: 'Check-In Config' }));
+    });
+
+    it('merges and validates pre- and post-session check-in data', () => {
+      const storage = useStorage();
+      const session = storage.createSession(testConfig);
+
+      const updated = storage.setSessionCheckIn(session.id!, { before: 2 });
+      expect(updated?.checkIn).toEqual({ before: 2 });
+
+      storage.completeSession(session.id!);
+      storage.setSessionCheckIn(session.id!, { after: 4, comment: 'Felt easier' });
+
+      expect(storage.getSession(session.id!)?.checkIn).toEqual({
+        before: 2,
+        after: 4,
+        comment: 'Felt easier',
+      });
+    });
+
+    it('returns undefined when the session does not exist', () => {
+      const storage = useStorage();
+      expect(storage.setSessionCheckIn('non-existent-id', { before: 3 })).toBeUndefined();
+    });
+
+    it('rejects invalid check-in data and leaves the existing check-in untouched', () => {
+      const storage = useStorage();
+      const session = storage.createSession(testConfig);
+      storage.setSessionCheckIn(session.id!, { before: 3 });
+
+      const invalidScore = storage.setSessionCheckIn(session.id!, {
+        after: 9 as unknown as 4,
+      });
+      expect(invalidScore).toBeUndefined();
+
+      const overlongComment = storage.setSessionCheckIn(session.id!, {
+        comment: 'x'.repeat(501),
+      });
+      expect(overlongComment).toBeUndefined();
+
+      expect(storage.getSession(session.id!)?.checkIn).toEqual({ before: 3 });
+    });
+
+    it('applies the same post-session data idempotently', () => {
+      const storage = useStorage();
+      const session = storage.createSession(testConfig);
+
+      const first = storage.setSessionCheckIn(session.id!, { after: 5, comment: 'Calm' });
+      const second = storage.setSessionCheckIn(session.id!, { after: 5, comment: 'Calm' });
+
+      expect(first?.checkIn).toEqual({ after: 5, comment: 'Calm' });
+      expect(second?.checkIn).toEqual(first?.checkIn);
+    });
+  });
+
   describe('Stats', () => {
     beforeEach(() => {
       resetStorageForTesting();

@@ -12,6 +12,7 @@ const addExtendedHoldMock = vi.fn();
 const completeSessionMock = vi.fn();
 const updateSessionMock = vi.fn();
 const createConfigMock = vi.fn();
+const setSessionCheckInMock = vi.fn();
 const sessionsRef = ref<Session[]>([]);
 
 let speakMock: ReturnType<typeof vi.fn>;
@@ -31,6 +32,7 @@ vi.mock('@/composables/useStorage', () => {
       completeSession: completeSessionMock,
       cancelSession: cancelSessionMock,
       updateSession: updateSessionMock,
+      setSessionCheckIn: setSessionCheckInMock,
       createConfig: createConfigMock,
       getSoundTheme: vi.fn(() => 'wood'),
       setSoundTheme: vi.fn(),
@@ -139,6 +141,30 @@ vi.mock('@/services/ttsService', () => ({
   },
 }));
 
+type Wrapper = ReturnType<typeof mount>;
+
+// Clicking Start opens the optional pre-session check-in before any session is
+// created. These helpers drive that prompt so existing flows and new ones can
+// resolve it explicitly.
+function findByText(wrapper: Wrapper, text: string) {
+  return wrapper.findAll('button').find((b) => b.text().toLowerCase().includes(text));
+}
+
+async function skipBeforeCheckIn(wrapper: Wrapper) {
+  const skip = wrapper.find('[data-testid="checkin-skip"]');
+  if (skip.exists()) {
+    await skip.trigger('click');
+    await nextTick();
+  }
+}
+
+async function startPracticeAndSkip(wrapper: Wrapper) {
+  const startBtn = findByText(wrapper, 'start practice');
+  if (startBtn) await startBtn.trigger('click');
+  await nextTick();
+  await skipBeforeCheckIn(wrapper);
+}
+
 describe('BreathingPractice flows', () => {
   beforeEach(() => {
     createSessionMock.mockReset();
@@ -147,6 +173,7 @@ describe('BreathingPractice flows', () => {
     completeSessionMock.mockReset();
     updateSessionMock.mockReset();
     createConfigMock.mockReset();
+    setSessionCheckInMock.mockReset();
     cancelSessionMock.mockReset();
     sessionsRef.value = [];
 
@@ -171,12 +198,8 @@ describe('BreathingPractice flows', () => {
       },
     });
 
-    // Click Start Practice button
-    const startBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().toLowerCase().includes('start practice'));
-    expect(startBtn).toBeTruthy();
-    if (startBtn) await startBtn.trigger('click');
+    // Click Start Practice button, then dismiss the optional pre-session check-in
+    await startPracticeAndSkip(wrapper);
 
     expect(createSessionMock).toHaveBeenCalled();
     // simulate set complete via the mocked timer helper
@@ -196,10 +219,7 @@ describe('BreathingPractice flows', () => {
       },
     });
 
-    const startButton = wrapper
-      .findAll('button')
-      .find((button) => button.text().toLowerCase().includes('start practice'));
-    await startButton!.trigger('click');
+    await startPracticeAndSkip(wrapper);
 
     const vm = wrapper.vm as unknown as {
       timer: {
@@ -261,10 +281,7 @@ describe('BreathingPractice flows', () => {
     });
 
     // start session
-    const startBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().toLowerCase().includes('start practice'));
-    if (startBtn) await startBtn.trigger('click');
+    await startPracticeAndSkip(wrapper);
 
     // Call endExtendedHold which calls into the mocked timer.endExtendedHold
     // The release hold button only appears when phase is an EXTENDED_* state, so call the timer helper directly
@@ -294,10 +311,7 @@ describe('BreathingPractice flows', () => {
     });
 
     // Start and then trigger set complete so the UI shows Finish Session
-    const startBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().toLowerCase().includes('start practice'));
-    if (startBtn) await startBtn.trigger('click');
+    await startPracticeAndSkip(wrapper);
     const vm = wrapper.vm as unknown as Record<string, unknown>;
     (vm as { timer: { triggerSetComplete: (n?: number) => void } }).timer.triggerSetComplete(1);
     // wait for DOM update
@@ -329,10 +343,7 @@ describe('BreathingPractice flows', () => {
     });
 
     // start and then trigger session complete
-    const startBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().toLowerCase().includes('start practice'));
-    if (startBtn) await startBtn.trigger('click');
+    await startPracticeAndSkip(wrapper);
     const vm = wrapper.vm as unknown as Record<string, unknown>;
     (vm as { timer: { triggerSessionComplete: () => void } }).timer.triggerSessionComplete();
     // wait for DOM update
@@ -447,10 +458,7 @@ describe('BreathingPractice flows', () => {
     });
 
     // start a session
-    const startBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().toLowerCase().includes('start practice'));
-    if (startBtn) await startBtn.trigger('click');
+    await startPracticeAndSkip(wrapper);
     // call startNextSet method directly
     const vm = wrapper.vm as unknown as Record<string, unknown>;
     (vm as { startNextSet: () => void }).startNextSet();
@@ -474,10 +482,7 @@ describe('BreathingPractice flows', () => {
     });
 
     // start then reset
-    const startBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().toLowerCase().includes('start practice'));
-    if (startBtn) await startBtn.trigger('click');
+    await startPracticeAndSkip(wrapper);
     // call resetExercise
     const vm = wrapper.vm as unknown as Record<string, unknown>;
     (vm as { resetExercise: () => void }).resetExercise();
@@ -529,6 +534,158 @@ describe('BreathingPractice flows', () => {
     expect((vm as { currentSession?: unknown }).currentSession).toBeNull();
     expect((vm as { currentSetData?: unknown }).currentSetData).toBeNull();
   });
+
+  it('skipping the pre-session prompt starts immediately with no check-in attached', async () => {
+    createSessionMock.mockReturnValue({ id: 'skip-before', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    const startBtn = findByText(wrapper, 'start practice');
+    await startBtn!.trigger('click');
+    await nextTick();
+
+    // No session is created until the check-in resolves.
+    expect(createSessionMock).not.toHaveBeenCalled();
+
+    await skipBeforeCheckIn(wrapper);
+
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    expect(setSessionCheckInMock).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('attaches a submitted pre-score to the session created by that start', async () => {
+    createSessionMock.mockReturnValue({ id: 'attach-before', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    const startBtn = findByText(wrapper, 'start practice');
+    await startBtn!.trigger('click');
+    await nextTick();
+
+    await wrapper.find('[data-testid="feeling-score-2"]').setValue();
+    await wrapper.find('[data-testid="checkin-submit"]').trigger('click');
+    await nextTick();
+
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    expect(setSessionCheckInMock).toHaveBeenCalledWith('attach-before', { before: 2 });
+    wrapper.unmount();
+  });
+
+  it('persists no orphan check-in when the start is rejected', async () => {
+    // A rejected start yields no session, so a submitted pre-score has nothing
+    // to attach to.
+    createSessionMock.mockReturnValue(undefined);
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    const startBtn = findByText(wrapper, 'start practice');
+    await startBtn!.trigger('click');
+    await nextTick();
+
+    await wrapper.find('[data-testid="feeling-score-2"]').setValue();
+    await wrapper.find('[data-testid="checkin-submit"]').trigger('click');
+    await nextTick();
+
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    expect(setSessionCheckInMock).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('persists completion before showing the post-session prompt', async () => {
+    createSessionMock.mockReturnValue({ id: 'post-order', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    await startPracticeAndSkip(wrapper);
+    const vm = wrapper.vm as unknown as {
+      timer: { triggerSessionComplete: () => void };
+    };
+    vm.timer.triggerSessionComplete();
+    await nextTick();
+
+    // Completion is persisted first; only then does the post prompt appear.
+    expect(completeSessionMock).toHaveBeenCalledWith('post-order');
+    expect(wrapper.find('[data-testid="checkin-skip"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('saves post-session data without completing the session again', async () => {
+    createSessionMock.mockReturnValue({ id: 'post-save', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    await startPracticeAndSkip(wrapper);
+    const vm = wrapper.vm as unknown as {
+      timer: { triggerSessionComplete: () => void };
+    };
+    vm.timer.triggerSessionComplete();
+    await nextTick();
+    expect(completeSessionMock).toHaveBeenCalledTimes(1);
+
+    await wrapper.find('[data-testid="feeling-score-4"]').setValue();
+    await wrapper.find('[data-testid="checkin-comment"]').setValue('Felt easier');
+    await wrapper.find('[data-testid="checkin-submit"]').trigger('click');
+    await nextTick();
+
+    expect(setSessionCheckInMock).toHaveBeenCalledWith('post-save', {
+      after: 4,
+      comment: 'Felt easier',
+    });
+    // Dismissing the prompt must never re-run completion.
+    expect(completeSessionMock).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it('skipping the post-session prompt leaves completion intact', async () => {
+    createSessionMock.mockReturnValue({ id: 'post-skip', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    await startPracticeAndSkip(wrapper);
+    const vm = wrapper.vm as unknown as {
+      timer: { triggerSessionComplete: () => void };
+    };
+    vm.timer.triggerSessionComplete();
+    await nextTick();
+    expect(completeSessionMock).toHaveBeenCalledTimes(1);
+
+    await skipBeforeCheckIn(wrapper);
+
+    expect(setSessionCheckInMock).not.toHaveBeenCalled();
+    expect(completeSessionMock).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
 });
 
 function fullConfig(name: string): BreathingConfig {
@@ -555,6 +712,7 @@ function completed(id: string, name: string, startedAt: Date): Session {
 describe('BreathingPractice goal recommendations', () => {
   beforeEach(() => {
     createSessionMock.mockReset();
+    setSessionCheckInMock.mockReset();
     sessionsRef.value = [];
   });
 
@@ -593,6 +751,7 @@ describe('BreathingPractice goal recommendations', () => {
 
     actions.vm.$emit('start', fullConfig('Recommended'));
     await nextTick();
+    await skipBeforeCheckIn(wrapper);
 
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     expect((createSessionMock.mock.calls[0][0] as BreathingConfig).name).toBe('Recommended');
@@ -606,6 +765,7 @@ describe('BreathingPractice goal recommendations', () => {
 
     actions.vm.$emit('repeat', fullConfig('Repeated'));
     await nextTick();
+    await skipBeforeCheckIn(wrapper);
 
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     expect((createSessionMock.mock.calls[0][0] as BreathingConfig).name).toBe('Repeated');

@@ -189,6 +189,7 @@ describe('BreathingPractice.vue', () => {
 
   it('calls start when Start button clicked', async () => {
     isRunning.value = false;
+    createSessionMock.mockReturnValue({ id: 'sess-start', sets: [] });
     const wrapper = mount(BreathingPractice, {
       global: {
         provide: {
@@ -202,6 +203,9 @@ describe('BreathingPractice.vue', () => {
     const startBtn = buttons.find((b) => b.text().toLowerCase().includes('start'));
     expect(startBtn).toBeTruthy();
     if (startBtn) await startBtn.trigger('click');
+    // Resolve the optional pre-session check-in before the timer starts.
+    await nextTick();
+    await wrapper.find('[data-testid="checkin-skip"]').trigger('click');
     expect(startMock).toHaveBeenCalled();
   });
 
@@ -282,6 +286,8 @@ describe('BreathingPractice.vue', () => {
       .findAll('button')
       .find((button) => button.text().toLowerCase().includes('start'))!
       .trigger('click');
+    await nextTick();
+    await wrapper.find('[data-testid="checkin-skip"]').trigger('click');
     isRunning.value = true;
     await nextTick();
 
@@ -476,6 +482,7 @@ describe('BreathingPractice.vue', () => {
     await nextTick();
 
     (vm as { startExercise?: () => void }).startExercise?.();
+    (vm as { continueSessionStart?: () => void }).continueSessionStart?.();
     await nextTick();
 
     expect((vm as { sessionNotes?: string }).sessionNotes).toBe('');
@@ -521,10 +528,12 @@ describe('BreathingPractice.vue', () => {
       };
       finishSession: () => void;
       startExercise: () => void;
+      continueSessionStart: () => void;
     };
     vm.config.extendedHoldMode = 'TIMED';
     vm.config.extendedHoldDuration = 25;
     vm.startExercise();
+    vm.continueSessionStart();
 
     const onRepetitionComplete = lastTimerOptions?.onRepetitionComplete as (rep: number) => void;
     const onExtendedHoldEnd = lastTimerOptions?.onExtendedHoldEnd as (
@@ -568,9 +577,11 @@ describe('BreathingPractice.vue', () => {
     const vm = wrapper.vm as unknown as {
       currentSetData: { completedRepetitions: number };
       startExercise: () => void;
+      continueSessionStart: () => void;
       saveIncompleteSession: () => void;
     };
     vm.startExercise();
+    vm.continueSessionStart();
     vm.currentSetData.completedRepetitions = 2;
 
     vm.saveIncompleteSession();
@@ -593,9 +604,11 @@ describe('BreathingPractice.vue', () => {
     });
     const vm = wrapper.vm as unknown as {
       startExercise: () => void;
+      continueSessionStart: () => void;
       exitWithoutSavingSession: () => void;
     };
     vm.startExercise();
+    vm.continueSessionStart();
 
     vm.exitWithoutSavingSession();
 

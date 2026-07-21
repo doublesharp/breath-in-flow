@@ -4,6 +4,7 @@ import type {
   BreathingConfig,
   CreateBreathingConfig,
   Session,
+  SessionCheckIn,
   SessionSet,
   ExtendedHoldRecord,
   SoundTheme,
@@ -11,6 +12,7 @@ import type {
 import {
   BreathingConfigSchema,
   DEFAULT_BREATHING_CONFIG,
+  SessionCheckInSchema,
   SessionSchema,
   SoundThemeSchema,
 } from '@breath-in-flow/shared';
@@ -233,6 +235,17 @@ export function useStorage() {
     });
   }
 
+  function setSessionCheckIn(
+    id: string,
+    updates: Partial<SessionCheckIn>
+  ): Session | undefined {
+    const session = getSession(id);
+    if (!session) return undefined;
+    const parsed = SessionCheckInSchema.safeParse({ ...session.checkIn, ...updates });
+    if (!parsed.success) return undefined;
+    return updateSession(id, { checkIn: parsed.data });
+  }
+
   function cancelSession(id: string): Session | undefined {
     return updateSession(id, {
       status: 'CANCELLED',
@@ -304,6 +317,7 @@ export function useStorage() {
     addSetToSession,
     addExtendedHoldToSet,
     completeSession,
+    setSessionCheckIn,
     cancelSession,
     deleteSession,
     deleteAllSessions,

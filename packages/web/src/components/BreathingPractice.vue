@@ -1036,6 +1036,22 @@
         <button @click="saveSessionNotes" class="mt-3 btn-secondary">Save Notes</button>
       </div>
     </div>
+
+    <!-- Optional pre-session comfort check-in -->
+    <FeelingCheckIn
+      :open="showBeforeCheckIn"
+      stage="before"
+      @submit="submitBeforeCheckIn"
+      @skip="continueSessionStart()"
+    />
+
+    <!-- Optional post-session comfort check-in -->
+    <FeelingCheckIn
+      :open="showAfterCheckIn"
+      stage="after"
+      @submit="saveAfterCheckIn"
+      @skip="skipAfterCheckIn"
+    />
   </div>
 </template>
 
@@ -1046,6 +1062,7 @@ import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
 import RecommendedActions from './RecommendedActions.vue';
+import FeelingCheckIn from './FeelingCheckIn.vue';
 import { useBreathingTimer, useStorage } from '../composables';
 import { useAppLifecycle } from '../composables/useAppLifecycle';
 import { useHrvStorage } from '../composables/useHrvStorage';
@@ -1055,7 +1072,9 @@ import {
   CreateBreathingConfigSchema,
   formatTime,
   type BreathingConfig,
+  type FeelingScore,
   type Session,
+  type SessionCheckIn,
   type SessionSet,
   type BreathingPhase,
   type TimerState,
@@ -1175,6 +1194,14 @@ const sortedVoices = computed(() => {
 const currentSession = ref<Session | null>(null);
 const currentSetData = ref<SessionSet | null>(null);
 const sessionNotes = ref('');
+
+// Optional check-in state. The pre-session prompt holds the pending config until
+// the user continues or skips; the post-session prompt keeps the completed
+// session id so its response can be saved after completion is already persisted.
+const showBeforeCheckIn = ref(false);
+const pendingStartConfig = ref<BreathingConfig | null>(null);
+const showAfterCheckIn = ref(false);
+const completedSessionId = ref<string | null>(null);
 
 // Load last used config on mount
 onMounted(async () => {
@@ -1296,7 +1323,7 @@ const timer = useBreathingTimer(config, {
   },
   onSessionComplete: (_state) => {
     if (currentSession.value) {
-      storage.completeSession(currentSession.value.id!);
+      finalizeCompletedSession(currentSession.value.id!);
     }
   },
 });
@@ -1472,11 +1499,18 @@ function handleEscape(event: KeyboardEvent) {
   }
 }
 
-function startSession(validatedConfig: BreathingConfig) {
-  Object.assign(config, validatedConfig);
+function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScore) {
+  Object.assign(config, candidate);
 
-  // Create new session
-  currentSession.value = storage.createSession(validatedConfig);
+  // Create the session first; a rejected start leaves no session, so a submitted
+  // pre-session score is never persisted as an orphan check-in.
+  const session = storage.createSession(candidate);
+  if (!session?.id) return;
+  currentSession.value = session;
+
+  if (before !== undefined) {
+    storage.setSessionCheckIn(session.id, { before });
+  }
 
   sessionNotes.value = '';
 
@@ -1491,13 +1525,48 @@ function startSession(validatedConfig: BreathingConfig) {
   timer.start();
 }
 
-// Single seam for beginning a session. Task 4 replaces this body with a
-// pre-session check-in flow; its callers (start, repeat, Start Practice) stay
-// the same, so only this function changes.
-function requestSessionStart(sessionConfig: BreathingConfig) {
-  const result = BreathingConfigSchema.safeParse(sessionConfig);
-  if (!result.success) return;
-  startSession(result.data);
+// Single seam for beginning a session. A start request opens the optional
+// pre-session check-in; the session itself begins only once the check-in is
+// continued or skipped. Callers (start, repeat, Start Practice) stay the same.
+function requestSessionStart(candidate: BreathingConfig) {
+  pendingStartConfig.value = BreathingConfigSchema.parse(candidate);
+  showBeforeCheckIn.value = true;
+}
+
+function continueSessionStart(before?: FeelingScore) {
+  const candidate = pendingStartConfig.value;
+  showBeforeCheckIn.value = false;
+  pendingStartConfig.value = null;
+  if (!candidate) return;
+  startValidatedExercise(candidate, before);
+}
+
+function submitBeforeCheckIn(payload: { score: FeelingScore }) {
+  continueSessionStart(payload.score);
+}
+
+// Completion is persisted before the post-session prompt appears, and the
+// completed session id is retained so a submitted response can be saved without
+// completing the session a second time.
+function finalizeCompletedSession(id: string) {
+  storage.completeSession(id);
+  completedSessionId.value = id;
+  showAfterCheckIn.value = true;
+}
+
+function saveAfterCheckIn(payload: { score: FeelingScore; comment?: string }) {
+  const id = completedSessionId.value;
+  showAfterCheckIn.value = false;
+  completedSessionId.value = null;
+  if (!id) return;
+  const updates: Partial<SessionCheckIn> = { after: payload.score };
+  if (payload.comment) updates.comment = payload.comment;
+  storage.setSessionCheckIn(id, updates);
+}
+
+function skipAfterCheckIn() {
+  showAfterCheckIn.value = false;
+  completedSessionId.value = null;
 }
 
 function startExercise() {
@@ -1584,9 +1653,10 @@ function startNextSet() {
 
 function finishSession() {
   // Automatic target-set completion is persisted by onSessionComplete. Manual
-  // finishes from SET_COMPLETE/SET_REST still need to finalize the session.
+  // finishes from SET_COMPLETE/SET_REST still need to finalize the session and
+  // then offer the optional post-session check-in.
   if (currentSession.value && timer.phase.value !== 'SESSION_COMPLETE') {
-    storage.completeSession(currentSession.value.id!);
+    finalizeCompletedSession(currentSession.value.id!);
   }
   timer.stop();
   currentSession.value = null;

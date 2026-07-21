@@ -238,6 +238,32 @@
             </div>
           </div>
 
+          <!-- Check-In -->
+          <div
+            v-if="session.checkIn"
+            data-testid="session-checkin"
+            class="mt-4 p-3 bg-slate-800/30 rounded-lg"
+          >
+            <div class="text-xs text-slate-500 uppercase tracking-wider mb-2">Check-In</div>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-if="session.checkIn.before"
+                class="px-3 py-1.5 bg-slate-700/40 text-slate-300 rounded-lg text-sm border border-slate-600/40"
+              >
+                Before: {{ feelingLabel(session.checkIn.before) }}
+              </span>
+              <span
+                v-if="session.checkIn.after"
+                class="px-3 py-1.5 bg-slate-700/40 text-slate-300 rounded-lg text-sm border border-slate-600/40"
+              >
+                After: {{ feelingLabel(session.checkIn.after) }}
+              </span>
+            </div>
+            <p v-if="session.checkIn.comment" class="text-slate-300 text-sm italic mt-2">
+              "{{ session.checkIn.comment }}"
+            </p>
+          </div>
+
           <!-- Notes -->
           <div v-if="session.notes" class="mt-4 p-3 bg-slate-800/30 rounded-lg">
             <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Notes</div>
@@ -252,7 +278,24 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useStorage } from '../composables';
-import { formatTimeSimple, type Session, type ExtendedHoldRecord } from '@breath-in-flow/shared';
+import {
+  formatTimeSimple,
+  type FeelingScore,
+  type Session,
+  type ExtendedHoldRecord,
+} from '@breath-in-flow/shared';
+
+const FEELING_LABELS: Record<FeelingScore, string> = {
+  1: 'Very uncomfortable',
+  2: 'Uncomfortable',
+  3: 'Neutral',
+  4: 'Comfortable',
+  5: 'Very comfortable',
+};
+
+function feelingLabel(score: FeelingScore): string {
+  return FEELING_LABELS[score];
+}
 
 const storage = useStorage();
 
