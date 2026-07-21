@@ -8,17 +8,10 @@
         <button data-testid="start-recommended" class="btn-primary" @click="emitStart">
           Start recommended session
         </button>
-        <button data-testid="adjust-recommended" class="btn-secondary" @click="emitAdjust">
-          Adjust first
-        </button>
+        <button data-testid="adjust-recommended" class="btn-secondary" @click="emitAdjust">Adjust first</button>
       </template>
 
-      <button
-        v-else-if="recommendation.kind === 'lab'"
-        data-testid="open-lab"
-        class="btn-primary"
-        @click="emitOpenLab"
-      >
+      <button v-else-if="recommendation.kind === 'lab'" data-testid="open-lab" class="btn-primary" @click="emitOpenLab">
         Open the Lab
       </button>
 
@@ -51,9 +44,7 @@ const recommendation = computed(() => resolveRecommendation(props.goal));
 
 const recommendedPreset = computed(() => {
   const rec = recommendation.value;
-  return rec.kind === 'practice'
-    ? (guidedPresets.find((preset) => preset.id === rec.presetId) ?? null)
-    : null;
+  return rec.kind === 'practice' ? (guidedPresets.find((preset) => preset.id === rec.presetId) ?? null) : null;
 });
 
 // Detached, validated clone so a caller can never mutate the built-in preset.

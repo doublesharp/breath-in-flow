@@ -259,10 +259,7 @@ export function useStorage() {
     });
   }
 
-  function setSessionCheckIn(
-    id: string,
-    updates: Partial<SessionCheckIn>
-  ): Session | undefined {
+  function setSessionCheckIn(id: string, updates: Partial<SessionCheckIn>): Session | undefined {
     const session = getSession(id);
     if (!session) return undefined;
     const parsed = SessionCheckInSchema.safeParse({ ...session.checkIn, ...updates });

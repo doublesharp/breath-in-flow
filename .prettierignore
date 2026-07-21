@@ -12,3 +12,6 @@ release
 # Capacitor native projects
 ios
 android
+
+# Local planning scratch space (not product source)
+.superpowers

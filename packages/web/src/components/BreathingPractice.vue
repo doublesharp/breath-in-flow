@@ -1046,12 +1046,7 @@
     />
 
     <!-- Optional post-session comfort check-in -->
-    <FeelingCheckIn
-      :open="showAfterCheckIn"
-      stage="after"
-      @submit="saveAfterCheckIn"
-      @skip="skipAfterCheckIn"
-    />
+    <FeelingCheckIn :open="showAfterCheckIn" stage="after" @submit="saveAfterCheckIn" @skip="skipAfterCheckIn" />
   </div>
 </template>
 

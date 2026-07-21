@@ -167,7 +167,11 @@ function byteLength(text: string): number {
 function validateConfig(raw: unknown): BreathingConfig {
   const parsed = BreathingConfigSchema.safeParse(restoreDates(raw));
   if (!parsed.success) {
-    throw new BackupRestoreError('validate', 'Backup contains an invalid breathing config.', parsed.error);
+    throw new BackupRestoreError(
+      'validate',
+      'Backup contains an invalid breathing config.',
+      parsed.error
+    );
   }
   return parsed.data;
 }
@@ -183,7 +187,11 @@ function validateSession(raw: unknown): Session {
 function validateAssessment(raw: unknown): AssessmentResult {
   const parsed = AssessmentResultSchema.safeParse(restoreDates(raw));
   if (!parsed.success) {
-    throw new BackupRestoreError('validate', 'Backup contains an invalid assessment.', parsed.error);
+    throw new BackupRestoreError(
+      'validate',
+      'Backup contains an invalid assessment.',
+      parsed.error
+    );
   }
   return parsed.data;
 }
@@ -285,14 +293,20 @@ export function createBackupService(repositories: BackupRepositories): BackupSer
     // unsupported formatVersion, and validates preferences + soundTheme inline.
     const envelopeResult = BackupEnvelopeShapeSchema.safeParse(raw);
     if (!envelopeResult.success) {
-      throw new BackupRestoreError('validate', 'Backup envelope failed schema validation.', envelopeResult.error);
+      throw new BackupRestoreError(
+        'validate',
+        'Backup envelope failed schema validation.',
+        envelopeResult.error
+      );
     }
     const envelope = envelopeResult.data;
 
     // Then nested validation of the opaque (z.unknown) collections.
     const configs = envelope.data.configs.map((config) => validateConfig(config));
     const sessions = envelope.data.sessions.map((session) => validateSession(session));
-    const assessments = envelope.data.assessments.map((assessment) => validateAssessment(assessment));
+    const assessments = envelope.data.assessments.map((assessment) =>
+      validateAssessment(assessment)
+    );
     const measurements = envelope.data.measurements.map((measurement) => {
       const parsedMeasurement = repositories.hrv.parseMeasurement(measurement);
       if (!parsedMeasurement) {
@@ -341,7 +355,11 @@ export function createBackupService(repositories: BackupRepositories): BackupSer
       lastConfigSnapshot = repositories.lastConfig.read();
       hrvSnapshot = await repositories.hrv.exportState();
     } catch (error) {
-      throw new BackupRestoreError('snapshot', 'Failed to capture current state before restore.', error);
+      throw new BackupRestoreError(
+        'snapshot',
+        'Failed to capture current state before restore.',
+        error
+      );
     }
 
     const originalData: EnvelopeData = {
@@ -378,13 +396,25 @@ export function createBackupService(repositories: BackupRepositories): BackupSer
         await rollback();
         const afterRollback = await currentData();
         if (!canonicalEqual(afterRollback, originalData)) {
-          throw new BackupRestoreError('rollback', 'Rollback did not restore the original state.', reason);
+          throw new BackupRestoreError(
+            'rollback',
+            'Rollback did not restore the original state.',
+            reason
+          );
         }
       } catch (rollbackError) {
         if (rollbackError instanceof BackupRestoreError) throw rollbackError;
-        throw new BackupRestoreError('rollback', 'Rollback failed; data may be inconsistent.', rollbackError);
+        throw new BackupRestoreError(
+          'rollback',
+          'Rollback failed; data may be inconsistent.',
+          rollbackError
+        );
       }
-      throw new BackupRestoreError(stage, `Restore failed during the ${stage} stage; original state restored.`, reason);
+      throw new BackupRestoreError(
+        stage,
+        `Restore failed during the ${stage} stage; original state restored.`,
+        reason
+      );
     };
 
     // --- WRITE: practice, preferences, last-config, then the atomic HRV replace. ---
@@ -412,7 +442,10 @@ export function createBackupService(repositories: BackupRepositories): BackupSer
       return rollbackAndThrow('verify', error);
     }
     if (!canonicalEqual(readBack, expected)) {
-      return rollbackAndThrow('verify', new Error('Read-back verification did not match the restored backup.'));
+      return rollbackAndThrow(
+        'verify',
+        new Error('Read-back verification did not match the restored backup.')
+      );
     }
   }
 

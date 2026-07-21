@@ -32,8 +32,8 @@
     <div class="help-card">
       <h4 class="help-card-title">Backup</h4>
       <p class="text-sm text-slate-300 mb-3">
-        Export a private copy of your data, or restore one on a new device. Backups stay on your
-        device unless you share them.
+        Export a private copy of your data, or restore one on a new device. Backups stay on your device unless you share
+        them.
       </p>
       <div class="flex flex-wrap gap-2">
         <button
@@ -78,8 +78,7 @@
     <div class="help-card">
       <h4 class="help-card-title">Send feedback</h4>
       <p class="text-sm text-slate-300 mb-3">
-        Share a note with the team. We only include your app and device details — never your
-        practice data.
+        Share a note with the team. We only include your app and device details — never your practice data.
       </p>
       <button
         type="button"
@@ -107,46 +106,46 @@
       tabindex="-1"
       class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm safe-area-top safe-area-bottom"
     >
-        <div class="card-solid max-w-md w-full">
-          <h2 id="restore-confirm-title" ref="confirmTitleRef" tabindex="-1" class="text-xl font-bold text-white">
-            Restore this backup?
-          </h2>
-          <p class="mt-2 text-sm text-slate-400">
-            This replaces all data currently on this device. This cannot be undone.
-          </p>
+      <div class="card-solid max-w-md w-full">
+        <h2 id="restore-confirm-title" ref="confirmTitleRef" tabindex="-1" class="text-xl font-bold text-white">
+          Restore this backup?
+        </h2>
+        <p class="mt-2 text-sm text-slate-400">
+          This replaces all data currently on this device. This cannot be undone.
+        </p>
 
-          <div data-testid="backup-preview" class="mt-4 rounded-xl bg-white/[0.03] p-3 text-sm text-slate-300">
-            <p>Exported {{ formattedExportedAt }}</p>
-            <ul class="mt-2 space-y-1">
-              <li>{{ previewCounts.sessions }} sessions</li>
-              <li>{{ previewCounts.measurements }} measurements</li>
-              <li>{{ previewCounts.configs }} presets</li>
-              <li>{{ previewCounts.assessments }} assessments</li>
-            </ul>
-          </div>
+        <div data-testid="backup-preview" class="mt-4 rounded-xl bg-white/[0.03] p-3 text-sm text-slate-300">
+          <p>Exported {{ formattedExportedAt }}</p>
+          <ul class="mt-2 space-y-1">
+            <li>{{ previewCounts.sessions }} sessions</li>
+            <li>{{ previewCounts.measurements }} measurements</li>
+            <li>{{ previewCounts.configs }} presets</li>
+            <li>{{ previewCounts.assessments }} assessments</li>
+          </ul>
+        </div>
 
-          <div class="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              data-testid="cancel-restore"
-              class="btn-secondary"
-              :disabled="restoring"
-              @click="cancelRestore"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              data-testid="confirm-restore"
-              class="btn-primary"
-              :disabled="restoring"
-              @click="confirmRestore"
-            >
-              Restore
-            </button>
-          </div>
+        <div class="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            data-testid="cancel-restore"
+            class="btn-secondary"
+            :disabled="restoring"
+            @click="cancelRestore"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-testid="confirm-restore"
+            class="btn-primary"
+            :disabled="restoring"
+            @click="confirmRestore"
+          >
+            Restore
+          </button>
         </div>
       </div>
+    </div>
   </div>
 </template>
 

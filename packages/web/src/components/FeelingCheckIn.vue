@@ -49,12 +49,7 @@
 
       <div class="mt-6 flex justify-end gap-3">
         <button data-testid="checkin-skip" class="btn-secondary" @click="skip">Skip</button>
-        <button
-          data-testid="checkin-submit"
-          class="btn-primary"
-          :disabled="selectedScore === null"
-          @click="submit"
-        >
+        <button data-testid="checkin-submit" class="btn-primary" :disabled="selectedScore === null" @click="submit">
           {{ submitLabel }}
         </button>
       </div>
@@ -89,9 +84,7 @@ const options: Array<{ score: FeelingScore; label: string }> = [
 const selectedScore = ref<FeelingScore | null>(props.initialScore ?? null);
 const comment = ref('');
 
-const title = computed(() =>
-  props.stage === 'before' ? 'How do you feel right now?' : 'How did that feel?'
-);
+const title = computed(() => (props.stage === 'before' ? 'How do you feel right now?' : 'How did that feel?'));
 const submitLabel = computed(() => (props.stage === 'before' ? 'Continue' : 'Save'));
 
 // Reset the form each time the prompt opens so a new session starts clean.

@@ -920,15 +920,16 @@ describe('useHrvStorage', () => {
       // Abort the single transaction while writing the assessments store. If the
       // implementation used two transactions the measurements write would have
       // already committed, so this proves both stores roll back together.
-      const putSpy = vi
-        .spyOn(IDBObjectStore.prototype, 'put')
-        .mockImplementation(function (this: IDBObjectStore, value: unknown) {
-          if (this.name === 'assessments') {
-            this.transaction.abort();
-            return {} as IDBRequest;
-          }
-          return realPut.call(this, value);
-        });
+      const putSpy = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+        this: IDBObjectStore,
+        value: unknown
+      ) {
+        if (this.name === 'assessments') {
+          this.transaction.abort();
+          return {} as IDBRequest;
+        }
+        return realPut.call(this, value);
+      });
 
       let aborted = false;
       try {

@@ -3,7 +3,11 @@ import { describe, it, expect, vi } from 'vitest';
 import RecommendedActions from '@/components/RecommendedActions.vue';
 import { guidedPresets } from '@/data/guidedPresets';
 import { resolveRecommendation } from '@/services/recommendationService';
-import { DEFAULT_BREATHING_CONFIG, type BreathingConfig, type Session } from '@breath-in-flow/shared';
+import {
+  DEFAULT_BREATHING_CONFIG,
+  type BreathingConfig,
+  type Session,
+} from '@breath-in-flow/shared';
 
 vi.mock('@/services/recommendationService', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/recommendationService')>();

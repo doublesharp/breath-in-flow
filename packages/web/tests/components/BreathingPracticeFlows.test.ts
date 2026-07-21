@@ -732,8 +732,16 @@ describe('BreathingPractice goal recommendations', () => {
       status: 'IN_PROGRESS',
       completedAt: undefined,
     };
-    const newest = completed('a0000000-0000-4000-8000-000000000002', 'Newest', new Date('2026-03-02'));
-    const older = completed('a0000000-0000-4000-8000-000000000003', 'Older', new Date('2026-03-01'));
+    const newest = completed(
+      'a0000000-0000-4000-8000-000000000002',
+      'Newest',
+      new Date('2026-03-02')
+    );
+    const older = completed(
+      'a0000000-0000-4000-8000-000000000003',
+      'Older',
+      new Date('2026-03-01')
+    );
     // Storage keeps sessions newest-first.
     sessionsRef.value = [inProgress, newest, older];
 

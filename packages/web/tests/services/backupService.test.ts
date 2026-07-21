@@ -145,7 +145,9 @@ function makeMeasurement(): HrvMeasurement {
 function makeAssessment(): AssessmentResult {
   return {
     id: crypto.randomUUID(),
-    trials: [{ rate: 6.0, inhaleTime: 5, exhaleTime: 5, repetitions: 5, comfortRating: 4, symptoms: [] }],
+    trials: [
+      { rate: 6.0, inhaleTime: 5, exhaleTime: 5, repetitions: 5, comfortRating: 4, symptoms: [] },
+    ],
     selectedRate: 6.0,
     completedAt: new Date('2026-03-01T09:00:00.000Z'),
     config: { warmupDurationSeconds: 120, warmupRate: 6.0, restDurationSeconds: 120 },
@@ -161,7 +163,11 @@ interface SeedState {
 
 function seededState(): SeedState {
   return {
-    practice: { configs: [makeConfig()], sessions: [makeSession()], soundTheme: 'wood' as SoundTheme },
+    practice: {
+      configs: [makeConfig()],
+      sessions: [makeSession()],
+      soundTheme: 'wood' as SoundTheme,
+    },
     preferences: { version: 1, goal: 'RELAX' },
     lastConfig: makeConfig(),
     hrv: { measurements: [makeMeasurement()], assessments: [makeAssessment()] },
@@ -175,7 +181,11 @@ function seededState(): SeedState {
 type ThrowMode = null | 'once' | 'always';
 
 interface FakeControls {
-  practice: { throwOnExportCall: number | null; replaceThrows: ThrowMode; corruptReplace: ThrowMode };
+  practice: {
+    throwOnExportCall: number | null;
+    replaceThrows: ThrowMode;
+    corruptReplace: ThrowMode;
+  };
   preferences: { throwOnExportCall: number | null; replaceThrows: ThrowMode };
   lastConfig: { throwOnReadCall: number | null; replaceThrows: ThrowMode };
   hrv: { throwOnExportCall: number | null; replaceThrows: ThrowMode; corruptReplace: ThrowMode };
@@ -458,14 +468,20 @@ describe('backupService parsing and validation', () => {
   it('rejects an invalid nested measurement', async () => {
     const service = createBackupService(makeFakes(seededState()).repositories);
     const base = JSON.parse((await service.createBackup()).json);
-    const text = JSON.stringify({ ...base, data: { ...base.data, measurements: [{ bogus: true }] } });
+    const text = JSON.stringify({
+      ...base,
+      data: { ...base.data, measurements: [{ bogus: true }] },
+    });
     expect(captureParse(service, text).stage).toBe('validate');
   });
 
   it('rejects an invalid nested assessment', async () => {
     const service = createBackupService(makeFakes(seededState()).repositories);
     const base = JSON.parse((await service.createBackup()).json);
-    const text = JSON.stringify({ ...base, data: { ...base.data, assessments: [{ bogus: true }] } });
+    const text = JSON.stringify({
+      ...base,
+      data: { ...base.data, assessments: [{ bogus: true }] },
+    });
     expect(captureParse(service, text).stage).toBe('validate');
   });
 

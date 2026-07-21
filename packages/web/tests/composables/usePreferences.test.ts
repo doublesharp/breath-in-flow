@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { UserPreferences } from '@breath-in-flow/shared';
-import {
-  usePreferences,
-  reloadPreferencesForTesting,
-} from '../../src/composables/usePreferences';
+import { usePreferences, reloadPreferencesForTesting } from '../../src/composables/usePreferences';
 import { PREFERENCES_STORAGE_KEY } from '../../src/constants/storageKeys';
 
 beforeEach(() => {
@@ -37,10 +34,7 @@ describe('usePreferences', () => {
   });
 
   it('hydrates a valid stored preference on reload', () => {
-    localStorage.setItem(
-      PREFERENCES_STORAGE_KEY,
-      JSON.stringify({ version: 1, goal: 'RELAX' })
-    );
+    localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 1, goal: 'RELAX' }));
     reloadPreferencesForTesting();
 
     const state = usePreferences();
@@ -66,10 +60,7 @@ describe('usePreferences', () => {
   });
 
   it('treats a storage read failure as needing onboarding', () => {
-    localStorage.setItem(
-      PREFERENCES_STORAGE_KEY,
-      JSON.stringify({ version: 1, goal: 'RELAX' })
-    );
+    localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 1, goal: 'RELAX' }));
     const getItem = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
       throw new Error('read blocked');
     });

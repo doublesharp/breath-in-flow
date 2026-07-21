@@ -200,8 +200,14 @@ describe('useModalIsolation', () => {
     const parent = await openHarness();
     const nested = await openHarness();
 
-    const parentVm = parent.wrapper.vm as unknown as { open: boolean; close: ReturnType<typeof vi.fn> };
-    const nestedVm = nested.wrapper.vm as unknown as { open: boolean; close: ReturnType<typeof vi.fn> };
+    const parentVm = parent.wrapper.vm as unknown as {
+      open: boolean;
+      close: ReturnType<typeof vi.fn>;
+    };
+    const nestedVm = nested.wrapper.vm as unknown as {
+      open: boolean;
+      close: ReturnType<typeof vi.fn>;
+    };
 
     // Nested dialog is top of the stack, so it alone consumes Escape.
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

@@ -30,7 +30,12 @@ import {
   shareBackupFile,
 } from '../../src/services/supportService';
 
-const APP_INFO = { name: 'Breath In Flow', id: 'com.breathinflow.app', build: '42', version: '1.0.0' };
+const APP_INFO = {
+  name: 'Breath In Flow',
+  id: 'com.breathinflow.app',
+  build: '42',
+  version: '1.0.0',
+};
 const DEVICE_INFO = {
   platform: 'ios',
   operatingSystem: 'ios',
@@ -91,7 +96,10 @@ describe('supportService', () => {
         JSON.stringify([{ id: 'x', configSnapshot: { name: 'Morning Ritual Secret' } }])
       );
       localStorage.setItem('breath-in-flow-hrv-rmssd', '55');
-      localStorage.setItem('breath-in-flow-check-in', JSON.stringify({ checkIn: { mood: 'anxious' } }));
+      localStorage.setItem(
+        'breath-in-flow-check-in',
+        JSON.stringify({ checkIn: { mood: 'anxious' } })
+      );
 
       const message = await createSupportMessage();
 
@@ -167,7 +175,12 @@ describe('supportService', () => {
 
       expect(result.method).toBe('share');
       expect(mocks.writeFile).toHaveBeenCalledWith(
-        expect.objectContaining({ path: FILENAME, data: JSON_PAYLOAD, directory: 'CACHE', encoding: 'utf8' })
+        expect.objectContaining({
+          path: FILENAME,
+          data: JSON_PAYLOAD,
+          directory: 'CACHE',
+          encoding: 'utf8',
+        })
       );
       expect(mocks.share).toHaveBeenCalledWith(
         expect.objectContaining({ url: 'file:///cache/backup.json' })

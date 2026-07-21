@@ -239,11 +239,7 @@
           </div>
 
           <!-- Check-In -->
-          <div
-            v-if="session.checkIn"
-            data-testid="session-checkin"
-            class="mt-4 p-3 bg-slate-800/30 rounded-lg"
-          >
+          <div v-if="session.checkIn" data-testid="session-checkin" class="mt-4 p-3 bg-slate-800/30 rounded-lg">
             <div class="text-xs text-slate-500 uppercase tracking-wider mb-2">Check-In</div>
             <div class="flex flex-wrap gap-2">
               <span
@@ -278,12 +274,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useStorage } from '../composables';
-import {
-  formatTimeSimple,
-  type FeelingScore,
-  type Session,
-  type ExtendedHoldRecord,
-} from '@breath-in-flow/shared';
+import { formatTimeSimple, type FeelingScore, type Session, type ExtendedHoldRecord } from '@breath-in-flow/shared';
 
 const FEELING_LABELS: Record<FeelingScore, string> = {
   1: 'Very uncomfortable',
