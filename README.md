@@ -18,7 +18,7 @@ Breath in Flow is a private, standalone wellness and training app for guided bre
 
 - On first run, a short onboarding asks what you want from your practice: **Relax and unwind**, **Train my diaphragm**, **Build a consistent habit**, or **Explore pulse variability**.
 - Your goal tailors a **Recommended for you** shortcut on the home screen so a suitable routine is one tap away, alongside a **Repeat last session** shortcut that reuses your previous configuration.
-- The goal is a convenience, not a lock-in: every preset and custom routine stays fully available regardless of what you picked. You can change or clear your goal at any time under **Data & support → Your goal**, and the choice is stored only on your device.
+- The goal is a convenience, not a lock-in: every preset and custom routine stays fully available regardless of what you picked. You can change your goal at any time under **Data & support → Your goal**, and the choice is stored only on your device.
 
 ### Optional check-ins
 
