@@ -70,6 +70,7 @@ export default defineConfig({
         'src/composables/useModalIsolation.ts': completeLineAndFunctionThresholds,
         'src/composables/usePreferences.ts': completeLineAndFunctionThresholds,
         'src/services/adaptiveMotionGate.ts': completeLineAndFunctionThresholds,
+        'src/services/backupService.ts': completeLineAndFunctionThresholds,
         'src/services/recommendationService.ts': completeLineAndFunctionThresholds,
         'src/utils/hrvAnalysisValidation.ts': completeLineAndFunctionThresholds,
         'src/utils/measurementTrends.ts': completeLineAndFunctionThresholds,
