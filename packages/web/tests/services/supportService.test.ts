@@ -160,6 +160,34 @@ describe('supportService', () => {
       expect(writeText).toHaveBeenCalledTimes(1);
       expect(String(writeText.mock.calls[0][0])).toContain('Feedback:');
     });
+
+    it('treats a cancelled share sheet as a quiet no-op — no email, no clipboard', async () => {
+      // Native iOS/Android reject a user cancellation with the exact string
+      // "Share canceled" (see @capacitor/share SharePlugin.swift / SharePlugin.java).
+      mocks.share.mockRejectedValue(new Error('Share canceled'));
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      const writeText = stubClipboard();
+
+      const result = await sendSupportMessage();
+
+      expect(result.method).toBe('cancel');
+      expect(open).not.toHaveBeenCalled();
+      expect(writeText).not.toHaveBeenCalled();
+    });
+
+    it('treats a web share AbortError as a quiet cancel, not a fallback', async () => {
+      // On web the Share plugin delegates to navigator.share, which rejects with
+      // a DOMException named "AbortError" when the user dismisses the sheet.
+      mocks.share.mockRejectedValue(new DOMException('The user aborted a request.', 'AbortError'));
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      const writeText = stubClipboard();
+
+      const result = await sendSupportMessage();
+
+      expect(result.method).toBe('cancel');
+      expect(open).not.toHaveBeenCalled();
+      expect(writeText).not.toHaveBeenCalled();
+    });
   });
 
   describe('shareBackupFile', () => {
@@ -193,12 +221,62 @@ describe('supportService', () => {
     it('deletes the temp file even when the native share fails', async () => {
       mocks.isNativePlatform.mockReturnValue(true);
       mocks.writeFile.mockResolvedValue({ uri: 'file:///cache/backup.json' });
+      // A genuine failure (not the "Share canceled" cancel string) still throws.
       mocks.share.mockRejectedValue(new Error('user cancelled'));
 
       await expect(shareBackupFile(JSON_PAYLOAD, FILENAME)).rejects.toThrow();
       expect(mocks.deleteFile).toHaveBeenCalledWith(
         expect.objectContaining({ path: FILENAME, directory: 'CACHE' })
       );
+    });
+
+    it('treats a native share cancel as a quiet no-op and still deletes the temp file', async () => {
+      mocks.isNativePlatform.mockReturnValue(true);
+      mocks.writeFile.mockResolvedValue({ uri: 'file:///cache/backup.json' });
+      mocks.share.mockRejectedValue(new Error('Share canceled'));
+
+      const result = await shareBackupFile(JSON_PAYLOAD, FILENAME);
+
+      expect(result.method).toBe('cancel');
+      expect(mocks.deleteFile).toHaveBeenCalledWith(
+        expect.objectContaining({ path: FILENAME, directory: 'CACHE' })
+      );
+    });
+
+    it('treats a web share cancel (AbortError) as a quiet no-op with no download fallback', async () => {
+      mocks.isNativePlatform.mockReturnValue(false);
+      const share = vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError'));
+      Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+      Object.defineProperty(navigator, 'canShare', {
+        value: vi.fn().mockReturnValue(true),
+        configurable: true,
+      });
+      const createObjectURL = vi.fn().mockReturnValue('blob:mock');
+      Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
+
+      const result = await shareBackupFile(JSON_PAYLOAD, FILENAME);
+
+      expect(result.method).toBe('cancel');
+      expect(createObjectURL).not.toHaveBeenCalled();
+    });
+
+    it('downloads when the web share rejects for a real reason', async () => {
+      mocks.isNativePlatform.mockReturnValue(false);
+      const share = vi.fn().mockRejectedValue(new Error('permission denied'));
+      Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+      Object.defineProperty(navigator, 'canShare', {
+        value: vi.fn().mockReturnValue(true),
+        configurable: true,
+      });
+      const createObjectURL = vi.fn().mockReturnValue('blob:mock');
+      const revokeObjectURL = vi.fn();
+      Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
+      Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true });
+
+      const result = await shareBackupFile(JSON_PAYLOAD, FILENAME);
+
+      expect(result.method).toBe('download');
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
     });
 
     it('prefers navigator.share with files on the web', async () => {

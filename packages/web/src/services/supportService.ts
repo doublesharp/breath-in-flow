@@ -10,17 +10,32 @@ import { Share } from '@capacitor/share';
 const SUPPORT_EMAIL = 'hello@breathinflow.app';
 const SUPPORT_TITLE = 'Breath in Flow feedback';
 
-export type SupportSendMethod = 'share' | 'email' | 'clipboard';
+export type SupportSendMethod = 'share' | 'email' | 'clipboard' | 'cancel';
 
 export interface SupportSendResult {
   method: SupportSendMethod;
   message: string;
 }
 
-export type BackupShareMethod = 'share' | 'download';
+export type BackupShareMethod = 'share' | 'download' | 'cancel';
 
 export interface BackupShareResult {
   method: BackupShareMethod;
+}
+
+// A user dismissing the share sheet is not a failure and must NOT fall through
+// to a fallback (email/clipboard/download) or an error — it is a quiet no-op.
+// @capacitor/share@8 makes cancellation distinguishable:
+//   - iOS   (ios/Sources/SharePlugin/SharePlugin.swift):   call.reject("Share canceled")
+//   - Android(android/.../share/SharePlugin.java):          call.reject("Share canceled")
+//   - Web   (delegates to navigator.share):                 rejects with a
+//            DOMException whose name is "AbortError" on cancel.
+// Both native platforms use the exact string "Share canceled" (American spelling,
+// single "l"), so a genuine failure with a different message still falls back.
+function isShareCancel(error: unknown): boolean {
+  if ((error as { name?: unknown } | null)?.name === 'AbortError') return true;
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && message.toLowerCase() === 'share canceled';
 }
 
 // Gathers device/app context lazily, only when invoked (never on import/mount).
@@ -53,8 +68,11 @@ export async function sendSupportMessage(): Promise<SupportSendResult> {
   try {
     await Share.share({ title: SUPPORT_TITLE, text: message, dialogTitle: SUPPORT_TITLE });
     return { method: 'share', message };
-  } catch {
-    // Share unavailable or dismissed — try email next.
+  } catch (error) {
+    // The user dismissing the share sheet is a deliberate "no" — stop here rather
+    // than popping the email composer after they cancelled.
+    if (isShareCancel(error)) return { method: 'cancel', message };
+    // Share genuinely unavailable — try email next.
   }
 
   try {
@@ -82,6 +100,10 @@ async function shareBackupFileNative(json: string, filename: string): Promise<Ba
   try {
     await Share.share({ title: SUPPORT_TITLE, url: uri, dialogTitle: 'Share your backup' });
     return { method: 'share' };
+  } catch (error) {
+    // Cancel is a quiet no-op; anything else is a genuine failure and rethrows.
+    if (isShareCancel(error)) return { method: 'cancel' };
+    throw error;
   } finally {
     // Always remove the exported copy from the cache — it holds personal data and
     // must not linger whether the share succeeded, failed, or was cancelled.
@@ -97,8 +119,10 @@ async function shareBackupFileWeb(json: string, filename: string): Promise<Backu
     try {
       await nav.share({ files: [file], title: SUPPORT_TITLE });
       return { method: 'share' };
-    } catch {
-      // Web share dismissed/unsupported — fall through to a direct download.
+    } catch (error) {
+      // An explicit cancel (AbortError) is a no-op — don't force a download the
+      // user didn't ask for. Any other failure falls through to a direct download.
+      if (isShareCancel(error)) return { method: 'cancel' };
     }
   }
 

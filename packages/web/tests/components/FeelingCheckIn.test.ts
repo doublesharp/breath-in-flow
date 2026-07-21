@@ -92,6 +92,24 @@ describe('FeelingCheckIn', () => {
     expect(wrapper.emitted('submit')).toEqual([[{ score: 3 }]]);
   });
 
+  it('emits skip when Escape is pressed', async () => {
+    const wrapper = mount(FeelingCheckIn, {
+      props: { open: true, stage: 'before' },
+      attachTo: document.body,
+    });
+
+    await nextTick();
+    await nextTick();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+
+    expect(wrapper.emitted('skip')).toHaveLength(1);
+    expect(wrapper.emitted('submit')).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
   it('isolates focus into the dialog when opened', async () => {
     const background = document.createElement('button');
     background.setAttribute('data-testid', 'background');

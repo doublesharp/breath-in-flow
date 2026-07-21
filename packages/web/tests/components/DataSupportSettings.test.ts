@@ -123,6 +123,16 @@ describe('DataSupportSettings.vue', () => {
     expect(supportMocks.shareBackupFile).not.toHaveBeenCalled();
   });
 
+  it('shows no export status when the user cancels the share sheet', async () => {
+    supportMocks.shareBackupFile.mockResolvedValue({ method: 'cancel' });
+    const wrapper = mount(DataSupportSettings);
+    await wrapper.get('[data-testid="export-backup"]').trigger('click');
+    await flushPromises();
+
+    expect(backupServiceMock.createBackup).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="export-status"]').exists()).toBe(false);
+  });
+
   it('previews an imported backup without restoring it', async () => {
     const wrapper = mount(DataSupportSettings);
     const input = attachFile(wrapper);
@@ -237,6 +247,29 @@ describe('DataSupportSettings.vue', () => {
     expect(supportMocks.sendSupportMessage).toHaveBeenCalledTimes(1);
     expect(wrapper.get('[data-testid="feedback-status"]').text().toLowerCase()).toContain(
       'clipboard'
+    );
+  });
+
+  it('shows no feedback status when the user cancels the share sheet', async () => {
+    supportMocks.sendSupportMessage.mockResolvedValue({ method: 'cancel' });
+    const wrapper = mount(DataSupportSettings);
+    await wrapper.get('[data-testid="send-feedback"]').trigger('click');
+    await flushPromises();
+
+    expect(supportMocks.sendSupportMessage).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="feedback-status"]').exists()).toBe(false);
+  });
+
+  it('surfaces an error when every feedback channel fails', async () => {
+    // share unavailable -> mailto open throws -> clipboard write rejects all
+    // surface as a rejected sendSupportMessage; the UI must report the failure.
+    supportMocks.sendSupportMessage.mockRejectedValue(new Error('no channel available'));
+    const wrapper = mount(DataSupportSettings);
+    await wrapper.get('[data-testid="send-feedback"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="feedback-status"]').text().toLowerCase()).toContain(
+      'could not'
     );
   });
 });

@@ -116,6 +116,8 @@ const isolationActive = ref(false);
 
 useModalIsolation(dialogRef, isolationActive, {
   initialFocus: () => titleRef.value,
+  // Escape skips the optional check-in, matching the app's dialog conventions.
+  onEscape: () => emit('skip'),
 });
 watch(
   () => props.open,

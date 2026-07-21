@@ -192,6 +192,8 @@ async function handleExport() {
     const { json } = await backupService.createBackup();
     const filename = `breath-in-flow-backup-${new Date().toISOString().slice(0, 10)}.json`;
     const result = await shareBackupFile(json, filename);
+    // The user dismissing the share sheet is a quiet no-op — no status to show.
+    if (result.method === 'cancel') return;
     exportStatus.value = {
       ok: true,
       text: result.method === 'download' ? 'Backup downloaded.' : 'Backup ready to share.',
@@ -296,6 +298,8 @@ async function handleFeedback() {
   feedbackStatus.value = null;
   try {
     const { method } = await sendSupportMessage();
+    // The user dismissing the share sheet is a quiet no-op — no status to show.
+    if (method === 'cancel') return;
     feedbackStatus.value = FEEDBACK_LABELS[method] ?? 'Feedback ready to send.';
   } catch {
     feedbackStatus.value = 'Could not open a way to send feedback. Please try again.';
