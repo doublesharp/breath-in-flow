@@ -2,6 +2,9 @@ import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref, nextTick } from 'vue';
 import BreathingPractice from '@/components/BreathingPractice.vue';
+import RecommendedActions from '@/components/RecommendedActions.vue';
+import { presetConfig, guidedPresets } from '@/data/guidedPresets';
+import type { BreathingConfig, Session } from '@breath-in-flow/shared';
 
 const createSessionMock = vi.fn();
 const addSetMock = vi.fn();
@@ -9,6 +12,7 @@ const addExtendedHoldMock = vi.fn();
 const completeSessionMock = vi.fn();
 const updateSessionMock = vi.fn();
 const createConfigMock = vi.fn();
+const sessionsRef = ref<Session[]>([]);
 
 let speakMock: ReturnType<typeof vi.fn>;
 let loadVoicesMock: ReturnType<typeof vi.fn>;
@@ -33,6 +37,7 @@ vi.mock('@/composables/useStorage', () => {
       soundTheme: ref('wood'),
       getAllConfigs: vi.fn(() => []),
       getSession: vi.fn(() => ({ id: 'test-session', sets: [] })),
+      sessions: sessionsRef,
     }),
   };
 });
@@ -143,6 +148,7 @@ describe('BreathingPractice flows', () => {
     updateSessionMock.mockReset();
     createConfigMock.mockReset();
     cancelSessionMock.mockReset();
+    sessionsRef.value = [];
 
     speakMock = vi.fn();
     loadVoicesMock = vi.fn().mockResolvedValue([]);
@@ -522,5 +528,115 @@ describe('BreathingPractice flows', () => {
     // Session should be cleared
     expect((vm as { currentSession?: unknown }).currentSession).toBeNull();
     expect((vm as { currentSetData?: unknown }).currentSetData).toBeNull();
+  });
+});
+
+function fullConfig(name: string): BreathingConfig {
+  return {
+    ...presetConfig(guidedPresets[0]),
+    id: '33333333-3333-4333-8333-333333333333',
+    name,
+  };
+}
+
+function completed(id: string, name: string, startedAt: Date): Session {
+  return {
+    id,
+    configSnapshot: fullConfig(name),
+    status: 'COMPLETED',
+    sets: [],
+    targetSets: 0,
+    completedSets: 0,
+    startedAt,
+    completedAt: startedAt,
+  };
+}
+
+describe('BreathingPractice goal recommendations', () => {
+  beforeEach(() => {
+    createSessionMock.mockReset();
+    sessionsRef.value = [];
+  });
+
+  function mountWithGoal() {
+    return mount(BreathingPractice, {
+      props: { goal: 'RELAX' },
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+  }
+
+  it('offers the newest completed session as the repeatable last session', () => {
+    const inProgress: Session = {
+      ...completed('a0000000-0000-4000-8000-000000000001', 'Active', new Date('2026-03-03')),
+      status: 'IN_PROGRESS',
+      completedAt: undefined,
+    };
+    const newest = completed('a0000000-0000-4000-8000-000000000002', 'Newest', new Date('2026-03-02'));
+    const older = completed('a0000000-0000-4000-8000-000000000003', 'Older', new Date('2026-03-01'));
+    // Storage keeps sessions newest-first.
+    sessionsRef.value = [inProgress, newest, older];
+
+    const wrapper = mountWithGoal();
+    const actions = wrapper.findComponent(RecommendedActions);
+    expect(actions.exists()).toBe(true);
+    expect((actions.props('lastSession') as Session | null)?.id).toBe(newest.id);
+    wrapper.unmount();
+  });
+
+  it('routes a recommended start through the session start request', async () => {
+    createSessionMock.mockReturnValue({ id: 'rec-start', sets: [] });
+    const wrapper = mountWithGoal();
+    const actions = wrapper.findComponent(RecommendedActions);
+
+    actions.vm.$emit('start', fullConfig('Recommended'));
+    await nextTick();
+
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    expect((createSessionMock.mock.calls[0][0] as BreathingConfig).name).toBe('Recommended');
+    wrapper.unmount();
+  });
+
+  it('routes a repeat through the same session start request', async () => {
+    createSessionMock.mockReturnValue({ id: 'rec-repeat', sets: [] });
+    const wrapper = mountWithGoal();
+    const actions = wrapper.findComponent(RecommendedActions);
+
+    actions.vm.$emit('repeat', fullConfig('Repeated'));
+    await nextTick();
+
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    expect((createSessionMock.mock.calls[0][0] as BreathingConfig).name).toBe('Repeated');
+    wrapper.unmount();
+  });
+
+  it('adjust assigns the cloned config and opens the configuration modal', async () => {
+    const wrapper = mountWithGoal();
+    const actions = wrapper.findComponent(RecommendedActions);
+
+    actions.vm.$emit('adjust', fullConfig('Adjusted'));
+    await nextTick();
+
+    const vm = wrapper.vm as unknown as {
+      config: { name: string };
+      showConfigModal: boolean;
+    };
+    expect(vm.config.name).toBe('Adjusted');
+    expect(vm.showConfigModal).toBe(true);
+    expect(createSessionMock).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('opening the Lab from recommendations switches tabs', async () => {
+    const wrapper = mountWithGoal();
+    const actions = wrapper.findComponent(RecommendedActions);
+
+    actions.vm.$emit('openLab');
+    await nextTick();
+
+    expect(wrapper.emitted('switch-tab')).toEqual([['lab']]);
+    wrapper.unmount();
   });
 });

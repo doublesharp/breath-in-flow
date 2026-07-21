@@ -6,6 +6,8 @@
     <!-- Animated background -->
     <div class="animated-bg"></div>
 
+    <GoalOnboarding :open="needsOnboarding" @select="handleGoalSelect" />
+
     <header
       :class="[
         'sticky top-0 z-50 safe-area-top transition-transform duration-300 border-b border-white/[0.08]',
@@ -235,6 +237,7 @@
         <BreathingPractice
           v-if="activeTab === 'practice'"
           key="practice"
+          :goal="selectedGoal ?? undefined"
           @switch-tab="(tab: string) => (activeTab = tab as 'practice' | 'lab' | 'history' | 'configs' | 'analytics')"
         />
         <LabTab v-else-if="activeTab === 'lab'" key="lab" />
@@ -386,8 +389,16 @@
 <script setup lang="ts">
 import { defineAsyncComponent, ref, provide, onMounted, onUnmounted } from 'vue';
 import BreathingPractice from './components/BreathingPractice.vue';
+import GoalOnboarding from './components/GoalOnboarding.vue';
 import HelpSystem from './components/HelpSystem.vue';
-import { AppConfig, type BreathingConfig } from '@breath-in-flow/shared';
+import { usePreferences } from './composables';
+import { AppConfig, type BreathingConfig, type UserGoal } from '@breath-in-flow/shared';
+
+const { selectedGoal, needsOnboarding, setGoal } = usePreferences();
+
+function handleGoalSelect(goal: UserGoal) {
+  setGoal(goal);
+}
 
 const AnalyticsDashboard = defineAsyncComponent(() => import('./components/AnalyticsDashboard.vue'));
 const LabTab = defineAsyncComponent(() => import('./components/LabTab.vue'));

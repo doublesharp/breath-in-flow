@@ -879,6 +879,17 @@
     <div class="space-y-4 sm:space-y-6">
       <!-- Lab CTA (at bottom, after Start button) is rendered below -->
 
+      <!-- Goal-based recommendation and repeat shortcuts -->
+      <RecommendedActions
+        v-if="goal && !isRunning"
+        :goal="goal"
+        :last-session="lastSession"
+        @start="requestSessionStart"
+        @adjust="handleRecommendedAdjust"
+        @repeat="requestSessionStart"
+        @open-lab="handleOpenLab"
+      />
+
       <!-- Quick Start / Practice View - Always at Top -->
       <div class="card-solid !p-4 sm:!p-6">
         <BreathingVisualizer
@@ -1034,6 +1045,7 @@ import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
+import RecommendedActions from './RecommendedActions.vue';
 import { useBreathingTimer, useStorage } from '../composables';
 import { useAppLifecycle } from '../composables/useAppLifecycle';
 import { useHrvStorage } from '../composables/useHrvStorage';
@@ -1047,6 +1059,7 @@ import {
   type SessionSet,
   type BreathingPhase,
   type TimerState,
+  type UserGoal,
 } from '@breath-in-flow/shared';
 import { ttsService } from '../services/ttsService';
 
@@ -1071,9 +1084,17 @@ const cancelStopButtonRef = ref<HTMLButtonElement | null>(null);
 const showLabCta = ref(false);
 const labCtaDismissed = ref(localStorage.getItem('lab-cta-dismissed') === 'true');
 
-defineEmits<{
+defineProps<{ goal?: UserGoal }>();
+
+const emit = defineEmits<{
   'switch-tab': [tab: string];
 }>();
+
+// The newest completed session, used to offer a one-tap repeat. Storage keeps
+// sessions newest-first, so the first COMPLETED entry is the most recent one.
+const lastSession = computed<Session | null>(
+  () => storage.sessions.value.find((session) => session.status === 'COMPLETED') ?? null
+);
 
 function dismissLabCta() {
   showLabCta.value = false;
@@ -1451,9 +1472,7 @@ function handleEscape(event: KeyboardEvent) {
   }
 }
 
-function startExercise() {
-  const validatedConfig = getValidatedConfig();
-  if (!validatedConfig) return;
+function startSession(validatedConfig: BreathingConfig) {
   Object.assign(config, validatedConfig);
 
   // Create new session
@@ -1470,6 +1489,31 @@ function startExercise() {
   };
 
   timer.start();
+}
+
+// Single seam for beginning a session. Task 4 replaces this body with a
+// pre-session check-in flow; its callers (start, repeat, Start Practice) stay
+// the same, so only this function changes.
+function requestSessionStart(sessionConfig: BreathingConfig) {
+  const result = BreathingConfigSchema.safeParse(sessionConfig);
+  if (!result.success) return;
+  startSession(result.data);
+}
+
+function startExercise() {
+  const validatedConfig = getValidatedConfig();
+  if (!validatedConfig) return;
+  requestSessionStart(validatedConfig);
+}
+
+function handleRecommendedAdjust(sessionConfig: BreathingConfig) {
+  Object.assign(config, sessionConfig);
+  configName.value = sessionConfig.name;
+  showConfigModal.value = true;
+}
+
+function handleOpenLab() {
+  emit('switch-tab', 'lab');
 }
 
 function stopExercise() {

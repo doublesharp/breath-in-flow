@@ -1,13 +1,60 @@
 /// <reference types="node" />
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import App from '../../src/App.vue';
 import { AppConfig, BreathingConfig } from '@breath-in-flow/shared';
+import { usePreferences } from '../../src/composables';
+import { reloadPreferencesForTesting } from '../../src/composables/usePreferences';
+import * as permissionService from '../../src/services/permissionService';
+
+const childStubs = {
+  BreathingPractice: true,
+  SessionHistory: true,
+  PracticePresets: true,
+  AnalyticsDashboard: true,
+  LabTab: true,
+  HelpSystem: true,
+};
 
 describe('App.vue', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    reloadPreferencesForTesting();
+  });
+
+  it('shows first-run goal onboarding without touching camera, motion, or permission services', () => {
+    const getUserMedia = vi.fn();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia },
+      configurable: true,
+    });
+    const permissionSpy = vi.spyOn(permissionService, 'requestSensorPermissions');
+
+    const wrapper = mount(App, { global: { stubs: childStubs } });
+
+    expect(wrapper.get('[role="dialog"]').attributes('aria-labelledby')).toBe(
+      'goal-onboarding-title'
+    );
+    expect(wrapper.findAll('input[name="wellness-goal"]')).toHaveLength(4);
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(permissionSpy).not.toHaveBeenCalled();
+  });
+
+  it('persists the chosen goal and keeps onboarding closed after a remount', async () => {
+    const wrapper = mount(App, { global: { stubs: childStubs } });
+
+    await wrapper.get('[data-testid="goal-relax"]').setValue();
+    await wrapper.get('[data-testid="save-goal"]').trigger('click');
+    expect(usePreferences().selectedGoal.value).toBe('RELAX');
+    wrapper.unmount();
+
+    const remounted = mount(App, { global: { stubs: childStubs } });
+    expect(remounted.find('[role="dialog"]').exists()).toBe(false);
+  });
+
   it('renders header and navigation buttons', () => {
     const wrapper = mount(App, {
       global: {
