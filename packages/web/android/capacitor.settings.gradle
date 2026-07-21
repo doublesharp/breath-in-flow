@@ -11,5 +11,14 @@ project(':capacitor-community-text-to-speech').projectDir = new File('../../../n
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../../../node_modules/.pnpm/@capacitor+app@8.1.1_@capacitor+core@8.4.2/node_modules/@capacitor/app/android')
 
+include ':capacitor-device'
+project(':capacitor-device').projectDir = new File('../../../node_modules/.pnpm/@capacitor+device@8.0.3_@capacitor+core@8.4.2/node_modules/@capacitor/device/android')
+
+include ':capacitor-filesystem'
+project(':capacitor-filesystem').projectDir = new File('../../../node_modules/.pnpm/@capacitor+filesystem@8.1.2_@capacitor+core@8.4.2/node_modules/@capacitor/filesystem/android')
+
+include ':capacitor-share'
+project(':capacitor-share').projectDir = new File('../../../node_modules/.pnpm/@capacitor+share@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor/share/android')
+
 include ':capawesome-capacitor-torch'
 project(':capawesome-capacitor-torch').projectDir = new File('../../../node_modules/.pnpm/@capawesome+capacitor-torch@8.0.1_@capacitor+core@8.4.2/node_modules/@capawesome/capacitor-torch/android')

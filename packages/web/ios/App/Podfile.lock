@@ -8,8 +8,16 @@ PODS:
   - CapacitorCommunityTextToSpeech (8.0.2):
     - Capacitor
   - CapacitorCordova (8.4.2)
+  - CapacitorDevice (8.0.3):
+    - Capacitor
+  - CapacitorFilesystem (8.1.2):
+    - Capacitor
+    - IONFilesystemLib (~> 1.1.1)
+  - CapacitorShare (8.0.1):
+    - Capacitor
   - CapawesomeCapacitorTorch (8.0.1):
     - Capacitor
+  - IONFilesystemLib (1.1.2)
 
 DEPENDENCIES:
   - "Capacitor (from `../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios`)"
@@ -17,7 +25,14 @@ DEPENDENCIES:
   - "CapacitorCommunityKeepAwake (from `../../../../node_modules/.pnpm/@capacitor-community+keep-awake@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor-community/keep-awake`)"
   - "CapacitorCommunityTextToSpeech (from `../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@8.0.2_@capacitor+core@8.4.2/node_modules/@capacitor-community/text-to-speech`)"
   - "CapacitorCordova (from `../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios`)"
+  - "CapacitorDevice (from `../../../../node_modules/.pnpm/@capacitor+device@8.0.3_@capacitor+core@8.4.2/node_modules/@capacitor/device`)"
+  - "CapacitorFilesystem (from `../../../../node_modules/.pnpm/@capacitor+filesystem@8.1.2_@capacitor+core@8.4.2/node_modules/@capacitor/filesystem`)"
+  - "CapacitorShare (from `../../../../node_modules/.pnpm/@capacitor+share@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor/share`)"
   - "CapawesomeCapacitorTorch (from `../../../../node_modules/.pnpm/@capawesome+capacitor-torch@8.0.1_@capacitor+core@8.4.2/node_modules/@capawesome/capacitor-torch`)"
+
+SPEC REPOS:
+  trunk:
+    - IONFilesystemLib
 
 EXTERNAL SOURCES:
   Capacitor:
@@ -30,6 +45,12 @@ EXTERNAL SOURCES:
     :path: "../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@8.0.2_@capacitor+core@8.4.2/node_modules/@capacitor-community/text-to-speech"
   CapacitorCordova:
     :path: "../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios"
+  CapacitorDevice:
+    :path: "../../../../node_modules/.pnpm/@capacitor+device@8.0.3_@capacitor+core@8.4.2/node_modules/@capacitor/device"
+  CapacitorFilesystem:
+    :path: "../../../../node_modules/.pnpm/@capacitor+filesystem@8.1.2_@capacitor+core@8.4.2/node_modules/@capacitor/filesystem"
+  CapacitorShare:
+    :path: "../../../../node_modules/.pnpm/@capacitor+share@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor/share"
   CapawesomeCapacitorTorch:
     :path: "../../../../node_modules/.pnpm/@capawesome+capacitor-torch@8.0.1_@capacitor+core@8.4.2/node_modules/@capawesome/capacitor-torch"
 
@@ -39,8 +60,12 @@ SPEC CHECKSUMS:
   CapacitorCommunityKeepAwake: d41922812644562e94a79acaf7f41e6d9413af8c
   CapacitorCommunityTextToSpeech: a9f7c5bcdc424197d11bb7ae3e9010b415e931b0
   CapacitorCordova: 345eacdc4c8282415446aea4acd8c77d82480bd4
+  CapacitorDevice: 708e742b60a61572cd593e44c809592e8f31da14
+  CapacitorFilesystem: 2db285a1ac6e475cc27cae2e1bea999000f9e2be
+  CapacitorShare: 0c58305114538568059bfc07111f22dcb9cb2a82
   CapawesomeCapacitorTorch: d118c3fe55e7472061f02d4775f08899fde73a32
+  IONFilesystemLib: 21a63377696b2d8fab5632ecfb7d2ac67bddb68a
 
-PODFILE CHECKSUM: 51bff58daeabcb5e78e065d21e14a425b73fbb42
+PODFILE CHECKSUM: 4667d6ea5486765a364704c997374b169c58b575
 
 COCOAPODS: 1.17.0

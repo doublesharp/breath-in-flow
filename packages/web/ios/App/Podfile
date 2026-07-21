@@ -14,6 +14,9 @@ def capacitor_pods
   pod 'CapacitorCommunityKeepAwake', :path => '../../../../node_modules/.pnpm/@capacitor-community+keep-awake@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor-community/keep-awake'
   pod 'CapacitorCommunityTextToSpeech', :path => '../../../../node_modules/.pnpm/@capacitor-community+text-to-speech@8.0.2_@capacitor+core@8.4.2/node_modules/@capacitor-community/text-to-speech'
   pod 'CapacitorApp', :path => '../../../../node_modules/.pnpm/@capacitor+app@8.1.1_@capacitor+core@8.4.2/node_modules/@capacitor/app'
+  pod 'CapacitorDevice', :path => '../../../../node_modules/.pnpm/@capacitor+device@8.0.3_@capacitor+core@8.4.2/node_modules/@capacitor/device'
+  pod 'CapacitorFilesystem', :path => '../../../../node_modules/.pnpm/@capacitor+filesystem@8.1.2_@capacitor+core@8.4.2/node_modules/@capacitor/filesystem'
+  pod 'CapacitorShare', :path => '../../../../node_modules/.pnpm/@capacitor+share@8.0.1_@capacitor+core@8.4.2/node_modules/@capacitor/share'
   pod 'CapawesomeCapacitorTorch', :path => '../../../../node_modules/.pnpm/@capawesome+capacitor-torch@8.0.1_@capacitor+core@8.4.2/node_modules/@capawesome/capacitor-torch'
 end
 

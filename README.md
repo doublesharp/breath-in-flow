@@ -14,6 +14,18 @@ Breath in Flow is a private, standalone wellness and training app for guided bre
 - Follow a large animated guide with pause, resume, skip-rest, and safe-stop controls.
 - Save custom routines locally for quick reuse.
 
+### Choosing a goal
+
+- On first run, a short onboarding asks what you want from your practice: **Relax and unwind**, **Train my diaphragm**, **Build a consistent habit**, or **Explore pulse variability**.
+- Your goal tailors a **Recommended for you** shortcut on the home screen so a suitable routine is one tap away, alongside a **Repeat last session** shortcut that reuses your previous configuration.
+- The goal is a convenience, not a lock-in: every preset and custom routine stays fully available regardless of what you picked. You can change or clear your goal at any time under **Data & support → Your goal**, and the choice is stored only on your device.
+
+### Optional check-ins
+
+- Before and after a session you can record a quick one-tap **feeling check-in** to note how you feel.
+- Check-ins are entirely optional. You can skip either prompt, and skipping never blocks or alters your practice.
+- Any check-in you save stays on your device with the rest of your local history; nothing is sent anywhere.
+
 ### Diaphragm resistance training
 
 The guided **Diaphragm Resistance Starter** preset uses a 3-second inhale, 1-second hold, 4-second exhale, 1-second hold, 10 repetitions, 2 sets, and 60 seconds of rest between sets. Its in-app guide explains:
@@ -49,6 +61,26 @@ Phone-camera pulse variability is related to, but not interchangeable with, ECG-
 - Measurement records include signal eligibility and algorithm provenance.
 - Pulse Variability measurements and resonance assessments use IndexedDB. Valid legacy assessments migrate from localStorage once; invalid records are skipped individually.
 - No account is required.
+
+### Local backup and restore
+
+- Under **Data & support → Backup** you can **Export** a single backup file containing your routines, session history, pulse-variability measurements, resonance assessments, preferences, and goal.
+- **Restore** reads a backup file back in. Restore validates the file's envelope and every nested record before changing anything: an invalid or unsupported file is rejected with an explanation and your current data is left untouched.
+- Restore is confirmation-gated and loss-resistant. It takes a snapshot of your existing data first, and if any part of the import fails it rolls back to that snapshot so a partial or corrupt restore cannot destroy what you already had.
+- Backups are plain files you control. They are created only when you ask and are saved or shared only through the destination you choose (see below); the app never uploads them on its own.
+
+### Sharing feedback and support
+
+- **Data & support → Send feedback** composes a support message and lets you send it through your device's share sheet, falling back to a pre-filled email or the clipboard if sharing is unavailable.
+- You can also share an exported backup file the same way when a helper asks for it.
+- All sharing is explicit and user-initiated. Nothing leaves the device until you pick a destination and confirm, and you can cancel at any point.
+
+## Privacy and data handling
+
+- Breath in Flow keeps your data on your device. Routines, history, measurements, assessments, check-ins, preferences, and your goal are stored locally (localStorage and IndexedDB).
+- **There is no background reporting.** The app contains no analytics, telemetry, crash-reporting, or usage-tracking SDK, and it does not send diagnostics, measurements, or any personal data on its own.
+- Data leaves the device only through an action you take deliberately — exporting or sharing a backup, or sending a feedback message — and only to the destination you choose in that moment.
+- No account, sign-in, or network connection is required to use the app.
 
 ## Getting started
 

@@ -2,9 +2,18 @@
 
 ## Purpose and status
 
-This matrix is the release checklist for behavior that automated tests, browser simulation, Capacitor synchronization, and native compilation cannot prove. A checked item requires an executed test on the named physical device with evidence recorded below. No physical-device check has been executed for this release candidate yet.
+This matrix is the release checklist for behavior that automated tests, browser simulation, Capacitor synchronization, and native compilation cannot prove. A checked item requires an executed test on the named physical device with evidence recorded below. As of the latest update (2026-07-21) automated, build, and connected-hardware-enumeration evidence has been recorded for this release candidate; **no physical-device observation check has been executed yet.**
 
 Passing this matrix establishes product behavior on the tested hardware only. It does not validate Breath in Flow as a medical device or establish equivalence to ECG-derived HRV.
+
+### Evidence tiers
+
+Every row in this document belongs to exactly one evidence tier. Tiers do not substitute for one another: a build pass never satisfies a physical-observation row.
+
+- **Automated** — deterministic results from the JavaScript release matrix (`pnpm test`, `test:coverage`, `typecheck`, `lint`, `format:check`, web `build`). Proves logic and rendering in a simulated DOM only.
+- **Simulator** — behavior observed on an OS simulator/emulator. Not yet available for this candidate (see the iOS rows below).
+- **Build** — the native toolchains compile and package the app (Capacitor sync, Android Gradle assemble, iOS xcodebuild). Proves the project links and packages; proves nothing about on-device sensor behavior.
+- **Observed physical** — a human ran the app on named hardware and recorded what they saw. This is the only tier that satisfies the device matrix, the per-device checklists, and release sign-off. No automated agent can produce it.
 
 ## Supported native versions
 
@@ -15,29 +24,42 @@ Passing this matrix establishes product behavior on the tested hardware only. It
 
 Camera, flash/torch, and motion sampling remain capability-dependent even on a supported operating-system version. A device that cannot supply a required sensor must receive an actionable unavailable state rather than a false successful measurement.
 
-## Native build verification
+## Native build verification (Build tier)
 
-Build and synchronization evidence does not complete any physical-device check below.
+Build and synchronization evidence does not complete any physical-device (Observed) check below. Evidence recorded 2026-07-21 on macOS 15 (Darwin 24.6.0), Apple silicon, from `main` after the family-validation prep commit. The app build under test is the Android `app-debug.apk` with SHA-256 `8787ca45a88e3edcad991ae1758c94cea9e9249389e008b04ef960bea579cd31`.
 
-| Check                            | Result             | Evidence                                                                                                                                                                                        |
-| -------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Capacitor Android/iOS sync       | Passed             | Four native plugins synchronized with no tracked native-project diff.                                                                                                                           |
-| Android debug build              | Passed             | Java 21 and Gradle produced `app-debug.apk` (SHA-256 `85e16f7e7bb3f6b86ec4858e112ee232729e933133cf80ef02cd6acd60faeab2`).                                                                       |
-| Repository iOS simulator command | Blocked externally | The command targets `iPhone 16 Pro` on the intended iOS 26.2 simulator platform; that target/platform is unavailable locally.                                                                   |
-| Direct installed-simulator build | Blocked externally | The only installed simulator runtime is iOS 17.5, including an iPhone 15 Pro. Xcode 26.2 reports that the iOS 26.2 platform component is not installed and exposes no eligible App destination. |
+| Check                            | Tier      | Result             | Evidence                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------- | --------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JavaScript release matrix        | Automated | Passed             | `pnpm test` 1120 tests, 0 skipped (shared 267, database 3, web 850). Coverage gates met (stmts 90.45%, branches 82.42%, funcs 87.98%, lines 92.08%). `typecheck`, `lint`, `format:check`, web `build` all clean.                                                                                                                                                                                         |
+| Capacitor Android/iOS sync       | Build     | Passed             | `cap sync` registered 7 native plugins for both platforms (keep-awake, text-to-speech, app, device, filesystem, share, torch; `@capacitor/motion` is JS-only). CocoaPods `pod install` completed. Tracked native diff limited to generated plugin/pod registration for the three new plugins plus filesystem's transitive `IONFilesystemLib` pod.                                                        |
+| Android debug build              | Build     | Passed             | `env JAVA_HOME=…/openjdk@21 ./gradlew assembleDebug` → `BUILD SUCCESSFUL in 51s`. Output `packages/web/android/app/build/outputs/apk/debug/app-debug.apk`, 10,261,555 bytes, SHA-256 `8787ca45a88e3edcad991ae1758c94cea9e9249389e008b04ef960bea579cd31`. Only benign filesystem-plugin Kotlin deprecation warnings.                                                                                      |
+| Repository iOS simulator command | Build     | Blocked externally | Xcode 26.2 (build 17C52), SDK `iphonesimulator26.2`. The scheme reports "Supported platforms for the buildables in the current scheme is empty" and only exposes the ineligible `Any iOS Device` destination.                                                                                                                                                                                            |
+| Direct installed-simulator build | Build     | Blocked externally | Signing-disabled `xcodebuild … -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO` and an explicit `iPhone 15 Pro, OS=17.5` destination both fail: `xcodebuild: error: Unable to find a destination matching the provided destination specifier: … { platform:iOS … error:iOS 26.2 is not installed. Please download and install the platform from Xcode > Settings > Components. }`. |
 
-The iOS rows remain blocked and are not release passes. The intended verification target is an iPhone 16 Pro simulator backed by the iOS 26.2 platform. The current machine instead has only the iOS 17.5 simulator runtime, while Xcode 26.2 is missing its iOS 26.2 platform component. Install that component and target, or use a compatible Xcode/runtime pair and explicitly record the substituted target before rerunning verification.
+The iOS rows remain blocked and are **not** release passes; iOS native compilation is not verified. The intended verification target is an iPhone 16 Pro simulator backed by the iOS 26.2 platform. The current machine has only the iOS 17.5 simulator runtime installed, while Xcode 26.2 is missing its iOS 26.2 platform component. Install that component and target, or use a compatible Xcode/runtime pair and explicitly record the substituted target before rerunning verification.
+
+## Connected-hardware enumeration (2026-07-21)
+
+Device enumeration was attempted so any authorized hardware could be used. No representative mobile hardware was usable.
+
+| Enumeration                                      | Result                 | Evidence                                                                                                                                                                                                                            |
+| ------------------------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `adb devices -l`                                 | Could not enumerate    | The adb daemon (v1.0.41 / 37.0.1) fails to complete startup in this environment: every invocation prints `* daemon not running; starting now at tcp:5037` and then hangs. No Android device could be listed, authorized, or driven. |
+| `xcrun xctrace list devices`                     | No physical iOS device | Lists only the host Mac (`Justin's M2`). No iPhone/iPad connected.                                                                                                                                                                  |
+| USB inspection (`system_profiler SPUSBDataType`) | No phone attached      | The only external Samsung USB device is a mass-storage unit (Vendor `0x04e8`, Product `0x61fb`, 10 Gb/s) — a Samsung portable SSD, not an Android phone.                                                                            |
+
+Because no connected representative phone was reachable, the Android `app-debug.apk` was **not** installed or launched on hardware, and no iOS device install/launch was performed. All Observed-physical rows below remain **not run — no connected representative hardware**.
 
 ## Device matrix
 
-Use exact model, operating-system build, app commit, build identifier, and reference-device firmware in the evidence log.
+Use exact model, operating-system build, app commit, build identifier, and reference-device firmware in the evidence log. Every cell below is an Observed-physical check and requires a human on the named hardware; none can be satisfied by the Build-tier evidence above. As of 2026-07-21 no representative phone was connected (see Connected-hardware enumeration), so all rows read **not run — no connected representative hardware**.
 
-| Physical device   | OS                               | Camera and flash | Motion sampling | Background interruption | Permission denial and recovery | Thermal behavior | Trusted reference comparison | Status    |
-| ----------------- | -------------------------------- | ---------------- | --------------- | ----------------------- | ------------------------------ | ---------------- | ---------------------------- | --------- |
-| iPhone model TBD  | iOS 16.x support floor           | ☐ Not run        | ☐ Not run       | ☐ Not run               | ☐ Not run                      | ☐ Not run        | ☐ Not run                    | ☐ Pending |
-| iPhone model TBD  | Current supported iOS            | ☐ Not run        | ☐ Not run       | ☐ Not run               | ☐ Not run                      | ☐ Not run        | ☐ Not run                    | ☐ Pending |
-| Android model TBD | Android 7 / API 24 support floor | ☐ Not run        | ☐ Not run       | ☐ Not run               | ☐ Not run                      | ☐ Not run        | ☐ Not run                    | ☐ Pending |
-| Android model TBD | Android 16 / API 36 target       | ☐ Not run        | ☐ Not run       | ☐ Not run               | ☐ Not run                      | ☐ Not run        | ☐ Not run                    | ☐ Pending |
+| Physical device   | OS                               | Camera and flash        | Motion sampling         | Background interruption | Permission denial and recovery | Thermal behavior        | Trusted reference comparison | Status    |
+| ----------------- | -------------------------------- | ----------------------- | ----------------------- | ----------------------- | ------------------------------ | ----------------------- | ---------------------------- | --------- |
+| iPhone model TBD  | iOS 16.x support floor           | ☐ Not run — no hardware | ☐ Not run — no hardware | ☐ Not run — no hardware | ☐ Not run — no hardware        | ☐ Not run — no hardware | ☐ Not run — no hardware      | ☐ Pending |
+| iPhone model TBD  | Current supported iOS            | ☐ Not run — no hardware | ☐ Not run — no hardware | ☐ Not run — no hardware | ☐ Not run — no hardware        | ☐ Not run — no hardware | ☐ Not run — no hardware      | ☐ Pending |
+| Android model TBD | Android 7 / API 24 support floor | ☐ Not run — no hardware | ☐ Not run — no hardware | ☐ Not run — no hardware | ☐ Not run — no hardware        | ☐ Not run — no hardware | ☐ Not run — no hardware      | ☐ Pending |
+| Android model TBD | Android 16 / API 36 target       | ☐ Not run — no hardware | ☐ Not run — no hardware | ☐ Not run — no hardware | ☐ Not run — no hardware        | ☐ Not run — no hardware | ☐ Not run — no hardware      | ☐ Pending |
 
 ## Required checks for each device
 
@@ -85,11 +107,12 @@ Use exact model, operating-system build, app commit, build identifier, and refer
 
 ## Evidence log
 
-Add one entry per executed device/protocol combination.
+Add one entry per executed device/protocol combination. Only Observed-physical runs belong here; Build-tier evidence lives in the section above.
 
-| Date    | App commit/build | Device and OS | Protocol and sensor mode | Reference device | Result  | Evidence link or notes               |
-| ------- | ---------------- | ------------- | ------------------------ | ---------------- | ------- | ------------------------------------ |
-| Not run | —                | —             | —                        | —                | Pending | No physical-device evidence recorded |
+| Date       | App commit/build                                 | Device and OS             | Protocol and sensor mode | Reference device | Result                                         | Evidence link or notes                                                                                                                          |
+| ---------- | ------------------------------------------------ | ------------------------- | ------------------------ | ---------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-21 | app-debug.apk SHA-256 `8787ca45…a579cd31` (main) | none — no phone connected | n/a                      | n/a              | Not run — no connected representative hardware | adb daemon could not start; xctrace shows only the host Mac; sole Samsung USB device is a portable SSD. APK not installed/launched on hardware. |
+| Not run    | —                                                | —                         | —                        | —                | Pending                                        | No physical-device observation evidence recorded                                                                                                |
 
 ## Release sign-off
 
