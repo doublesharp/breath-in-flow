@@ -4,7 +4,7 @@
     <h2 class="mt-1 text-lg font-bold text-white">{{ recommendation.title }}</h2>
 
     <div class="mt-4 flex flex-col sm:flex-row flex-wrap gap-3">
-      <template v-if="recommendedConfig">
+      <template v-if="hasRecommendedConfig">
         <button data-testid="start-recommended" class="btn-primary" @click="emitStart">
           Start recommended session
         </button>
@@ -54,7 +54,7 @@ function buildRecommendedConfig(): BreathingConfig | null {
 }
 
 // Backs the v-if for the start/adjust controls without cloning on every render.
-const recommendedConfig = computed(() => recommendedPreset.value !== null);
+const hasRecommendedConfig = computed(() => recommendedPreset.value !== null);
 
 function emitStart() {
   const config = buildRecommendedConfig();
