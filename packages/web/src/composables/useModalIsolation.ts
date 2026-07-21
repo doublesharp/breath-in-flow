@@ -29,6 +29,15 @@ function focusableElements(dialog: HTMLElement): HTMLElement[] {
   );
 }
 
+// Active isolations, ordered oldest-first. Only the top-most (most recently
+// activated) isolation consumes Escape, so a nested dialog cancels itself
+// without the parent modal also closing.
+const activationStack: symbol[] = [];
+
+function isTopOfStack(id: symbol): boolean {
+  return activationStack[activationStack.length - 1] === id;
+}
+
 export function useModalIsolation(
   dialogRef: Ref<HTMLElement | null>,
   openRef: Readonly<Ref<boolean>>,
@@ -38,6 +47,7 @@ export function useModalIsolation(
   let restoredAttributes: RestoredAttribute[] = [];
   let listening = false;
   let activationId = 0;
+  const stackId = Symbol('modal-isolation');
 
   function backgroundElements(dialog: HTMLElement): HTMLElement[] {
     if (options.backgroundRef?.value) return [options.backgroundRef.value];
@@ -76,6 +86,9 @@ export function useModalIsolation(
     if (!openRef.value || !dialog) return;
 
     if (event.key === 'Escape') {
+      // Only the top-most open modal handles Escape; a nested dialog must
+      // cancel itself while leaving any parent modal open.
+      if (!isTopOfStack(stackId)) return;
       if (!options.onEscape || options.canEscape?.() === false) return;
       event.preventDefault();
       event.stopPropagation();
@@ -107,12 +120,15 @@ export function useModalIsolation(
   function listen() {
     if (listening) return;
     document.addEventListener('keydown', handleKeydown, true);
+    activationStack.push(stackId);
     listening = true;
   }
 
   function unlisten() {
     if (!listening) return;
     document.removeEventListener('keydown', handleKeydown, true);
+    const index = activationStack.lastIndexOf(stackId);
+    if (index !== -1) activationStack.splice(index, 1);
     listening = false;
   }
 
