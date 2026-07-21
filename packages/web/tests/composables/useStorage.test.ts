@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { useStorage, resetStorageForTesting } from '../../src/composables/useStorage';
+import {
+  useStorage,
+  resetStorageForTesting,
+  type PracticeStorageSnapshot,
+} from '../../src/composables/useStorage';
 import type {
   BreathingConfig,
   CreateBreathingConfig,
@@ -1264,6 +1268,140 @@ describe('useStorage', () => {
         storage.setSoundTheme(theme);
         expect(storage.getSoundTheme()).toBe(theme);
       });
+    });
+  });
+
+  describe('Snapshot repository (backup)', () => {
+    beforeEach(() => {
+      resetStorageForTesting();
+      localStorageMock.clear();
+    });
+
+    function makeStoredConfig(overrides: Partial<BreathingConfig> = {}): BreathingConfig {
+      return {
+        ...createTestConfigInput(),
+        id: crypto.randomUUID(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+      } as BreathingConfig;
+    }
+
+    function makeStoredSession(overrides: Record<string, unknown> = {}) {
+      const config = makeStoredConfig();
+      return {
+        id: crypto.randomUUID(),
+        configId: config.id,
+        configSnapshot: config,
+        status: 'COMPLETED',
+        sets: [],
+        targetSets: 1,
+        completedSets: 0,
+        startedAt: new Date(),
+        completedAt: new Date(),
+        ...overrides,
+      };
+    }
+
+    it('exportPracticeState returns detached copies so mutations do not leak into live state', () => {
+      const storage = useStorage();
+      const config = storage.createConfig(createTestConfigInput({ name: 'Export Config' }));
+      storage.createSession(config);
+      storage.setSoundTheme('water');
+
+      const snapshot = storage.exportPracticeState();
+      expect(snapshot.configs).toHaveLength(1);
+      expect(snapshot.sessions).toHaveLength(1);
+      expect(snapshot.soundTheme).toBe('water');
+
+      snapshot.configs[0].name = 'Mutated Export';
+      snapshot.sessions[0].status = 'CANCELLED';
+
+      expect(storage.getAllConfigs()[0].name).toBe('Export Config');
+      expect(storage.getAllSessions()[0].status).toBe('IN_PROGRESS');
+    });
+
+    it('replacePracticeState swaps every record and the theme', () => {
+      const storage = useStorage();
+      storage.createConfig(createTestConfigInput({ name: 'Stale' }));
+
+      const config = makeStoredConfig({ name: 'Restored' });
+      const session = makeStoredSession({ configId: config.id, configSnapshot: config });
+      const snapshot: PracticeStorageSnapshot = {
+        configs: [config],
+        sessions: [session] as PracticeStorageSnapshot['sessions'],
+        soundTheme: 'chimes',
+      };
+      storage.replacePracticeState(snapshot);
+
+      expect(storage.getAllConfigs()).toHaveLength(1);
+      expect(storage.getAllConfigs()[0].name).toBe('Restored');
+      expect(storage.getAllSessions()).toHaveLength(1);
+      expect(storage.getAllSessions()[0].id).toBe(session.id);
+      expect(storage.getSoundTheme()).toBe('chimes');
+    });
+
+    it('preserves Date instances after replacement', () => {
+      const storage = useStorage();
+      const startedAt = new Date('2026-01-02T03:04:05.000Z');
+      const session = makeStoredSession({ startedAt, completedAt: startedAt });
+
+      storage.replacePracticeState({
+        configs: [session.configSnapshot as BreathingConfig],
+        sessions: [session] as PracticeStorageSnapshot['sessions'],
+        soundTheme: 'wood',
+      });
+
+      const stored = storage.getAllSessions()[0];
+      expect(stored.startedAt).toBeInstanceOf(Date);
+      expect(stored.startedAt.getTime()).toBe(startedAt.getTime());
+      expect(stored.configSnapshot.createdAt).toBeInstanceOf(Date);
+    });
+
+    it('rejects the whole replacement when one record is invalid and leaves live state untouched', () => {
+      const storage = useStorage();
+      const original = storage.createConfig(createTestConfigInput({ name: 'Keep Me' }));
+      storage.setSoundTheme('wind');
+
+      const validConfig = makeStoredConfig();
+      const invalidConfig = { ...makeStoredConfig(), name: '' }; // name.min(1) fails
+
+      expect(() =>
+        storage.replacePracticeState({
+          configs: [validConfig, invalidConfig as BreathingConfig],
+          sessions: [],
+          soundTheme: 'water',
+        })
+      ).toThrow();
+
+      expect(storage.getAllConfigs()).toEqual([original]);
+      expect(storage.getSoundTheme()).toBe('wind');
+    });
+
+    it('restores previous refs and rethrows when persistence fails', () => {
+      const storage = useStorage();
+      const original = storage.createConfig(createTestConfigInput({ name: 'Durable' }));
+      storage.setSoundTheme('subtle');
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const setItemSpy = vi.spyOn(localStorageMock, 'setItem').mockImplementation(() => {
+        throw new Error('quota exceeded');
+      });
+
+      const config = makeStoredConfig({ name: 'Should Not Persist' });
+      expect(() =>
+        storage.replacePracticeState({
+          configs: [config],
+          sessions: [],
+          soundTheme: 'chimes',
+        })
+      ).toThrow('quota exceeded');
+
+      setItemSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+
+      expect(storage.getAllConfigs()).toEqual([original]);
+      expect(storage.getSoundTheme()).toBe('subtle');
     });
   });
 });

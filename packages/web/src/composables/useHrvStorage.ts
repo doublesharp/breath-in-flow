@@ -41,6 +41,12 @@ interface MeasurementQuery {
   type?: HrvMeasurement['type'];
 }
 
+// A detached copy of the HRV database contents for backup/restore work.
+export interface HrvStorageSnapshot {
+  measurements: HrvMeasurement[];
+  assessments: AssessmentResult[];
+}
+
 interface MeasurementStats {
   count: number;
   avgRmssd: number;
@@ -581,6 +587,43 @@ async function migrateLegacyAssessments(): Promise<void> {
   }
 }
 
+async function exportHrvState(): Promise<HrvStorageSnapshot> {
+  const measurements = await getMeasurements();
+  const assessments = await getAssessments();
+  return { measurements, assessments };
+}
+
+async function replaceHrvState(snapshot: HrvStorageSnapshot): Promise<void> {
+  // Validate every record up front so an invalid entry rejects the whole
+  // replacement before any store is touched.
+  const measurements = snapshot.measurements.map((measurement) => {
+    const dto = validateMeasurement(toStructuredCloneSafe(measurement));
+    if (!dto) throw new TypeError('Cannot restore an invalid pulse variability measurement.');
+    return dto;
+  });
+  const assessments = snapshot.assessments.map((assessment) => {
+    const dto = validateAssessment(toStructuredCloneSafe(assessment));
+    if (!dto) throw new TypeError('Cannot restore an invalid resonance assessment.');
+    return dto;
+  });
+
+  const db = await openDB();
+  try {
+    // One transaction spanning both stores makes the replacement atomic: an
+    // abort rolls both stores back rather than leaving one partially replaced.
+    const tx = db.transaction(['measurements', 'assessments'], 'readwrite');
+    const measurementsStore = tx.objectStore('measurements');
+    const assessmentsStore = tx.objectStore('assessments');
+    measurementsStore.clear();
+    assessmentsStore.clear();
+    for (const measurement of measurements) measurementsStore.put(measurement);
+    for (const assessment of assessments) assessmentsStore.put(assessment);
+    await waitForTransaction(tx);
+  } finally {
+    db.close();
+  }
+}
+
 async function initialize(): Promise<void> {
   await migrateLegacyAssessments();
 }
@@ -603,6 +646,12 @@ export function useHrvStorage() {
     saveAssessment,
     getAssessments,
     getLatestAssessment,
+
+    // Backup repository operations
+    exportHrvState,
+    replaceHrvState,
+    // Validated measurement parsing for the backup coordinator (no raw DB access).
+    parseMeasurement: validateMeasurement,
 
     // Migration
     initialize,

@@ -855,4 +855,103 @@ describe('useHrvStorage', () => {
       expect(stats.latestDate).toBeNull();
     });
   });
+
+  describe('snapshot repository (backup)', () => {
+    it('exportHrvState returns both measurements and assessments via validated readers', async () => {
+      const hrv = useHrvStorage();
+      await hrv.saveMeasurement(makeMeasurement());
+      await hrv.saveAssessment(makeAssessment());
+
+      const snapshot = await hrv.exportHrvState();
+      expect(snapshot.measurements).toHaveLength(1);
+      expect(snapshot.assessments).toHaveLength(1);
+    });
+
+    it('replaceHrvState atomically clears both stores', async () => {
+      const hrv = useHrvStorage();
+      await hrv.saveMeasurement(makeMeasurement());
+      await hrv.saveAssessment(makeAssessment());
+
+      const snapshot = await hrv.exportHrvState();
+      expect(snapshot.measurements).toHaveLength(1);
+      expect(snapshot.assessments).toHaveLength(1);
+
+      await hrv.replaceHrvState({ measurements: [], assessments: [] });
+      expect(await hrv.getMeasurements()).toEqual([]);
+      expect(await hrv.getAssessments()).toEqual([]);
+    });
+
+    it('replaceHrvState swaps prior records for the provided snapshot', async () => {
+      const hrv = useHrvStorage();
+      await hrv.saveMeasurement(makeMeasurement());
+
+      const replacement = makeMeasurement();
+      const replacementAssessment = makeAssessment();
+      await hrv.replaceHrvState({
+        measurements: [replacement],
+        assessments: [replacementAssessment],
+      });
+
+      expect((await hrv.getMeasurements()).map((m) => m.id)).toEqual([replacement.id]);
+      expect((await hrv.getAssessments()).map((a) => a.id)).toEqual([replacementAssessment.id]);
+    });
+
+    it('rejects the replacement before opening a transaction when a record is invalid', async () => {
+      const hrv = useHrvStorage();
+      const original = makeMeasurement();
+      await hrv.saveMeasurement(original);
+
+      const invalid = { ...makeMeasurement(), analysis: {} } as unknown as HrvMeasurement;
+      await expect(
+        hrv.replaceHrvState({ measurements: [makeMeasurement(), invalid], assessments: [] })
+      ).rejects.toThrow();
+
+      expect((await hrv.getMeasurements()).map((m) => m.id)).toEqual([original.id]);
+    });
+
+    it('leaves neither store partially replaced when the transaction aborts', async () => {
+      const hrv = useHrvStorage();
+      const originalMeasurement = makeMeasurement();
+      const originalAssessment = makeAssessment();
+      await hrv.saveMeasurement(originalMeasurement);
+      await hrv.saveAssessment(originalAssessment);
+
+      const realPut = IDBObjectStore.prototype.put;
+      // Abort the single transaction while writing the assessments store. If the
+      // implementation used two transactions the measurements write would have
+      // already committed, so this proves both stores roll back together.
+      const putSpy = vi
+        .spyOn(IDBObjectStore.prototype, 'put')
+        .mockImplementation(function (this: IDBObjectStore, value: unknown) {
+          if (this.name === 'assessments') {
+            this.transaction.abort();
+            return {} as IDBRequest;
+          }
+          return realPut.call(this, value);
+        });
+
+      let aborted = false;
+      try {
+        await hrv.replaceHrvState({
+          measurements: [makeMeasurement()],
+          assessments: [makeAssessment()],
+        });
+      } catch {
+        aborted = true;
+      }
+
+      putSpy.mockRestore();
+
+      expect(aborted).toBe(true);
+      expect((await hrv.getMeasurements()).map((m) => m.id)).toEqual([originalMeasurement.id]);
+      expect((await hrv.getAssessments()).map((a) => a.id)).toEqual([originalAssessment.id]);
+    });
+
+    it('exposes validated measurement parsing without exposing raw IndexedDB access', () => {
+      const hrv = useHrvStorage();
+      expect(hrv).not.toHaveProperty('openDB');
+      expect(hrv.parseMeasurement(makeMeasurement())).not.toBeNull();
+      expect(hrv.parseMeasurement({ id: 'not-a-measurement' })).toBeNull();
+    });
+  });
 });

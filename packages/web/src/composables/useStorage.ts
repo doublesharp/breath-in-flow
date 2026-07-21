@@ -17,6 +17,18 @@ import {
   SoundThemeSchema,
 } from '@breath-in-flow/shared';
 import { validateStoredArray } from '@/utils/storedRecordValidation';
+import {
+  CONFIGS_STORAGE_KEY,
+  SESSIONS_STORAGE_KEY,
+  SOUND_THEME_STORAGE_KEY,
+} from '@/constants/storageKeys';
+
+// A detached, non-reactive copy of practice state for backup/restore work.
+export interface PracticeStorageSnapshot {
+  configs: BreathingConfig[];
+  sessions: Session[];
+  soundTheme: SoundTheme;
+}
 
 // Simple in-memory storage for now (can be replaced with IndexedDB or API calls)
 const configs = ref<BreathingConfig[]>([]);
@@ -55,31 +67,37 @@ function restoreDateFields(value: unknown): unknown {
 // Load from localStorage on init
 function loadFromStorage() {
   configs.value = validateStoredArray({
-    key: 'breath-in-flow-configs',
-    value: loadValueFromStorage('breath-in-flow-configs'),
+    key: CONFIGS_STORAGE_KEY,
+    value: loadValueFromStorage(CONFIGS_STORAGE_KEY),
     schema: BreathingConfigSchema,
     normalize: restoreDateFields,
   });
 
   sessions.value = validateStoredArray({
-    key: 'breath-in-flow-sessions',
-    value: loadValueFromStorage('breath-in-flow-sessions'),
+    key: SESSIONS_STORAGE_KEY,
+    value: loadValueFromStorage(SESSIONS_STORAGE_KEY),
     schema: SessionSchema,
     normalize: restoreDateFields,
   });
 
-  const storedTheme = loadStringFromStorage('breath-in-flow-sound-theme');
+  const storedTheme = loadStringFromStorage(SOUND_THEME_STORAGE_KEY);
   if (storedTheme) {
     const parsedTheme = SoundThemeSchema.safeParse(storedTheme);
     soundTheme.value = parsedTheme.success ? parsedTheme.data : 'wood';
   }
 }
 
+// Writes the current practice state to localStorage. Throws on failure so
+// callers that need to react to a failed write (e.g. restore) can roll back.
+function persistPracticeState() {
+  localStorage.setItem(CONFIGS_STORAGE_KEY, JSON.stringify(configs.value));
+  localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions.value));
+  localStorage.setItem(SOUND_THEME_STORAGE_KEY, soundTheme.value);
+}
+
 function saveToStorage() {
   try {
-    localStorage.setItem('breath-in-flow-configs', JSON.stringify(configs.value));
-    localStorage.setItem('breath-in-flow-sessions', JSON.stringify(sessions.value));
-    localStorage.setItem('breath-in-flow-sound-theme', soundTheme.value);
+    persistPracticeState();
   } catch (e) {
     console.error('Failed to save to storage:', e);
   }
@@ -95,8 +113,10 @@ export function resetStorageForTesting() {
   soundTheme.value = 'wood';
 }
 
-function cloneConfig(config: BreathingConfig): BreathingConfig {
-  const source = isProxy(config) ? toRaw(config) : config;
+// Produces a detached, non-reactive deep copy. structuredClone preserves Date
+// instances; the JSON fallback is only reached in environments without it.
+function detachForExport<T>(value: T): T {
+  const source = isProxy(value) ? toRaw(value) : value;
 
   try {
     if (typeof structuredClone === 'function') {
@@ -106,7 +126,11 @@ function cloneConfig(config: BreathingConfig): BreathingConfig {
     console.warn('structuredClone failed, falling back to JSON copy', error);
   }
 
-  return JSON.parse(JSON.stringify(source)) as BreathingConfig;
+  return JSON.parse(JSON.stringify(source)) as T;
+}
+
+function cloneConfig(config: BreathingConfig): BreathingConfig {
+  return detachForExport(config);
 }
 
 export function useStorage() {
@@ -294,6 +318,54 @@ export function useStorage() {
     saveToStorage();
   }
 
+  // Backup repository operations
+  function exportPracticeState(): PracticeStorageSnapshot {
+    return {
+      configs: detachForExport(configs.value),
+      sessions: detachForExport(sessions.value),
+      soundTheme: soundTheme.value,
+    };
+  }
+
+  function replacePracticeState(snapshot: PracticeStorageSnapshot): void {
+    // Validate every record and the theme before mutating any state so a single
+    // invalid entry rejects the whole replacement with live state untouched.
+    const parsedTheme = SoundThemeSchema.safeParse(snapshot.soundTheme);
+    if (!parsedTheme.success) throw new TypeError('Cannot restore an invalid sound theme.');
+
+    const nextConfigs: BreathingConfig[] = [];
+    for (const config of snapshot.configs) {
+      const parsed = BreathingConfigSchema.safeParse(restoreDateFields(config));
+      if (!parsed.success) throw new TypeError('Cannot restore an invalid breathing config.');
+      nextConfigs.push(parsed.data);
+    }
+
+    const nextSessions: Session[] = [];
+    for (const session of snapshot.sessions) {
+      const parsed = SessionSchema.safeParse(restoreDateFields(session));
+      if (!parsed.success) throw new TypeError('Cannot restore an invalid session.');
+      nextSessions.push(parsed.data);
+    }
+
+    const previousConfigs = configs.value;
+    const previousSessions = sessions.value;
+    const previousTheme = soundTheme.value;
+
+    configs.value = nextConfigs;
+    sessions.value = nextSessions;
+    soundTheme.value = parsedTheme.data;
+
+    try {
+      persistPracticeState();
+    } catch (error) {
+      // A failed write must not be observable: restore the prior refs.
+      configs.value = previousConfigs;
+      sessions.value = previousSessions;
+      soundTheme.value = previousTheme;
+      throw error;
+    }
+  }
+
   return {
     // State
     configs,
@@ -325,6 +397,10 @@ export function useStorage() {
     // Sound theme operations
     getSoundTheme,
     setSoundTheme,
+
+    // Backup repository operations
+    exportPracticeState,
+    replacePracticeState,
 
     // Default
     DEFAULT_BREATHING_CONFIG,
