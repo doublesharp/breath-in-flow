@@ -10,6 +10,10 @@ describe('GoalOnboarding', () => {
     expect(dialog.attributes('aria-labelledby')).toBe('goal-onboarding-title');
     expect(wrapper.find('#goal-onboarding-title').exists()).toBe(true);
     expect(wrapper.findAll('input[name="wellness-goal"]')).toHaveLength(4);
+    expect(dialog.classes()).toContain('overflow-y-auto');
+    expect(wrapper.get('[data-testid="goal-onboarding-card"]').classes()).toContain(
+      'max-h-[calc(100dvh-2rem)]'
+    );
   });
 
   it('renders nothing while closed', () => {

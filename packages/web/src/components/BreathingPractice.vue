@@ -139,7 +139,7 @@
         aria-modal="true"
         aria-labelledby="session-dialog-title"
         tabindex="-1"
-        class="fixed inset-0 z-50 overflow-y-auto"
+        class="fixed inset-0 z-50 overflow-y-auto safe-area-top safe-area-bottom"
         style="background: linear-gradient(135deg, #1f1a15 0%, #2a241d 40%, #1f1a15 100%)"
       >
         <div class="min-h-screen p-4 sm:p-6 lg:p-8">
@@ -1508,6 +1508,45 @@ function handleEscape(event: KeyboardEvent) {
     confirmExit();
   }
 }
+
+function handleSystemBack(): boolean {
+  if (showStopConfirmation.value) {
+    showStopConfirmation.value = false;
+    return true;
+  }
+  if (showOverwriteConfirmation.value) {
+    showOverwriteConfirmation.value = false;
+    return true;
+  }
+  if (showSuccessNotification.value) {
+    showSuccessNotification.value = false;
+    return true;
+  }
+  if (showConfigModal.value) {
+    showConfigModal.value = false;
+    return true;
+  }
+  if (showAfterCheckIn.value) {
+    skipAfterCheckIn();
+    return true;
+  }
+  if (showBeforeCheckIn.value) {
+    showBeforeCheckIn.value = false;
+    pendingStartConfig.value = null;
+    return true;
+  }
+  if (timer.phase.value === 'SESSION_COMPLETE') {
+    resetExercise();
+    return true;
+  }
+  if (isSessionVisible.value) {
+    confirmExit();
+    return true;
+  }
+  return false;
+}
+
+defineExpose({ handleSystemBack });
 
 function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScore) {
   Object.assign(config, candidate);

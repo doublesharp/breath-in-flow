@@ -236,6 +236,7 @@
       <transition name="fade" mode="out-in">
         <BreathingPractice
           v-if="activeTab === 'practice'"
+          ref="breathingPracticeRef"
           key="practice"
           :goal="selectedGoal ?? undefined"
           @switch-tab="(tab: string) => (activeTab = tab as 'practice' | 'lab' | 'history' | 'configs' | 'analytics')"
@@ -388,6 +389,8 @@
 
 <script setup lang="ts">
 import { defineAsyncComponent, ref, provide, onMounted, onUnmounted } from 'vue';
+import { App as NativeApp } from '@capacitor/app';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import BreathingPractice from './components/BreathingPractice.vue';
 import GoalOnboarding from './components/GoalOnboarding.vue';
 import HelpSystem from './components/HelpSystem.vue';
@@ -407,6 +410,8 @@ const SessionHistory = defineAsyncComponent(() => import('./components/SessionHi
 
 const activeTab = ref<'practice' | 'lab' | 'history' | 'configs' | 'analytics'>('practice');
 const selectedConfig = ref<BreathingConfig | null>(null);
+const breathingPracticeRef = ref<{ handleSystemBack?: () => boolean } | null>(null);
+let backButtonListener: PluginListenerHandle | null = null;
 
 // Auto-hide header on scroll down, show on scroll up
 const headerHidden = ref(false);
@@ -428,11 +433,27 @@ function onScroll() {
   lastScrollY = currentY;
 }
 
-onMounted(() => {
+onMounted(async () => {
   lastScrollY = window.scrollY;
   window.addEventListener('scroll', onScroll, { passive: true });
+  if (Capacitor.isNativePlatform()) {
+    backButtonListener = await NativeApp.addListener('backButton', () => {
+      if (activeTab.value === 'practice' && breathingPracticeRef.value?.handleSystemBack?.()) {
+        return;
+      }
+      if (activeTab.value !== 'practice') {
+        activeTab.value = 'practice';
+        return;
+      }
+      void NativeApp.exitApp();
+    });
+  }
 });
-onUnmounted(() => window.removeEventListener('scroll', onScroll));
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll);
+  void backButtonListener?.remove();
+  backButtonListener = null;
+});
 
 function loadConfig(config: BreathingConfig) {
   selectedConfig.value = config;

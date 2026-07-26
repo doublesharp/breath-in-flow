@@ -6,9 +6,12 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="feeling-checkin-title"
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm safe-area-top safe-area-bottom"
+    class="fixed inset-0 z-[100] flex items-start sm:items-center justify-center overflow-y-auto p-4 bg-black/70 backdrop-blur-sm safe-area-top safe-area-bottom"
   >
-    <div class="card-solid max-w-lg w-full animate-scale-in">
+    <div
+      data-testid="checkin-card"
+      class="card-solid my-auto max-h-[calc(100dvh-2rem)] max-w-lg w-full overflow-y-auto overscroll-contain animate-scale-in"
+    >
       <h2 id="feeling-checkin-title" ref="titleRef" tabindex="-1" class="text-2xl font-bold text-white">
         {{ title }}
       </h2>

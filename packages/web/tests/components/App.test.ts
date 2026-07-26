@@ -10,6 +10,24 @@ import { usePreferences } from '../../src/composables';
 import { reloadPreferencesForTesting } from '../../src/composables/usePreferences';
 import * as permissionService from '../../src/services/permissionService';
 
+const nativeAppMocks = vi.hoisted(() => ({
+  addListener: vi.fn(),
+  exitApp: vi.fn(),
+  remove: vi.fn(),
+  backHandler: undefined as undefined | (() => void),
+}));
+
+vi.mock('@capacitor/app', () => ({
+  App: {
+    addListener: nativeAppMocks.addListener,
+    exitApp: nativeAppMocks.exitApp,
+  },
+}));
+
+vi.mock('@capacitor/core', () => ({
+  Capacitor: { isNativePlatform: () => true },
+}));
+
 const childStubs = {
   BreathingPractice: true,
   SessionHistory: true,
@@ -23,6 +41,38 @@ describe('App.vue', () => {
   beforeEach(() => {
     localStorage.clear();
     reloadPreferencesForTesting();
+    vi.clearAllMocks();
+    nativeAppMocks.backHandler = undefined;
+    nativeAppMocks.addListener.mockImplementation(
+      async (_event: string, handler: () => void) => {
+        nativeAppMocks.backHandler = handler;
+        return { remove: nativeAppMocks.remove };
+      }
+    );
+  });
+
+  it('routes Android Back to Practice before exiting and removes its listener', async () => {
+    usePreferences().setGoal('RELAX');
+    const wrapper = mount(App, { global: { stubs: childStubs } });
+    await nextTick();
+
+    expect(nativeAppMocks.addListener).toHaveBeenCalledWith('backButton', expect.any(Function));
+
+    (wrapper.vm as unknown as { activeTab: string }).activeTab = 'history';
+    await nextTick();
+    nativeAppMocks.backHandler?.();
+    await nextTick();
+
+    expect((wrapper.vm as unknown as { activeTab: string }).activeTab).toBe('practice');
+    expect(nativeAppMocks.exitApp).not.toHaveBeenCalled();
+
+    nativeAppMocks.backHandler?.();
+    await nextTick();
+    expect(nativeAppMocks.exitApp).toHaveBeenCalledOnce();
+
+    wrapper.unmount();
+    await nextTick();
+    expect(nativeAppMocks.remove).toHaveBeenCalledOnce();
   });
 
   it('shows first-run goal onboarding without touching camera, motion, or permission services', () => {

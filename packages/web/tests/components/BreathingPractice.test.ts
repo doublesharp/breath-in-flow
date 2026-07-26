@@ -469,6 +469,53 @@ describe('BreathingPractice.vue', () => {
     wrapper.unmount();
   });
 
+  it('routes system Back through the visible practice layer before closing the session', async () => {
+    isRunning.value = true;
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: {
+          selectedConfig: ref({}),
+          clearSelectedConfig: vi.fn(),
+        },
+        stubs: ['BreathingVisualizer'],
+      },
+      attachTo: document.body,
+    });
+    await nextTick();
+
+    const vm = wrapper.vm as unknown as {
+      handleSystemBack: () => boolean;
+      showStopConfirmation: boolean;
+    };
+    expect(vm.handleSystemBack()).toBe(true);
+    await nextTick();
+    expect(vm.showStopConfirmation).toBe(true);
+
+    expect(vm.handleSystemBack()).toBe(true);
+    await nextTick();
+    expect(vm.showStopConfirmation).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('applies safe-area padding to the full-screen practice dialog', async () => {
+    isRunning.value = true;
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+      attachTo: document.body,
+    });
+    await nextTick();
+
+    const dialog = document.body.querySelector('[data-testid="session-dialog"]');
+    expect(dialog?.classList.contains('safe-area-top')).toBe(true);
+    expect(dialog?.classList.contains('safe-area-bottom')).toBe(true);
+
+    wrapper.unmount();
+  });
+
   it('resets session notes when starting a new session', async () => {
     isRunning.value = false;
     createSessionMock.mockReturnValue({ id: 'sess-notes', sets: [] });
