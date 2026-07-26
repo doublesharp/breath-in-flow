@@ -205,7 +205,10 @@ describe('BreathingPractice.vue', () => {
     if (startBtn) await startBtn.trigger('click');
     // Resolve the optional pre-session check-in before the timer starts.
     await nextTick();
-    await wrapper.find('[data-testid="checkin-skip"]').trigger('click');
+    const skipCheckIn = document.body.querySelector<HTMLElement>('[data-testid="checkin-skip"]');
+    expect(skipCheckIn).not.toBeNull();
+    skipCheckIn?.click();
+    await nextTick();
     expect(startMock).toHaveBeenCalled();
   });
 
@@ -287,7 +290,10 @@ describe('BreathingPractice.vue', () => {
       .find((button) => button.text().toLowerCase().includes('start'))!
       .trigger('click');
     await nextTick();
-    await wrapper.find('[data-testid="checkin-skip"]').trigger('click');
+    const skipCheckIn = document.body.querySelector<HTMLElement>('[data-testid="checkin-skip"]');
+    expect(skipCheckIn).not.toBeNull();
+    skipCheckIn?.click();
+    await nextTick();
     isRunning.value = true;
     await nextTick();
 

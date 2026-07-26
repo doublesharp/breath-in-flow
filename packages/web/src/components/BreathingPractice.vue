@@ -1037,16 +1037,18 @@
       </div>
     </div>
 
-    <!-- Optional pre-session comfort check-in -->
-    <FeelingCheckIn
-      :open="showBeforeCheckIn"
-      stage="before"
-      @submit="submitBeforeCheckIn"
-      @skip="continueSessionStart()"
-    />
+    <Teleport to="body">
+      <!-- Optional pre-session comfort check-in -->
+      <FeelingCheckIn
+        :open="showBeforeCheckIn"
+        stage="before"
+        @submit="submitBeforeCheckIn"
+        @skip="continueSessionStart()"
+      />
 
-    <!-- Optional post-session comfort check-in -->
-    <FeelingCheckIn :open="showAfterCheckIn" stage="after" @submit="saveAfterCheckIn" @skip="skipAfterCheckIn" />
+      <!-- Optional post-session comfort check-in -->
+      <FeelingCheckIn :open="showAfterCheckIn" stage="after" @submit="saveAfterCheckIn" @skip="skipAfterCheckIn" />
+    </Teleport>
   </div>
 </template>
 

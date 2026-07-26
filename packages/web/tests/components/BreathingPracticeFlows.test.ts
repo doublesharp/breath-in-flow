@@ -1,10 +1,12 @@
-import { mount } from '@vue/test-utils';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ref, nextTick } from 'vue';
 import BreathingPractice from '@/components/BreathingPractice.vue';
 import RecommendedActions from '@/components/RecommendedActions.vue';
 import { presetConfig, guidedPresets } from '@/data/guidedPresets';
 import type { BreathingConfig, Session } from '@breath-in-flow/shared';
+
+enableAutoUnmount(afterEach);
 
 const createSessionMock = vi.fn();
 const addSetMock = vi.fn();
@@ -150,12 +152,30 @@ function findByText(wrapper: Wrapper, text: string) {
   return wrapper.findAll('button').find((b) => b.text().toLowerCase().includes(text));
 }
 
-async function skipBeforeCheckIn(wrapper: Wrapper) {
-  const skip = wrapper.find('[data-testid="checkin-skip"]');
-  if (skip.exists()) {
-    await skip.trigger('click');
+async function skipBeforeCheckIn(_wrapper: Wrapper) {
+  const skip = document.body.querySelector<HTMLElement>('[data-testid="checkin-skip"]');
+  if (skip) {
+    skip.click();
     await nextTick();
   }
+}
+
+async function clickCheckInControl(testId: string) {
+  const control = document.body.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  expect(control).not.toBeNull();
+  control?.click();
+  await nextTick();
+}
+
+async function setCheckInComment(value: string) {
+  const comment = document.body.querySelector<HTMLTextAreaElement>(
+    '[data-testid="checkin-comment"]'
+  );
+  expect(comment).not.toBeNull();
+  if (!comment) return;
+  comment.value = value;
+  comment.dispatchEvent(new Event('input', { bubbles: true }));
+  await nextTick();
 }
 
 async function startPracticeAndSkip(wrapper: Wrapper) {
@@ -573,9 +593,8 @@ describe('BreathingPractice flows', () => {
     await startBtn!.trigger('click');
     await nextTick();
 
-    await wrapper.find('[data-testid="feeling-score-2"]').setValue();
-    await wrapper.find('[data-testid="checkin-submit"]').trigger('click');
-    await nextTick();
+    await clickCheckInControl('feeling-score-2');
+    await clickCheckInControl('checkin-submit');
 
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     expect(setSessionCheckInMock).toHaveBeenCalledWith('attach-before', { before: 2 });
@@ -598,9 +617,8 @@ describe('BreathingPractice flows', () => {
     await startBtn!.trigger('click');
     await nextTick();
 
-    await wrapper.find('[data-testid="feeling-score-2"]').setValue();
-    await wrapper.find('[data-testid="checkin-submit"]').trigger('click');
-    await nextTick();
+    await clickCheckInControl('feeling-score-2');
+    await clickCheckInControl('checkin-submit');
 
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     expect(setSessionCheckInMock).not.toHaveBeenCalled();
@@ -626,7 +644,33 @@ describe('BreathingPractice flows', () => {
 
     // Completion is persisted first; only then does the post prompt appear.
     expect(completeSessionMock).toHaveBeenCalledWith('post-order');
-    expect(wrapper.find('[data-testid="checkin-skip"]').exists()).toBe(true);
+    expect(document.body.querySelector('[data-testid="checkin-skip"]')).not.toBeNull();
+    wrapper.unmount();
+  });
+
+  it('keeps the post-session prompt outside every inert session layer', async () => {
+    createSessionMock.mockReturnValue({ id: 'post-interactive', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      attachTo: document.body,
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    await startPracticeAndSkip(wrapper);
+    const vm = wrapper.vm as unknown as {
+      timer: { triggerSessionComplete: () => void };
+    };
+    vm.timer.triggerSessionComplete();
+    await nextTick();
+    await nextTick();
+
+    const prompt = document.body.querySelector<HTMLElement>('[data-testid="feeling-checkin"]');
+    expect(prompt).not.toBeNull();
+    expect(prompt?.closest('[inert]')).toBeNull();
+
     wrapper.unmount();
   });
 
@@ -648,10 +692,9 @@ describe('BreathingPractice flows', () => {
     await nextTick();
     expect(completeSessionMock).toHaveBeenCalledTimes(1);
 
-    await wrapper.find('[data-testid="feeling-score-4"]').setValue();
-    await wrapper.find('[data-testid="checkin-comment"]').setValue('Felt easier');
-    await wrapper.find('[data-testid="checkin-submit"]').trigger('click');
-    await nextTick();
+    await clickCheckInControl('feeling-score-4');
+    await setCheckInComment('Felt easier');
+    await clickCheckInControl('checkin-submit');
 
     expect(setSessionCheckInMock).toHaveBeenCalledWith('post-save', {
       after: 4,
