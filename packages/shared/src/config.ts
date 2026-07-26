@@ -1,5 +1,5 @@
 export const AppConfig = {
   appName: 'Breath In Flow',
-  version: '1.0.0',
+  version: '0.0.3',
   appId: 'com.breathinflow.app',
 };

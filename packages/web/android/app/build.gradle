@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+def appVersionCode = (project.findProperty("appVersionCode") ?: "3") as Integer
+def appVersionName = project.findProperty("appVersionName") ?: "0.0.3"
+
 android {
     namespace "com.breathinflow.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +10,8 @@ android {
         applicationId "com.breathinflow.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

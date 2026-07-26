@@ -10,33 +10,9 @@ const config: CapacitorConfig = {
     // cleartext: true,
     androidScheme: 'https',
   },
-  plugins: {
-    // SplashScreen configuration
-    SplashScreen: {
-      launchShowDuration: 2000,
-      launchAutoHide: true,
-      backgroundColor: '#0f172a',
-      androidSplashResourceName: 'splash',
-      androidScaleType: 'CENTER_CROP',
-      showSpinner: false,
-      splashFullScreen: true,
-      splashImmersive: true,
-    },
-    // Status bar configuration (optional)
-    StatusBar: {
-      style: 'DARK',
-      backgroundColor: '#0f172a',
-    },
-    // Keyboard configuration (optional)
-    Keyboard: {
-      resize: 'body',
-      resizeOnFullScreen: true,
-    },
-  },
   ios: {
     // iOS specific settings
     contentInset: 'automatic',
-    scheme: 'Breath in Flow',
     backgroundColor: '#0f172a',
   },
   android: {

@@ -1,6 +1,6 @@
 {
   "name": "breath-in-flow",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "license": "UNLICENSED",
@@ -8,7 +8,7 @@
   "description": "A breathing practice app for guided breathwork sessions",
   "scripts": {
     "dev": "pnpm --filter @breath-in-flow/web dev",
-    "build": "pnpm --filter @breath-in-flow/web build",
+    "build": "pnpm --filter @breath-in-flow/shared build && pnpm --filter @breath-in-flow/web build",
     "preview": "pnpm --filter @breath-in-flow/web preview",
     "test": "pnpm test:build-script && pnpm --filter @breath-in-flow/shared test && pnpm --filter @breath-in-flow/database test && pnpm --filter @breath-in-flow/web test",
     "test:build-script": "bash scripts/tests/build-script.test.sh",

@@ -32,6 +32,14 @@ if (typeof packageJson.version !== "string" || packageJson.version.length === 0)
 }
 process.stdout.write(packageJson.version);
 ' "$WEB_DIR/package.json")
+VERSION_CODE=$(node -e '
+const version = process.argv[1];
+const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+if (!match) throw new Error("Android builds require a numeric major.minor.patch version");
+const [, major, minor, patch] = match.map(Number);
+if (minor > 99 || patch > 99) throw new Error("Minor and patch versions must be <= 99");
+process.stdout.write(String(major * 10000 + minor * 100 + patch));
+' "$VERSION")
 RELEASE_VERSION_DIR="$RELEASE_DIR/$VERSION"
 
 print_header() {
@@ -94,6 +102,32 @@ print_existing_artifacts() {
     find "$output_dir" -type f -print | sort
 }
 
+verify_native_web_assets() {
+    local platform="$1"
+    local native_public_dir
+
+    case "$platform" in
+        android)
+            native_public_dir="$WEB_DIR/android/app/src/main/assets/public"
+            ;;
+        ios)
+            native_public_dir="$WEB_DIR/ios/App/App/public"
+            ;;
+        *)
+            print_error "Unsupported native asset platform: $platform"
+            return 1
+            ;;
+    esac
+
+    require_directory "$native_public_dir" "$platform native web assets"
+    if ! diff -qr --exclude='.DS_Store' "$WEB_DIR/dist" "$native_public_dir" >/dev/null; then
+        print_error "$platform native web assets do not match the current web build"
+        diff -qr --exclude='.DS_Store' "$WEB_DIR/dist" "$native_public_dir" || true
+        return 1
+    fi
+    print_success "$platform native web assets match the current web build"
+}
+
 # Ensure Java and Android SDK are available for Android builds
 setup_android_env() {
     if [[ -z "$JAVA_HOME" ]]; then
@@ -146,7 +180,7 @@ clean_dist() {
 build_web() {
     print_header "Building Web Assets"
     
-    cd "$WEB_DIR"
+    cd "$ROOT_DIR"
     pnpm build
     
     # Clean and copy web build to dist
@@ -227,12 +261,16 @@ build_android() {
         return 1
     fi
     
-    cd "$WEB_DIR"
+    cd "$ROOT_DIR"
     pnpm build
+    cd "$WEB_DIR"
     pnpm exec cap sync android
+    verify_native_web_assets android
     
     cd "$WEB_DIR/android"
-    ./gradlew assembleDebug
+    ./gradlew assembleDebug \
+        -PappVersionName="$VERSION" \
+        -PappVersionCode="$VERSION_CODE"
     
     # Clean and copy APK to dist
     clear_output_directory "$DIST_DIR/android"
@@ -256,9 +294,11 @@ build_ios() {
         return 1
     fi
     
-    cd "$WEB_DIR"
+    cd "$ROOT_DIR"
     pnpm build
+    cd "$WEB_DIR"
     pnpm exec cap sync ios
+    verify_native_web_assets ios
     
     # Copy iOS project reference to dist
     require_directory "$WEB_DIR/ios/App/App.xcodeproj" "iOS Xcode project"
