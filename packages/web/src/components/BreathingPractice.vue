@@ -144,14 +144,32 @@
       >
         <div class="min-h-screen p-4 sm:p-6 lg:p-8">
           <!-- Exit Button -->
-          <div class="absolute top-4 right-4 z-10">
+          <div class="sticky top-3 z-20 mb-3 flex justify-end pointer-events-none">
             <button
-              @click="confirmExit"
-              aria-label="Exit breathing session"
-              class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white transition-colors backdrop-blur-sm"
-              title="Exit session"
+              data-testid="session-header-exit"
+              @click="timer.phase.value === 'SESSION_COMPLETE' ? resetExercise() : confirmExit()"
+              :aria-label="timer.phase.value === 'SESSION_COMPLETE' ? 'Back to Practice' : 'Exit breathing session'"
+              :title="timer.phase.value === 'SESSION_COMPLETE' ? 'Back to Practice' : 'Exit session'"
+              :class="[
+                'min-h-11 rounded-xl transition-colors backdrop-blur-sm pointer-events-auto',
+                timer.phase.value === 'SESSION_COMPLETE'
+                  ? 'flex items-center gap-2 border border-emerald-400/40 bg-emerald-500/20 px-4 py-2.5 font-semibold text-emerald-50 shadow-lg shadow-emerald-950/30 hover:bg-emerald-500/30'
+                  : 'p-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white',
+              ]"
             >
               <svg
+                v-if="timer.phase.value === 'SESSION_COMPLETE'"
+                xmlns="http://www.w3.org/2000/svg"
+                class="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              <span v-if="timer.phase.value === 'SESSION_COMPLETE'">Back to Practice</span>
+              <svg
+                v-else
                 xmlns="http://www.w3.org/2000/svg"
                 class="w-6 h-6"
                 fill="none"
@@ -370,7 +388,7 @@
                   <button @click="saveSessionNotes" class="mt-3 btn-secondary">Save Notes</button>
                 </div>
 
-                <button @click="resetExercise" class="btn-primary btn-action">
+                <button data-testid="back-to-practice" @click="resetExercise" class="btn-primary btn-action">
                   <span class="flex items-center gap-2 justify-center">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -379,14 +397,9 @@
                       viewBox="0 0 24 24"
                       stroke="currentColor"
                     >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                      />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
-                    Start New Session
+                    Back to Practice
                   </span>
                 </button>
               </div>

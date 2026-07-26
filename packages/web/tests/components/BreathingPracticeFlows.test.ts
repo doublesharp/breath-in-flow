@@ -77,6 +77,7 @@ vi.mock('@/composables/useBreathingTimer', () => {
         },
         stop: () => {
           isRunning.value = false;
+          phase.value = 'IDLE';
         },
         nextSet: () => {
           currentSet.value += 1;
@@ -728,6 +729,98 @@ describe('BreathingPractice flows', () => {
     expect(setSessionCheckInMock).not.toHaveBeenCalled();
     expect(completeSessionMock).toHaveBeenCalledTimes(1);
     wrapper.unmount();
+  });
+
+  it('keeps the header exit confirmation for an active session', async () => {
+    createSessionMock.mockReturnValue({ id: 'active-header-exit', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    await startPracticeAndSkip(wrapper);
+
+    const headerExit = document.body.querySelector<HTMLElement>(
+      '[data-testid="session-header-exit"]'
+    );
+    expect(headerExit).not.toBeNull();
+    expect(headerExit?.textContent).not.toContain('Back to Practice');
+
+    headerExit?.click();
+    await nextTick();
+
+    expect(document.body.querySelector('[data-testid="session-dialog"]')).not.toBeNull();
+    expect(
+      document.body.querySelector<HTMLElement>('[data-testid="stop-confirmation"]')?.style.display
+    ).not.toBe('none');
+  });
+
+  it('returns to the Practice screen from the primary completion action', async () => {
+    createSessionMock.mockReturnValue({ id: 'post-return-primary', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    await startPracticeAndSkip(wrapper);
+    const vm = wrapper.vm as unknown as {
+      timer: { triggerSessionComplete: () => void };
+    };
+    vm.timer.triggerSessionComplete();
+    await nextTick();
+    await skipBeforeCheckIn(wrapper);
+
+    const backButton = document.body.querySelector<HTMLElement>('[data-testid="back-to-practice"]');
+    expect(backButton).not.toBeNull();
+    expect(backButton?.textContent).toContain('Back to Practice');
+
+    backButton?.click();
+    await nextTick();
+
+    expect(document.body.querySelector('[data-testid="session-dialog"]')).toBeNull();
+    expect(findByText(wrapper, 'start practice')).toBeTruthy();
+    expect(
+      document.body.querySelector<HTMLElement>('[data-testid="stop-confirmation"]')?.style.display
+    ).toBe('none');
+  });
+
+  it('makes the completed-session header exit obvious and returns directly to Practice', async () => {
+    createSessionMock.mockReturnValue({ id: 'post-return-header', sets: [] });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+
+    await startPracticeAndSkip(wrapper);
+    const vm = wrapper.vm as unknown as {
+      timer: { triggerSessionComplete: () => void };
+    };
+    vm.timer.triggerSessionComplete();
+    await nextTick();
+    await skipBeforeCheckIn(wrapper);
+
+    const headerExit = document.body.querySelector<HTMLElement>(
+      '[data-testid="session-header-exit"]'
+    );
+    expect(headerExit).not.toBeNull();
+    expect(headerExit?.textContent).toContain('Back to Practice');
+
+    headerExit?.click();
+    await nextTick();
+
+    expect(document.body.querySelector('[data-testid="session-dialog"]')).toBeNull();
+    expect(
+      document.body.querySelector<HTMLElement>('[data-testid="stop-confirmation"]')?.style.display
+    ).toBe('none');
   });
 });
 
