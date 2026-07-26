@@ -37,6 +37,10 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     setupFiles: './tests/setup.ts',
+    // The component suite performs several isolated Vue module imports. Capping
+    // workers prevents CPU oversubscription from turning those imports into
+    // false five-second test timeouts during the full release run.
+    maxWorkers: 8,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
