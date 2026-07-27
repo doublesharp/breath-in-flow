@@ -35,7 +35,9 @@ describe('FeelingCheckIn', () => {
       expect(wrapper.text()).toContain(label);
     }
     expect(dialog.classes()).toContain('overflow-y-auto');
-    expect(wrapper.get('[data-testid="checkin-card"]').classes()).toContain('max-h-[calc(100dvh-2rem)]');
+    expect(wrapper.get('[data-testid="checkin-card"]').classes()).toContain(
+      'max-h-[calc(100dvh-2rem)]'
+    );
   });
 
   it('emits skip without a score when the skip control is used', async () => {

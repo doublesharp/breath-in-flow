@@ -136,10 +136,7 @@ export function integrateFrequencyBand(
 ): number {
   let power = 0;
   for (let i = 0; i < frequencies.length; i++) {
-    if (
-      frequencies[i] >= low &&
-      (includeHigh ? frequencies[i] <= high : frequencies[i] < high)
-    ) {
+    if (frequencies[i] >= low && (includeHigh ? frequencies[i] <= high : frequencies[i] < high)) {
       power += psd[i] * freqResolution;
     }
   }

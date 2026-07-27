@@ -48,10 +48,7 @@ export type EligibilityReason =
   | 'sample-gap-too-long'
   | 'sensor-error';
 
-export type EligibilityWarning =
-  | 'elevated-artifacts'
-  | 'limited-coverage'
-  | 'short-recording-sdnn';
+export type EligibilityWarning = 'elevated-artifacts' | 'limited-coverage' | 'short-recording-sdnn';
 
 export interface MeasurementEligibility {
   eligible: boolean;

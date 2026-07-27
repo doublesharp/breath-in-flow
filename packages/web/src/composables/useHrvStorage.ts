@@ -195,11 +195,7 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
     'sample-gap-too-long',
     'sensor-error',
   ];
-  const eligibilityWarnings = [
-    'elevated-artifacts',
-    'limited-coverage',
-    'short-recording-sdnn',
-  ];
+  const eligibilityWarnings = ['elevated-artifacts', 'limited-coverage', 'short-recording-sdnn'];
   const metricGroups = [
     'average-pulse',
     'rmssd',

@@ -43,12 +43,10 @@ describe('App.vue', () => {
     reloadPreferencesForTesting();
     vi.clearAllMocks();
     nativeAppMocks.backHandler = undefined;
-    nativeAppMocks.addListener.mockImplementation(
-      async (_event: string, handler: () => void) => {
-        nativeAppMocks.backHandler = handler;
-        return { remove: nativeAppMocks.remove };
-      }
-    );
+    nativeAppMocks.addListener.mockImplementation(async (_event: string, handler: () => void) => {
+      nativeAppMocks.backHandler = handler;
+      return { remove: nativeAppMocks.remove };
+    });
   });
 
   it('routes Android Back to Practice before exiting and removes its listener', async () => {

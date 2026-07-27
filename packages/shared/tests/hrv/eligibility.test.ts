@@ -63,11 +63,7 @@ describe('evaluateMeasurementEligibility', () => {
     const longGap = samplesFor(130);
     longGap.splice(50, 8);
 
-    const lowCoverageResult = evaluateMeasurementEligibility(
-      lowCoverage,
-      'morning-readiness',
-      130
-    );
+    const lowCoverageResult = evaluateMeasurementEligibility(lowCoverage, 'morning-readiness', 130);
     const longGapResult = evaluateMeasurementEligibility(longGap, 'morning-readiness', 130);
 
     expect(lowCoverageResult.coveragePercentage).toBeLessThan(85);

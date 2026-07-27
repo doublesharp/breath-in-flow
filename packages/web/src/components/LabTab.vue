@@ -370,9 +370,7 @@
             class="rounded-xl border border-white/10 bg-white/[0.04] p-4"
             aria-labelledby="measurement-quality-title"
           >
-            <h3 id="measurement-quality-title" class="font-semibold text-white">
-              Measurement quality
-            </h3>
+            <h3 id="measurement-quality-title" class="font-semibold text-white">Measurement quality</h3>
             <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
               <div>
                 <dt class="text-white/60">Time covered</dt>
@@ -396,15 +394,11 @@
               </div>
               <div>
                 <dt class="text-white/60">Corrected beats</dt>
-                <dd class="font-semibold text-white">
-                  {{ currentEligibility.artifactPercentage.toFixed(1) }}%
-                </dd>
+                <dd class="font-semibold text-white">{{ currentEligibility.artifactPercentage.toFixed(1) }}%</dd>
               </div>
               <div>
                 <dt class="text-white/60">Average signal quality</dt>
-                <dd class="font-semibold text-white">
-                  {{ (currentEligibility.meanQuality * 100).toFixed(0) }}%
-                </dd>
+                <dd class="font-semibold text-white">{{ (currentEligibility.meanQuality * 100).toFixed(0) }}%</dd>
               </div>
             </dl>
             <ul
@@ -416,9 +410,8 @@
               </li>
             </ul>
             <p class="mt-3 text-xs leading-relaxed text-white/60">
-              This is a phone-derived wellness estimate, not a medical measurement. Results with
-              limited coverage or elevated corrections remain in your history but are not used for
-              trend comparisons.
+              This is a phone-derived wellness estimate, not a medical measurement. Results with limited coverage or
+              elevated corrections remain in your history but are not used for trend comparisons.
             </p>
           </section>
           <FrequencySpectrum

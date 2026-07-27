@@ -1033,7 +1033,7 @@ describe('BreathingPractice.vue', () => {
     await new Promise((r) => setTimeout(r, 10));
     await nextTick();
 
-    expect(wrapper.text()).toContain('Find your resonance frequency');
+    expect(wrapper.text()).toContain('Explore your estimated breathing response');
     wrapper.unmount();
   });
 

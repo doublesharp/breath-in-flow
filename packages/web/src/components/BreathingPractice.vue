@@ -1623,9 +1623,7 @@ function finalizeCompletedSession(id: string) {
     storage.completeSession(id);
   } catch (error) {
     successMessage.value =
-      error instanceof Error
-        ? error.message
-        : 'The completed session could not be saved. Please try again.';
+      error instanceof Error ? error.message : 'The completed session could not be saved. Please try again.';
     showSuccessNotification.value = true;
     return;
   }
@@ -1644,9 +1642,7 @@ function saveAfterCheckIn(payload: { score: FeelingScore; comment?: string }) {
     if (!saved) throw new Error('Your check-in could not be saved. Please try again.');
   } catch (error) {
     afterCheckInError.value =
-      error instanceof Error
-        ? error.message
-        : 'Your check-in could not be saved. Please try again.';
+      error instanceof Error ? error.message : 'Your check-in could not be saved. Please try again.';
     return;
   }
   showAfterCheckIn.value = false;
