@@ -24,6 +24,14 @@ export default defineConfig({
         viewport: { width: 390, height: 844 },
       },
     },
+    {
+      name: 'desktop-chromium',
+      testMatch: /mobile-compliance\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+      },
+    },
   ],
   webServer: {
     command: 'pnpm dev --host 127.0.0.1 --port 4174',

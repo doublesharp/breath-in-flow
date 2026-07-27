@@ -101,7 +101,6 @@ test('onboarding and check-in actions remain reachable in landscape with enlarge
   const onboarding = page.getByRole('dialog', { name: 'What brings you here?' });
   await onboarding.getByTestId('goal-relax').check();
   const continueButton = onboarding.getByTestId('save-goal');
-  await continueButton.scrollIntoViewIfNeeded();
   await expect(continueButton).toBeInViewport();
   await reviewScreenshot(page, testInfo, '06-landscape-large-text-onboarding');
   await continueButton.click();
@@ -110,7 +109,6 @@ test('onboarding and check-in actions remain reachable in landscape with enlarge
   const checkIn = page.getByRole('dialog', { name: 'How do you feel right now?' });
   const skipButton = checkIn.getByTestId('checkin-skip');
   const submitButton = checkIn.getByTestId('checkin-submit');
-  await skipButton.scrollIntoViewIfNeeded();
   await expect(skipButton).toBeInViewport();
   await expect(submitButton).toBeInViewport();
   await reviewScreenshot(page, testInfo, '07-landscape-large-text-check-in');

@@ -1,6 +1,6 @@
 <template>
   <div
-    class="min-h-screen relative pb-24 md:pb-0"
+    class="min-h-screen relative pb-24 lg:pb-0"
     style="padding-bottom: max(6rem, env(safe-area-inset-bottom) + 5rem)"
   >
     <!-- Animated background -->
@@ -15,8 +15,11 @@
       ]"
       style="background: linear-gradient(135deg, rgb(38, 32, 27) 0%, rgb(32, 27, 22) 100%)"
     >
-      <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
-        <h1 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
+      <div
+        data-testid="app-header-content"
+        class="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between"
+      >
+        <h1 class="shrink-0 whitespace-nowrap text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
           <div
             class="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
             style="
@@ -58,7 +61,8 @@
         <div class="flex items-center gap-2">
           <!-- Desktop Navigation -->
           <nav
-            class="hidden md:flex gap-1 p-1.5 rounded-2xl"
+            data-testid="desktop-navigation"
+            class="hidden lg:flex gap-1.5 p-2 rounded-2xl"
             style="
               background: linear-gradient(135deg, rgba(70, 60, 52, 0.6) 0%, rgba(47, 40, 34, 0.8) 100%);
               border: 1px solid rgba(255, 255, 255, 0.06);
@@ -67,7 +71,7 @@
             <button
               @click="activeTab = 'practice'"
               :class="[
-                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
                 activeTab === 'practice' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
               :style="
@@ -99,7 +103,7 @@
             <button
               @click="activeTab = 'lab'"
               :class="[
-                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
                 activeTab === 'lab' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
               :style="
@@ -131,7 +135,7 @@
             <button
               @click="activeTab = 'history'"
               :class="[
-                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
                 activeTab === 'history' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
               :style="
@@ -163,7 +167,7 @@
             <button
               @click="activeTab = 'configs'"
               :class="[
-                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
                 activeTab === 'configs' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
               :style="
@@ -195,7 +199,7 @@
             <button
               @click="activeTab = 'analytics'"
               :class="[
-                'px-4 py-2 rounded-xl font-medium transition-all duration-400',
+                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
                 activeTab === 'analytics' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
               :style="
@@ -250,7 +254,8 @@
 
     <!-- Mobile Bottom Navigation -->
     <nav
-      class="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.06]"
+      data-testid="mobile-navigation"
+      class="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.06]"
       style="
         background: linear-gradient(180deg, rgba(38, 32, 27, 0.95) 0%, rgba(32, 27, 22, 0.98) 100%);
         backdrop-filter: blur(24px);
@@ -380,7 +385,7 @@
       </div>
     </nav>
 
-    <footer class="hidden md:block text-center py-8 text-slate-500 text-sm">
+    <footer class="hidden lg:block text-center py-8 text-slate-500 text-sm">
       <p class="text-slate-400">Breathing exercises for everyone</p>
       <p class="text-slate-600 mt-1.5 text-xs tracking-wide">Designed with guidance from physical therapy expertise</p>
     </footer>

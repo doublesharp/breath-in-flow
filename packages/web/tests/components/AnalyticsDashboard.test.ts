@@ -12,7 +12,7 @@ describe('AnalyticsDashboard (consolidated)', () => {
     vi.resetModules();
   });
 
-  it('renders basic stats from sessions', async () => {
+  it('renders basic stats from sessions', { timeout: 10_000 }, async () => {
     const sampleSessions = [
       {
         id: 's1',

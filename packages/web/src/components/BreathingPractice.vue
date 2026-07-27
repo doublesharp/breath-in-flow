@@ -507,7 +507,8 @@
         >
           <!-- Modal Header -->
           <div
-            class="sticky top-0 bg-slate-800/95 backdrop-blur-sm -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 py-3 sm:py-4 mb-4 sm:mb-6 border-b border-slate-700/50 flex items-center justify-between z-10"
+            data-testid="configure-practice-header"
+            class="sticky top-0 bg-slate-800/95 backdrop-blur-sm -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 py-4 sm:py-5 mb-6 sm:mb-8 border-b border-slate-700/50 flex items-center justify-between z-10"
           >
             <div class="flex items-center gap-3">
               <div
@@ -540,9 +541,10 @@
               </div>
             </div>
             <button
+              data-testid="close-practice-settings"
               @click="showConfigModal = false"
               aria-label="Close practice settings"
-              class="p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
+              class="min-h-11 min-w-11 p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

@@ -9,7 +9,7 @@
   >
     <div
       data-testid="goal-onboarding-card"
-      class="card-solid my-auto max-h-[calc(100dvh-2rem)] max-w-lg w-full overflow-y-auto overscroll-contain animate-scale-in"
+      class="card-solid my-auto max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg min-w-0 overflow-y-auto overscroll-contain animate-scale-in"
     >
       <h2 id="goal-onboarding-title" ref="titleRef" tabindex="-1" class="text-2xl font-bold text-white">
         What brings you here?
@@ -39,7 +39,10 @@
         </label>
       </fieldset>
 
-      <div class="mt-6 flex justify-end">
+      <div
+        data-testid="goal-onboarding-actions"
+        class="sticky bottom-0 z-10 -mx-6 -mb-6 mt-6 flex justify-end border-t border-white/[0.06] bg-[#2b241d]/95 px-6 py-4 backdrop-blur-sm"
+      >
         <button data-testid="save-goal" class="btn-primary" :disabled="selected === null" @click="save">
           Continue
         </button>

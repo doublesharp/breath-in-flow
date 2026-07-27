@@ -10,7 +10,7 @@
   >
     <div
       data-testid="checkin-card"
-      class="card-solid my-auto max-h-[calc(100dvh-2rem)] max-w-lg w-full overflow-y-auto overscroll-contain animate-scale-in"
+      class="card-solid my-auto max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg min-w-0 overflow-y-auto overscroll-contain animate-scale-in"
     >
       <h2 id="feeling-checkin-title" ref="titleRef" tabindex="-1" class="text-2xl font-bold text-white">
         {{ title }}
@@ -58,7 +58,10 @@
         {{ errorMessage }}
       </p>
 
-      <div class="mt-6 flex justify-end gap-3">
+      <div
+        data-testid="checkin-actions"
+        class="sticky bottom-0 z-10 -mx-6 -mb-6 mt-6 flex justify-end gap-3 border-t border-white/[0.06] bg-[#2b241d]/95 px-6 py-4 backdrop-blur-sm"
+      >
         <button data-testid="checkin-skip" class="btn-secondary" @click="skip">Skip</button>
         <button data-testid="checkin-submit" class="btn-primary" :disabled="selectedScore === null" @click="submit">
           {{ submitLabel }}

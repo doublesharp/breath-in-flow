@@ -35,8 +35,11 @@ describe('FeelingCheckIn', () => {
       expect(wrapper.text()).toContain(label);
     }
     expect(dialog.classes()).toContain('overflow-y-auto');
-    expect(wrapper.get('[data-testid="checkin-card"]').classes()).toContain(
-      'max-h-[calc(100dvh-2rem)]'
+    expect(wrapper.get('[data-testid="checkin-card"]').classes()).toEqual(
+      expect.arrayContaining(['max-h-[calc(100dvh-2rem)]', 'w-[calc(100vw-2rem)]', 'min-w-0'])
+    );
+    expect(wrapper.get('[data-testid="checkin-actions"]').classes()).toEqual(
+      expect.arrayContaining(['sticky', 'bottom-0', 'z-10'])
     );
   });
 

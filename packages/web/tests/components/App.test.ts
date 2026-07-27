@@ -129,6 +129,22 @@ describe('App.vue', () => {
     expect(wrapper.findAll('button').some((b) => b.text().includes('Analytics'))).toBeTruthy();
   });
 
+  it('uses the approved responsive header spacing', () => {
+    usePreferences().setGoal('RELAX');
+    const wrapper = mount(App, { global: { stubs: childStubs } });
+
+    expect(wrapper.get('[data-testid="app-header-content"]').classes()).toEqual(
+      expect.arrayContaining(['max-w-7xl', 'py-4', 'sm:py-5'])
+    );
+    expect(wrapper.get('[data-testid="desktop-navigation"]').classes()).toEqual(
+      expect.arrayContaining(['hidden', 'lg:flex', 'gap-1.5', 'p-2'])
+    );
+    expect(wrapper.get('[data-testid="mobile-navigation"]').classes()).toEqual(
+      expect.arrayContaining(['lg:hidden'])
+    );
+    expect(wrapper.get('header h1').classes()).toEqual(expect.arrayContaining(['shrink-0', 'whitespace-nowrap']));
+  });
+
   it('names both desktop and mobile pulse navigation consistently', () => {
     const wrapper = mount(App, {
       global: {

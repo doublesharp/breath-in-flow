@@ -452,6 +452,26 @@ describe('BreathingPractice flows', () => {
     wrapper.unmount();
   });
 
+  it('separates the configuration title from the form and provides a full close target', async () => {
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+      attachTo: document.body,
+    });
+    await wrapper.get('button[title="Configure practice"]').trigger('click');
+    await nextTick();
+
+    const header = document.querySelector('[data-testid="configure-practice-header"]');
+    const close = document.querySelector('[data-testid="close-practice-settings"]');
+    expect(header?.className).toContain('mb-6');
+    expect(header?.className).toContain('sm:mb-8');
+    expect(close?.className).toContain('min-h-11');
+    expect(close?.className).toContain('min-w-11');
+    wrapper.unmount();
+  });
+
   it('does not add a set when onSetComplete is called and no current set data exists', async () => {
     // do not start session
     const wrapper = mount(BreathingPractice, {

@@ -34,9 +34,11 @@ pixels at the small breakpoint and above.
 
 The desktop navigation container receives 8 pixels of internal padding and 6
 pixels between items. Navigation buttons use at least a 44-pixel height, 20
-pixels of horizontal padding, and 10 pixels of vertical padding. The logo,
-product name, navigation labels, selected state, responsive visibility, and
-scroll-hide behavior remain unchanged.
+pixels of horizontal padding, and 10 pixels of vertical padding. To prevent
+tablet and enlarged-text overflow, the desktop navigation begins at 1024
+pixels; narrower layouts use the existing bottom navigation. The logo, product
+name, navigation labels, selected state, and scroll-hide behavior remain
+unchanged.
 
 Every icon-only header control must expose at least a 44-by-44-pixel interactive
 area even when its visible icon remains smaller.

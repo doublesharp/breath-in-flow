@@ -39,6 +39,17 @@ body {
   background-attachment: fixed;
 }
 
+/* Keep every native action comfortably tappable across phone layouts. */
+button,
+select,
+input[type='range'] {
+  min-height: 44px;
+}
+
+button {
+  min-width: 44px;
+}
+
 /* Safe area padding for mobile devices with notches/home indicators */
 .safe-area-top {
   padding-top: env(safe-area-inset-top, 0px);
@@ -501,7 +512,15 @@ input[type='number']::-webkit-outer-spin-button {
 
 /* Toggle switch - smooth and organic */
 .toggle {
-  @apply relative inline-flex h-7 w-12 items-center rounded-full cursor-pointer;
+  @apply relative inline-flex h-11 w-12 items-center rounded-full cursor-pointer;
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  background: transparent;
+  border: 0;
+}
+
+.toggle::before {
+  @apply absolute left-0 top-2 h-7 w-12 rounded-full;
+  content: '';
   transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   background: linear-gradient(135deg, rgba(82, 72, 64, 0.85) 0%, rgba(54, 47, 40, 0.95) 100%);
   border: 1px solid rgba(180, 156, 130, 0.3);
@@ -513,6 +532,12 @@ input[type='number']::-webkit-outer-spin-button {
 }
 
 .toggle-enabled {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.toggle-enabled::before {
   background: linear-gradient(135deg, #6bb59c 0%, #7fc3aa 100%);
   border-color: transparent;
   box-shadow:
@@ -521,12 +546,17 @@ input[type='number']::-webkit-outer-spin-button {
 }
 
 .toggle-disabled {
+  background: transparent;
+  border: 0;
+}
+
+.toggle-disabled::before {
   background: linear-gradient(135deg, rgba(82, 72, 64, 0.85) 0%, rgba(54, 47, 40, 0.95) 100%);
   border: 1px solid rgba(180, 156, 130, 0.3);
 }
 
 .toggle-knob {
-  @apply inline-block h-5 w-5 rounded-full bg-white;
+  @apply relative z-1 inline-block h-5 w-5 rounded-full bg-white;
   transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.2),
