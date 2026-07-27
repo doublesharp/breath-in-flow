@@ -84,27 +84,20 @@ export function computeResonanceMetrics(
       for (let c = 0; c < numCycles; c++) {
         const cycleStart = startTime + c * cycleDurationSec;
         const cycleEnd = cycleStart + cycleDurationSec;
-        const inhaleEnd = cycleStart + cycleDurationSec * 0.4;
-
-        // Collect HR values in inhale (~first 40%) and exhale (~last 60%)
-        const inhaleHR: number[] = [];
-        const exhaleHR: number[] = [];
+        const cycleHR: number[] = [];
 
         for (let i = 0; i < timestampsSec.length; i++) {
           const t = timestampsSec[i];
           if (t >= cycleStart && t < cycleEnd) {
-            if (t < inhaleEnd) {
-              inhaleHR.push(instantaneousHR[i]);
-            } else {
-              exhaleHR.push(instantaneousHR[i]);
-            }
+            cycleHR.push(instantaneousHR[i]);
           }
         }
 
-        if (inhaleHR.length > 0 && exhaleHR.length > 0) {
-          const maxHR = Math.max(...inhaleHR);
-          const minHR = Math.min(...exhaleHR);
-          amplitudes.push(maxHR - minHR);
+        if (cycleHR.length >= 2) {
+          // The measurement does not retain absolute pacer phase. A full-cycle
+          // range is invariant to where the retained sample window starts,
+          // unlike assuming that its first 40% is always inhale.
+          amplitudes.push(Math.max(...cycleHR) - Math.min(...cycleHR));
         }
       }
 

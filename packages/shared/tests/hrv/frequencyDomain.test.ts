@@ -4,6 +4,7 @@ import {
   computeFrequencyDomainMetrics,
   linearDetrend,
   hanningWindow,
+  integrateFrequencyBand,
 } from '../../src/hrv/frequencyDomain.js';
 import { analyzeRawHRV } from '../../src/hrv/index.js';
 import { FREQUENCY_BANDS } from '../../src/hrv/types.js';
@@ -186,6 +187,17 @@ describe('hanningWindow', () => {
 });
 
 describe('computeFrequencyDomainMetrics', () => {
+  it('assigns the shared 0.15 Hz boundary to HF only', () => {
+    const frequencies = [0.149, 0.15, 0.151];
+    const power = [1, 10, 1];
+
+    const lf = integrateFrequencyBand(frequencies, power, 0.04, 0.15, 0.001, false);
+    const hf = integrateFrequencyBand(frequencies, power, 0.15, 0.4, 0.001, true);
+
+    expect(lf).toBeCloseTo(0.001);
+    expect(hf).toBeCloseTo(0.011);
+  });
+
   it('returns only an unavailable reason when a spectrum cannot be computed', () => {
     const result = computeFrequencyDomainMetrics([800, 810, 790], [0, 800, 1610]);
 

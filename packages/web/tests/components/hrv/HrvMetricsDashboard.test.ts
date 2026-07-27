@@ -76,11 +76,11 @@ describe('HrvMetricsDashboard', () => {
     expect(wrapper.exists()).toBe(true);
   });
 
-  it('displays Heart Rate section header', () => {
+  it('displays Pulse Rate section header', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: sampleAnalysis },
     });
-    expect(wrapper.text()).toContain('Heart Rate');
+    expect(wrapper.text()).toContain('Pulse Rate');
   });
 
   it('uses pulse-variability-accurate copy for time-domain metrics', () => {
@@ -98,32 +98,32 @@ describe('HrvMetricsDashboard', () => {
     expect(wrapper.text()).toContain('Frequency-Domain');
   });
 
-  it('displays Resonance section header', () => {
+  it('labels resonance values as an estimated breathing response', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: sampleAnalysis },
     });
-    expect(wrapper.text()).toContain('Resonance');
+    expect(wrapper.text()).toContain('Estimated Breathing Response');
   });
 
-  it('displays MIN HR card', () => {
+  it('displays MIN PULSE card', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: sampleAnalysis },
     });
-    expect(wrapper.text()).toContain('MIN HR');
+    expect(wrapper.text()).toContain('MIN PULSE');
   });
 
-  it('displays MAX HR card', () => {
+  it('displays MAX PULSE card', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: sampleAnalysis },
     });
-    expect(wrapper.text()).toContain('MAX HR');
+    expect(wrapper.text()).toContain('MAX PULSE');
   });
 
-  it('displays AVG HR card', () => {
+  it('displays AVG PULSE card', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: sampleAnalysis },
     });
-    expect(wrapper.text()).toContain('AVG HR');
+    expect(wrapper.text()).toContain('AVG PULSE');
   });
 
   it('displays RMSSD card', () => {
@@ -223,7 +223,7 @@ describe('HrvMetricsDashboard', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: sampleAnalysis },
     });
-    expect(wrapper.text()).toContain('48.0');
+    expect(wrapper.text()).toContain('48');
   });
 
   it('displays correct RMSSD value', () => {
@@ -231,7 +231,7 @@ describe('HrvMetricsDashboard', () => {
       props: { analysis: sampleAnalysis },
     });
     const rmssdCard = wrapper.find('[data-label="RMSSD"]');
-    expect(rmssdCard.find('[data-part="value"]').text()).toBe('127.38');
+    expect(rmssdCard.find('[data-part="value"]').text()).toBe('127.4');
     expect(rmssdCard.find('[data-part="unit"]').text()).toBe('ms');
   });
 
@@ -246,8 +246,8 @@ describe('HrvMetricsDashboard', () => {
     const wrapper = mount(HrvMetricsDashboard, {
       props: { analysis: sampleAnalysis, compact: true },
     });
-    expect(wrapper.text()).toContain('Heart Rate');
-    expect(wrapper.text()).toContain('Resonance');
+    expect(wrapper.text()).toContain('Pulse Rate');
+    expect(wrapper.text()).toContain('Estimated Breathing Response');
   });
 
   it('explains when frequency metrics are unavailable instead of showing zero cards', () => {

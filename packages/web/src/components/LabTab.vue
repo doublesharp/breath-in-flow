@@ -361,9 +361,66 @@
             tabindex="-1"
             aria-live="polite"
           >
-            Pulse variability Results
+            Pulse Variability Results
           </h2>
           <HrvMetricsDashboard :analysis="currentAnalysis" />
+          <section
+            v-if="currentEligibility"
+            data-testid="measurement-quality"
+            class="rounded-xl border border-white/10 bg-white/[0.04] p-4"
+            aria-labelledby="measurement-quality-title"
+          >
+            <h3 id="measurement-quality-title" class="font-semibold text-white">
+              Measurement quality
+            </h3>
+            <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt class="text-white/60">Time covered</dt>
+                <dd class="font-semibold text-white">
+                  {{
+                    currentEligibility.coveragePercentage === undefined
+                      ? 'Not recorded'
+                      : `${currentEligibility.coveragePercentage.toFixed(0)}%`
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-white/60">Longest sample gap</dt>
+                <dd class="font-semibold text-white">
+                  {{
+                    currentEligibility.maximumGapSeconds === undefined
+                      ? 'Not recorded'
+                      : `${currentEligibility.maximumGapSeconds.toFixed(1)} s`
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-white/60">Corrected beats</dt>
+                <dd class="font-semibold text-white">
+                  {{ currentEligibility.artifactPercentage.toFixed(1) }}%
+                </dd>
+              </div>
+              <div>
+                <dt class="text-white/60">Average signal quality</dt>
+                <dd class="font-semibold text-white">
+                  {{ (currentEligibility.meanQuality * 100).toFixed(0) }}%
+                </dd>
+              </div>
+            </dl>
+            <ul
+              v-if="currentEligibility.warnings.length > 0"
+              class="mt-3 space-y-2 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] p-3 text-sm text-amber-100"
+            >
+              <li v-for="warning in currentEligibility.warnings" :key="warning">
+                {{ eligibilityWarningMessage(warning) }}
+              </li>
+            </ul>
+            <p class="mt-3 text-xs leading-relaxed text-white/60">
+              This is a phone-derived wellness estimate, not a medical measurement. Results with
+              limited coverage or elevated corrections remain in your history but are not used for
+              trend comparisons.
+            </p>
+          </section>
           <FrequencySpectrum
             v-if="currentAnalysis.frequencyDomain.available"
             :spectrum="currentAnalysis.frequencyDomain.value.spectrum"
@@ -403,13 +460,13 @@
 
     <!-- Section B: Resonance Frequency Assessment -->
     <div class="space-y-3">
-      <h2 class="text-lg font-bold text-white">Resonance Frequency</h2>
+      <h2 class="text-lg font-bold text-white">Estimated Breathing Response</h2>
 
       <!-- Latest assessment summary -->
       <div v-if="latestAssessment" class="rounded-xl p-3 bg-white/5 border border-white/5">
         <div class="flex items-center justify-between">
           <div>
-            <div class="text-xs text-white/50">Your resonance frequency</div>
+            <div class="text-xs text-white/60">Suggested practice rate</div>
             <div class="text-lg font-bold text-emerald-400">{{ latestAssessment.selectedRate.toFixed(1) }} BPM</div>
           </div>
           <div class="text-xs text-white/30">{{ formatDate(latestAssessment.completedAt) }}</div>
@@ -422,8 +479,8 @@
       >
         <span class="text-xl">🎯</span>
         <div class="flex-1">
-          <div class="font-semibold text-white text-sm">Find My Resonance Frequency</div>
-          <div class="text-xs text-white/40">5 breathing trials to find your optimal rate</div>
+          <div class="font-semibold text-white text-sm">Estimate My Breathing Response</div>
+          <div class="text-xs text-white/60">5 breathing trials to suggest a practice rate</div>
         </div>
         <span class="text-xs text-white/30">~25 min</span>
       </button>
@@ -709,6 +766,10 @@ async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementSt
       onQualityChange: (q: number) => {
         sensorQuality.value = Math.max(sensorQuality.value, q);
       },
+      onError: (error: Error) => {
+        measurementSession?.reportSensorError(error);
+        addDebugLine(`CAMERA ERROR: ${error.message}`);
+      },
     } satisfies PPGCallbacks;
     scgService.setCallbacks({
       onIBI: (sample) => {
@@ -717,6 +778,10 @@ async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementSt
       onHeartRateEstimate: recordHeartRateEstimate,
       onQualityChange: (q: number) => {
         sensorQuality.value = Math.max(sensorQuality.value, q);
+      },
+      onError: (error: Error) => {
+        measurementSession?.reportSensorError(error);
+        addDebugLine(`MOTION ERROR: ${error.message}`);
       },
     });
     return measurementSession.start({
@@ -755,6 +820,7 @@ async function startSensor(protocol: MeasurementProtocol): Promise<MeasurementSt
         addDebugLine(`Quality: ${(q * 100).toFixed(0)}%`);
       },
       onError: (err: Error) => {
+        measurementSession?.reportSensorError(err);
         addDebugLine(`ERROR: ${err.message}`);
       },
     };
@@ -1236,7 +1302,24 @@ function measurementEligibilityMessage(reasons: string[]): string {
   if (reasons.includes('low-signal-quality') || reasons.includes('too-many-artifacts')) {
     return 'Signal quality was too low for a reliable result. Reposition the sensor, stay still, and try again.';
   }
+  if (
+    reasons.includes('insufficient-coverage') ||
+    reasons.includes('sample-gap-too-long') ||
+    reasons.includes('sensor-error')
+  ) {
+    return 'The sensor stream was interrupted or incomplete. Keep the app open, reposition the sensor, and try again.';
+  }
   return 'There were not enough clean detected beats for a reliable result. Reposition the sensor and try again.';
+}
+
+function eligibilityWarningMessage(warning: MeasurementEligibility['warnings'][number]): string {
+  if (warning === 'elevated-artifacts') {
+    return 'More beats than usual needed correction, so this reading is not used for trend comparisons.';
+  }
+  if (warning === 'limited-coverage') {
+    return 'The sensor covered less than 95% of the recording, so this reading is not used for trend comparisons.';
+  }
+  return 'SDNN from a short recording is shown only as a short-recording estimate.';
 }
 
 function poincareUnavailableMessage(reason: PoincareUnavailableReason): string {

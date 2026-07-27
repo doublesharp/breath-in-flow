@@ -126,16 +126,20 @@ function generateFrequencyGrid(start: number, end: number, step: number): number
  * Integrate power within a frequency band.
  * bandPower = sum of psd values in band * frequency_resolution
  */
-function integrateBand(
+export function integrateFrequencyBand(
   frequencies: number[],
   psd: number[],
   low: number,
   high: number,
-  freqResolution: number
+  freqResolution: number,
+  includeHigh: boolean
 ): number {
   let power = 0;
   for (let i = 0; i < frequencies.length; i++) {
-    if (frequencies[i] >= low && frequencies[i] <= high) {
+    if (
+      frequencies[i] >= low &&
+      (includeHigh ? frequencies[i] <= high : frequencies[i] < high)
+    ) {
       power += psd[i] * freqResolution;
     }
   }
@@ -243,19 +247,21 @@ export function computeFrequencyDomainMetrics(
   const psd = lombScargle(timestampsSec, processedRR, frequencies);
 
   // Integrate band powers
-  const lfPower = integrateBand(
+  const lfPower = integrateFrequencyBand(
     frequencies,
     psd,
     FREQUENCY_BANDS.LF.low,
     FREQUENCY_BANDS.LF.high,
-    FREQ_STEP
+    FREQ_STEP,
+    false
   );
-  const hfPower = integrateBand(
+  const hfPower = integrateFrequencyBand(
     frequencies,
     psd,
     FREQUENCY_BANDS.HF.low,
     FREQUENCY_BANDS.HF.high,
-    FREQ_STEP
+    FREQ_STEP,
+    true
   );
   const spectrumPower = psd.reduce((sum, power) => sum + power, 0);
   if (!Number.isFinite(spectrumPower) || spectrumPower <= 1e-12) {

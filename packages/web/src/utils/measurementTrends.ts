@@ -12,6 +12,12 @@ export type ComparableMetric = 'rmssd' | 'average-pulse' | 'frequency-domain';
 function hasAvailableMetric(measurement: HrvMeasurement, metric: ComparableMetric): boolean {
   const eligibility = measurement.eligibility;
   if (!eligibility?.eligible || !eligibility.availableMetrics.includes(metric)) return false;
+  if (
+    eligibility.warnings.includes('elevated-artifacts') ||
+    eligibility.warnings.includes('limited-coverage')
+  ) {
+    return false;
+  }
 
   if (metric === 'rmssd') return Number.isFinite(measurement.analysis.timeDomain.rmssd);
   if (metric === 'average-pulse') return Number.isFinite(measurement.analysis.timeDomain.meanHR);

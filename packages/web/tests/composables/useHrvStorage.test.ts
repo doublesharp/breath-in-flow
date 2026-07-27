@@ -186,6 +186,8 @@ describe('useHrvStorage', () => {
           meanQuality: 0.9,
           detectedBeatCount: 120,
           observedDurationSeconds: 120,
+          coveragePercentage: 97,
+          maximumGapSeconds: 1.2,
         }),
         sampleProvenance: reactive<NonNullable<HrvMeasurement['sampleProvenance']>>({
           sources: ['ppg'],
@@ -199,7 +201,12 @@ describe('useHrvStorage', () => {
       expect(stored).toMatchObject({
         id: measurement.id,
         acquisitionSources: ['ppg'],
-        eligibility: { eligible: true, detectedBeatCount: 120 },
+        eligibility: {
+          eligible: true,
+          detectedBeatCount: 120,
+          coveragePercentage: 97,
+          maximumGapSeconds: 1.2,
+        },
         sampleProvenance: { sources: ['ppg'], detectionMethods: ['peak-detected'] },
       });
       expect(stored?.analysis).toEqual(measurement.analysis);

@@ -266,6 +266,59 @@ describe('LabTab.vue', () => {
     wrapper.unmount();
   });
 
+  it('shows measurement coverage, artifact cautions, and a nearby non-medical note', async () => {
+    const wrapper = mount(LabTab, { attachTo: document.body });
+    const vm = wrapper.vm as unknown as {
+      showResults: boolean;
+      currentAnalysis: HRVAnalysis | null;
+      currentEligibility: {
+        eligible: boolean;
+        reasons: string[];
+        warnings: string[];
+        availableMetrics: string[];
+        artifactPercentage: number;
+        meanQuality: number;
+        detectedBeatCount: number;
+        observedDurationSeconds: number;
+        coveragePercentage: number;
+        maximumGapSeconds: number;
+      } | null;
+    };
+    vm.currentAnalysis = analysisWithPoincareUnavailable('protocol-not-supported');
+    vm.currentEligibility = {
+      eligible: true,
+      reasons: [],
+      warnings: ['elevated-artifacts', 'limited-coverage'],
+      availableMetrics: ['average-pulse', 'rmssd'],
+      artifactPercentage: 6.2,
+      meanQuality: 0.82,
+      detectedBeatCount: 112,
+      observedDurationSeconds: 120,
+      coveragePercentage: 91,
+      maximumGapSeconds: 2.4,
+    };
+    vm.showResults = true;
+    await wrapper.vm.$nextTick();
+
+    const quality = document.body.querySelector('[data-testid="measurement-quality"]');
+    expect(quality?.textContent).toContain('91%');
+    expect(quality?.textContent).toContain('2.4 s');
+    expect(quality?.textContent).toContain('6.2%');
+    expect(quality?.textContent).toContain('not a medical measurement');
+    expect(quality?.textContent).toContain('not used for trend comparisons');
+
+    wrapper.unmount();
+  });
+
+  it('uses conservative breathing-response wording', () => {
+    const wrapper = mount(LabTab);
+
+    expect(wrapper.text()).toContain('Estimated Breathing Response');
+    expect(wrapper.text()).toContain('suggest a practice rate');
+    expect(wrapper.text()).not.toContain('optimal rate');
+    expect(wrapper.text()).not.toContain('Your resonance frequency');
+  });
+
   it('labels the duration control and enforces the selected protocol minimum', async () => {
     const wrapper = mount(LabTab, { attachTo: document.body });
     await wrapper.find('[data-testid="protocol-quick-check"]').trigger('click');
@@ -592,7 +645,7 @@ describe('LabTab.vue', () => {
     expect(wrapper.text()).not.toMatch(/\bBeta\b/i);
   });
 
-  it('shows RF assessment section with "Find My Resonance Frequency" button', () => {
+  it('shows the estimated breathing-response assessment action', () => {
     const wrapper = shallowMount(LabTab, {
       global: {
         stubs: {
@@ -606,8 +659,8 @@ describe('LabTab.vue', () => {
       },
     });
 
-    expect(wrapper.text()).toContain('Resonance Frequency');
-    expect(wrapper.text()).toContain('Find My Resonance Frequency');
+    expect(wrapper.text()).toContain('Estimated Breathing Response');
+    expect(wrapper.text()).toContain('Estimate My Breathing Response');
   });
 
   it('shows recent results section', () => {

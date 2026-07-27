@@ -1,28 +1,28 @@
 <template>
   <div class="hrv-metrics-dashboard" :class="compact ? 'space-y-3' : 'space-y-5'">
     <template v-if="analysis">
-      <!-- Heart Rate Section -->
+      <!-- Pulse Rate Section -->
       <section>
-        <h4 class="section-header">Heart Rate</h4>
+        <h4 class="section-header">Pulse Rate</h4>
         <div :class="gridClass">
           <MetricCard
             :value="fmtBPM(analysis.timeDomain.minHR)"
             unit="BPM"
-            label="MIN HR"
+            label="MIN PULSE"
             color="blue"
             :compact="compact"
           />
           <MetricCard
             :value="fmtBPM(analysis.timeDomain.maxHR)"
             unit="BPM"
-            label="MAX HR"
+            label="MAX PULSE"
             color="red"
             :compact="compact"
           />
           <MetricCard
             :value="fmtBPM(analysis.timeDomain.meanHR)"
             unit="BPM"
-            label="AVG HR"
+            label="AVG PULSE"
             color="green"
             :compact="compact"
           />
@@ -116,9 +116,9 @@
         </div>
       </section>
 
-      <!-- Resonance Section -->
+      <!-- Estimated breathing response section -->
       <section>
-        <h4 class="section-header">Resonance</h4>
+        <h4 class="section-header">Estimated Breathing Response</h4>
         <div v-if="analysis.resonance.available" :class="gridClass">
           <MetricCard
             :value="fmtBPM(analysis.resonance.value.peakToTroughAmplitude)"
@@ -187,10 +187,10 @@ const props = withDefaults(
 const gridClass = computed(() => (props.compact ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 sm:grid-cols-3 gap-3'));
 
 function fmtBPM(v: number) {
-  return v.toFixed(1);
+  return v.toFixed(0);
 }
 function fmtMs(v: number) {
-  return v.toFixed(2);
+  return v.toFixed(1);
 }
 function fmtPct(v: number) {
   return v.toFixed(1);
@@ -199,7 +199,7 @@ function fmtRatio(v: number) {
   return v.toFixed(2);
 }
 function fmtHz(v: number) {
-  return v.toFixed(3);
+  return v.toFixed(2);
 }
 function fmtDecimal(v: number) {
   return v.toFixed(2);

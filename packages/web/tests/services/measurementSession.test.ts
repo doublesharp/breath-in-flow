@@ -109,6 +109,41 @@ describe('MeasurementSession', () => {
     expect(session.getResult().activeSources).toEqual(['ppg']);
   });
 
+  it('records only sensors that contributed retained detected samples', async () => {
+    const camera = sensor({ ok: true });
+    const motion = sensor({ ok: true });
+    const session = new MeasurementSession({
+      protocol: 'quick-check',
+      now: () => nowMs,
+    });
+    await session.start({ ppg: camera, scg: motion });
+
+    for (let index = 0; index < 70; index++) {
+      session.addDetectedSample(detectedSample(index * 1_000, 'ppg'));
+    }
+    const result = session.stop();
+
+    expect(result.activeSources).toEqual(['ppg']);
+  });
+
+  it('makes a completed recording ineligible after an unresolved sensor error', async () => {
+    const camera = sensor({ ok: true });
+    const session = new MeasurementSession({
+      protocol: 'quick-check',
+      now: () => nowMs,
+    });
+    await session.start({ ppg: camera });
+    for (let index = 0; index < 70; index++) {
+      session.addDetectedSample(detectedSample(index * 1_000));
+    }
+
+    session.reportSensorError(new Error('Camera stream stopped unexpectedly.'));
+    const result = session.stop();
+
+    expect(result.eligibility?.reasons).toContain('sensor-error');
+    expect(result.errorMessage).toContain('Camera stream stopped');
+  });
+
   it('keeps autocorrelation estimates out of the detected sample array', async () => {
     const camera = sensor({ ok: true });
     const session = new MeasurementSession({ protocol: 'quick-check', now: () => nowMs });

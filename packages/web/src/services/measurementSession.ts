@@ -60,6 +60,7 @@ export class MeasurementSession {
   private estimates: HeartRateEstimate[] = [];
   private activeSensors = new Map<MeasurementSensorSource, MeasurementSensorAdapter>();
   private acquisitionSources: MeasurementSensorSource[] = [];
+  private contributingSources = new Set<MeasurementSensorSource>();
   private eligibility?: MeasurementEligibility;
   private errorMessage?: string;
   private startedAtMs = 0;
@@ -140,6 +141,11 @@ export class MeasurementSession {
     }
 
     this.samples.push(sample);
+    if (sample.provenance.source === 'fused') {
+      for (const source of this.activeSensors.keys()) this.contributingSources.add(source);
+    } else {
+      this.contributingSources.add(sample.provenance.source);
+    }
     if (this.state === 'acquiring') {
       this.setState('measuring');
     }
@@ -149,6 +155,11 @@ export class MeasurementSession {
   addHeartRateEstimate(estimate: HeartRateEstimate): void {
     if (this.state !== 'acquiring' && this.state !== 'measuring') return;
     this.estimates.push(estimate);
+  }
+
+  reportSensorError(error: Error): void {
+    if (this.state !== 'acquiring' && this.state !== 'measuring') return;
+    this.errorMessage = error.message || 'A sensor error interrupted measurement quality.';
   }
 
   stop(finalSamples?: IBISample[]): MeasurementSessionResult {
@@ -162,12 +173,12 @@ export class MeasurementSession {
     }
 
     this.clearTimers();
-    this.snapshotActiveSources();
-    this.stopActiveSensors();
 
     if (finalSamples) {
       this.samples = [...finalSamples];
     }
+    this.snapshotActiveSources();
+    this.stopActiveSensors();
 
     const sampleSpanSeconds =
       this.samples.length > 1
@@ -176,7 +187,8 @@ export class MeasurementSession {
     this.eligibility = evaluateMeasurementEligibility(
       this.samples,
       this.protocol,
-      sampleSpanSeconds
+      sampleSpanSeconds,
+      { hasUnresolvedSensorError: Boolean(this.errorMessage) }
     );
     this.setState('complete');
     return this.getResult();
@@ -233,7 +245,21 @@ export class MeasurementSession {
   }
 
   private snapshotActiveSources(): void {
-    this.acquisitionSources = [...this.activeSensors.keys()];
+    const retainedSources = new Set<MeasurementSensorSource>();
+    for (const sample of this.samples) {
+      const source = sample.provenance?.source;
+      if (source === 'ppg' || source === 'scg') {
+        retainedSources.add(source);
+      } else if (source === 'fused') {
+        for (const activeSource of this.activeSensors.keys()) retainedSources.add(activeSource);
+      }
+    }
+    this.acquisitionSources =
+      retainedSources.size > 0
+        ? [...retainedSources]
+        : this.contributingSources.size > 0
+          ? [...this.contributingSources]
+          : [...this.activeSensors.keys()];
   }
 
   private refreshNoDataTimeout(): void {

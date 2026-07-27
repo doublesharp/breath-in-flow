@@ -44,9 +44,14 @@ export type EligibilityReason =
   | 'estimated-samples'
   | 'low-signal-quality'
   | 'too-many-artifacts'
+  | 'insufficient-coverage'
+  | 'sample-gap-too-long'
   | 'sensor-error';
 
-export type EligibilityWarning = 'elevated-artifacts' | 'short-recording-sdnn';
+export type EligibilityWarning =
+  | 'elevated-artifacts'
+  | 'limited-coverage'
+  | 'short-recording-sdnn';
 
 export interface MeasurementEligibility {
   eligible: boolean;
@@ -57,6 +62,9 @@ export interface MeasurementEligibility {
   meanQuality: number;
   detectedBeatCount: number;
   observedDurationSeconds: number;
+  // Optional only for records created before temporal-coverage tracking.
+  coveragePercentage?: number;
+  maximumGapSeconds?: number;
 }
 
 export interface TimeDomainMetrics {

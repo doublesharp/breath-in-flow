@@ -1006,7 +1006,8 @@
           @click="$emit('switch-tab', 'lab')"
           class="text-xs text-white/40 hover:text-emerald-400 transition-colors"
         >
-          Find your resonance frequency in the <span class="font-medium text-white/60">Lab</span> →
+          Explore your estimated breathing response in the
+          <span class="font-medium text-white/60">Lab</span> →
         </button>
         <button @click="dismissLabCta" class="text-white/20 hover:text-white/50 ml-3 shrink-0" aria-label="Dismiss">
           <svg

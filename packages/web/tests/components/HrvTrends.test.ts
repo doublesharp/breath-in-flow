@@ -113,6 +113,15 @@ function makeMeasurement(
 }
 
 describe('HrvTrends', () => {
+  it('labels phone measurements as average pulse rate rather than resting heart rate', () => {
+    const wrapper = mount(HrvTrends, {
+      props: { measurements: [makeMeasurement()] },
+    });
+
+    expect(wrapper.text()).toContain('Average Pulse Rate');
+    expect(wrapper.text()).not.toContain('Resting Heart Rate');
+  });
+
   it('renders without crashing with empty measurements', () => {
     const wrapper = mount(HrvTrends, {
       props: { measurements: [] },
@@ -204,7 +213,7 @@ describe('HrvTrends', () => {
       {
         canvasTestId: 'hr-canvas',
         tableId: 'hr-trend-data',
-        metric: 'Resting heart rate (BPM)',
+        metric: 'Average pulse rate (BPM)',
         date: '2026-07-19',
         value: '67 BPM',
       },

@@ -108,10 +108,10 @@
         </table>
       </div>
 
-      <!-- Resting Heart Rate Trend -->
+      <!-- Average pulse rate trend -->
       <div class="glass rounded-xl p-4" data-testid="hr-chart-container">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Resting Heart Rate</h3>
+          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Average Pulse Rate</h3>
           <span class="text-xs text-slate-500">{{ pulseMeasurements.length }} comparable readings</span>
         </div>
         <div class="relative" style="height: 160px">
@@ -125,12 +125,12 @@
         </div>
         <table id="hr-trend-data" class="sr-only">
           <caption>
-            Resting heart rate trend plotted data
+            Average pulse rate trend plotted data
           </caption>
           <thead>
             <tr>
               <th scope="col">Date</th>
-              <th scope="col">Resting heart rate (BPM)</th>
+              <th scope="col">Average pulse rate (BPM)</th>
             </tr>
           </thead>
           <tbody>

@@ -54,6 +54,37 @@ describe('evaluateMeasurementEligibility', () => {
       'sdnn-short-recording',
     ]);
     expect(result.availableMetrics).not.toContain('frequency-domain');
+    expect(result.coveragePercentage).toBeGreaterThanOrEqual(99);
+    expect(result.maximumGapSeconds).toBeCloseTo(0.8, 5);
+  });
+
+  it('rejects poor temporal coverage and long sampling gaps', () => {
+    const lowCoverage = samplesFor(130).filter((_sample, index) => index % 4 !== 0);
+    const longGap = samplesFor(130);
+    longGap.splice(50, 8);
+
+    const lowCoverageResult = evaluateMeasurementEligibility(
+      lowCoverage,
+      'morning-readiness',
+      130
+    );
+    const longGapResult = evaluateMeasurementEligibility(longGap, 'morning-readiness', 130);
+
+    expect(lowCoverageResult.coveragePercentage).toBeLessThan(85);
+    expect(lowCoverageResult.reasons).toContain('insufficient-coverage');
+    expect(longGapResult.maximumGapSeconds).toBeGreaterThan(5);
+    expect(longGapResult.reasons).toContain('sample-gap-too-long');
+  });
+
+  it('warns on limited but usable temporal coverage', () => {
+    const limitedCoverage = samplesFor(130).filter((_sample, index) => index % 10 !== 0);
+    const result = evaluateMeasurementEligibility(limitedCoverage, 'morning-readiness', 130);
+
+    expect(result.eligible).toBe(true);
+    expect(result.coveragePercentage).toBeGreaterThanOrEqual(85);
+    expect(result.coveragePercentage).toBeLessThan(95);
+    expect(result.warnings).toContain('limited-coverage');
+    expect(result.reasons).not.toContain('sample-gap-too-long');
   });
 
   it('rejects autocorrelation estimates even when duration and quality pass', () => {
@@ -155,6 +186,8 @@ describe('evaluateMeasurementEligibility', () => {
     expect(result.reasons).toEqual(['duration-too-short', 'low-signal-quality']);
     expect(result.artifactPercentage).toBe(0);
     expect(result.meanQuality).toBe(0);
+    expect(result.coveragePercentage).toBe(0);
+    expect(result.maximumGapSeconds).toBe(0);
   });
 
   it('does not preprocess non-finite sample quality as an artifact series', () => {

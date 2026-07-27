@@ -184,6 +184,24 @@ describe('computeResonanceMetrics', () => {
     expect(result.peakToTroughAmplitude).toBeGreaterThanOrEqual(0);
   });
 
+  it('keeps peak-to-trough amplitude stable across breathing-phase offsets', () => {
+    const cycleMs = 10_000;
+    const makeWindow = (startMs: number) => {
+      const timestamps = Array.from({ length: 61 }, (_, index) => startMs + index * 500);
+      const rrIntervals = timestamps.map((timestamp) => {
+        const heartRate = 65 + 8 * Math.sin((2 * Math.PI * timestamp) / cycleMs);
+        return 60_000 / heartRate;
+      });
+      return computeResonanceMetrics(rrIntervals, timestamps, 6, []);
+    };
+
+    const aligned = makeWindow(0);
+    const shifted = makeWindow(2_500);
+
+    expect(aligned.peakToTroughAmplitude).toBeGreaterThan(15);
+    expect(shifted.peakToTroughAmplitude).toBeCloseTo(aligned.peakToTroughAmplitude, 1);
+  });
+
   it('noisy data has lower smoothness than clean sinusoidal data', () => {
     const { rrIntervals: cleanRR, timestamps: cleanTS } = generateCleanSinusoidalRR(
       1000,

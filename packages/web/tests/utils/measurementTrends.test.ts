@@ -50,6 +50,8 @@ function makeMeasurement(
       meanQuality: 0.9,
       detectedBeatCount: 120,
       observedDurationSeconds: 120,
+      coveragePercentage: 99,
+      maximumGapSeconds: 1,
     },
     ...overrides,
   };
@@ -146,6 +148,21 @@ describe('measurement trends', () => {
       'latest',
     ]);
     expect(buildWithinPersonInsights(measurements)).toEqual([]);
+  });
+
+  it('excludes elevated-artifact results from directional comparisons', () => {
+    const elevated = makeMeasurement('elevated', '2026-07-02T08:00:00Z', {
+      eligibility: {
+        ...makeMeasurement('base', '2026-07-01T08:00:00Z').eligibility!,
+        warnings: ['elevated-artifacts'],
+        artifactPercentage: 6,
+      },
+    });
+    const anchor = makeMeasurement('anchor', '2026-07-03T08:00:00Z');
+
+    expect(getComparableMeasurements([elevated, anchor], anchor).map(({ id }) => id)).toEqual([
+      'anchor',
+    ]);
   });
 
   it('compares the actual acquisition signature instead of the selected dual mode', () => {

@@ -18,6 +18,9 @@ const MINIMUM_DURATION_SECONDS: Record<MeasurementProtocol, number> = {
 };
 
 export const MAX_PLAUSIBLE_IBI_MS = 2_000;
+export const MINIMUM_COVERAGE_PERCENTAGE = 85;
+export const COVERAGE_WARNING_PERCENTAGE = 95;
+export const MAXIMUM_SAMPLE_GAP_SECONDS = 5;
 
 export interface EligibilityOptions {
   hasUnresolvedSensorError?: boolean;
@@ -42,6 +45,42 @@ function metricGroupsFor(
   }
 }
 
+function temporalCoverage(
+  samples: IBISample[],
+  observedDurationSeconds: number
+): { coveragePercentage: number; maximumGapSeconds: number } {
+  if (
+    samples.length < 2 ||
+    !Number.isFinite(observedDurationSeconds) ||
+    observedDurationSeconds <= 0
+  ) {
+    return { coveragePercentage: 0, maximumGapSeconds: 0 };
+  }
+
+  let coveredMilliseconds = 0;
+  let maximumGapMilliseconds = 0;
+  for (let index = 1; index < samples.length; index++) {
+    const gap = samples[index].timestamp - samples[index - 1].timestamp;
+    if (!Number.isFinite(gap) || gap <= 0) continue;
+    maximumGapMilliseconds = Math.max(maximumGapMilliseconds, gap);
+
+    // A detected sample's IBI describes the time actually represented by that
+    // beat. Any timestamp gap beyond the IBI is unobserved time, not coverage.
+    const representedInterval = samples[index].interval;
+    if (Number.isFinite(representedInterval) && representedInterval > 0) {
+      coveredMilliseconds += Math.min(gap, representedInterval);
+    }
+  }
+
+  return {
+    coveragePercentage: Math.min(
+      100,
+      (coveredMilliseconds / (observedDurationSeconds * 1_000)) * 100
+    ),
+    maximumGapSeconds: maximumGapMilliseconds / 1_000,
+  };
+}
+
 export function evaluateMeasurementEligibility(
   samples: IBISample[],
   protocol: MeasurementProtocol,
@@ -50,6 +89,10 @@ export function evaluateMeasurementEligibility(
 ): MeasurementEligibility {
   const reasons = new Set<EligibilityReason>();
   const warnings = new Set<EligibilityWarning>();
+  const { coveragePercentage, maximumGapSeconds } = temporalCoverage(
+    samples,
+    observedDurationSeconds
+  );
 
   if (
     !Number.isFinite(observedDurationSeconds) ||
@@ -60,6 +103,17 @@ export function evaluateMeasurementEligibility(
 
   if (samples.length < Math.ceil(Math.max(0, observedDurationSeconds) / 2)) {
     reasons.add('insufficient-beats');
+  }
+  if (samples.length > 1 && coveragePercentage < MINIMUM_COVERAGE_PERCENTAGE) {
+    reasons.add('insufficient-coverage');
+  } else if (
+    coveragePercentage >= MINIMUM_COVERAGE_PERCENTAGE &&
+    coveragePercentage < COVERAGE_WARNING_PERCENTAGE
+  ) {
+    warnings.add('limited-coverage');
+  }
+  if (maximumGapSeconds > MAXIMUM_SAMPLE_GAP_SECONDS) {
+    reasons.add('sample-gap-too-long');
   }
 
   const hasInvalidSample = samples.some(
@@ -132,5 +186,7 @@ export function evaluateMeasurementEligibility(
     meanQuality,
     detectedBeatCount: samples.length,
     observedDurationSeconds,
+    coveragePercentage,
+    maximumGapSeconds,
   };
 }

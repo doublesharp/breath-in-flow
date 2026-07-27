@@ -191,9 +191,15 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
     'estimated-samples',
     'low-signal-quality',
     'too-many-artifacts',
+    'insufficient-coverage',
+    'sample-gap-too-long',
     'sensor-error',
   ];
-  const eligibilityWarnings = ['elevated-artifacts', 'short-recording-sdnn'];
+  const eligibilityWarnings = [
+    'elevated-artifacts',
+    'limited-coverage',
+    'short-recording-sdnn',
+  ];
   const metricGroups = [
     'average-pulse',
     'rmssd',
@@ -217,6 +223,11 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
       eligibility.availableMetrics.every((metric) => metricGroups.includes(metric)) &&
       ['artifactPercentage', 'meanQuality', 'observedDurationSeconds'].every(
         (key) => typeof eligibility[key] === 'number' && Number.isFinite(eligibility[key])
+      ) &&
+      ['coveragePercentage', 'maximumGapSeconds'].every(
+        (key) =>
+          eligibility[key] === undefined ||
+          (typeof eligibility[key] === 'number' && Number.isFinite(eligibility[key]))
       ) &&
       typeof eligibility.detectedBeatCount === 'number' &&
       Number.isInteger(eligibility.detectedBeatCount) &&
@@ -293,6 +304,12 @@ function validateMeasurement(value: unknown): HrvMeasurement | null {
       meanQuality: eligibility.meanQuality as number,
       detectedBeatCount: eligibility.detectedBeatCount as number,
       observedDurationSeconds: eligibility.observedDurationSeconds as number,
+      ...(typeof eligibility.coveragePercentage === 'number'
+        ? { coveragePercentage: eligibility.coveragePercentage }
+        : {}),
+      ...(typeof eligibility.maximumGapSeconds === 'number'
+        ? { maximumGapSeconds: eligibility.maximumGapSeconds }
+        : {}),
     };
   }
   if (isRecord(provenance)) {
