@@ -5,6 +5,8 @@ overrides:
   '@hono/node-server': ^1.19.13
   esbuild: ^0.28.1
   electron-builder-squirrel-windows: 26.15.3
+  find-my-way: 9.7.0
+  valibot: 1.4.2
 
 onlyBuiltDependencies:
   - '@prisma/client'
