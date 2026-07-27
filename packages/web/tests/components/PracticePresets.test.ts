@@ -232,4 +232,11 @@ describe('PracticePresets.vue', () => {
     expect(emittedConfig.guidance).toBeUndefined();
     expect(emittedConfig.description).toBeUndefined();
   });
+
+  it('gives the recommended coherent-breathing routine a finite completion target', async () => {
+    const { guidedPresets } = await import('../../src/data/guidedPresets');
+    const coherent = guidedPresets.find((preset) => preset.id === 'coherent-breathing');
+
+    expect(coherent?.config.targetSets).toBe(1);
+  });
 });

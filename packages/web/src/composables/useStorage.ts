@@ -1,4 +1,4 @@
-import { ref, computed, isProxy, toRaw } from 'vue';
+import { ref, computed, isProxy, toRaw, type Ref } from 'vue';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   BreathingConfig,
@@ -28,6 +28,13 @@ export interface PracticeStorageSnapshot {
   configs: BreathingConfig[];
   sessions: Session[];
   soundTheme: SoundTheme;
+}
+
+export class PracticeStorageError extends Error {
+  constructor(operation: string, options?: ErrorOptions) {
+    super(`${operation} could not be saved. Your previous data is still intact.`, options);
+    this.name = 'PracticeStorageError';
+  }
 }
 
 // Simple in-memory storage for now (can be replaced with IndexedDB or API calls)
@@ -95,16 +102,45 @@ function persistPracticeState() {
   localStorage.setItem(SOUND_THEME_STORAGE_KEY, soundTheme.value);
 }
 
-function saveToStorage() {
+function persistMutation<T, Result>(
+  state: Ref<T>,
+  storageKey: string,
+  operation: string,
+  mutate: () => Result
+): Result {
+  const previous = detachForExport(state.value);
+  const result = mutate();
   try {
-    persistPracticeState();
-  } catch (e) {
-    console.error('Failed to save to storage:', e);
+    localStorage.setItem(storageKey, JSON.stringify(state.value));
+    return result;
+  } catch (error) {
+    state.value = previous;
+    throw new PracticeStorageError(operation, { cause: error });
   }
 }
 
 // Initialize storage
 loadFromStorage();
+
+function reconcileInterruptedSessions() {
+  if (!sessions.value.some((session) => session.status === 'IN_PROGRESS')) return;
+
+  const recoveredAt = new Date();
+  const previous = sessions.value;
+  sessions.value = sessions.value.map((session) =>
+    session.status === 'IN_PROGRESS'
+      ? { ...session, status: 'CANCELLED' as const, completedAt: recoveredAt }
+      : session
+  );
+  try {
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions.value));
+  } catch (error) {
+    sessions.value = previous;
+    console.error('Failed to reconcile an interrupted breathing session:', error);
+  }
+}
+
+reconcileInterruptedSessions();
 
 // For testing: reset the storage state
 export function resetStorageForTesting() {
@@ -144,9 +180,10 @@ export function useStorage() {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    configs.value.push(config);
-    saveToStorage();
-    return config;
+    return persistMutation(configs, CONFIGS_STORAGE_KEY, 'Breathing preset', () => {
+      configs.value.push(config);
+      return config;
+    });
   }
 
   function getConfig(id: string): BreathingConfig | undefined {
@@ -164,26 +201,28 @@ export function useStorage() {
     const index = configs.value.findIndex((c) => c.id === id);
     if (index === -1) return undefined;
 
-    configs.value[index] = {
-      ...configs.value[index],
-      ...updates,
-      updatedAt: new Date(),
-    };
-    saveToStorage();
-    return configs.value[index];
+    return persistMutation(configs, CONFIGS_STORAGE_KEY, 'Breathing preset', () => {
+      configs.value[index] = {
+        ...configs.value[index],
+        ...updates,
+        updatedAt: new Date(),
+      };
+      return configs.value[index];
+    });
   }
 
   function deleteConfig(id: string): boolean {
     const index = configs.value.findIndex((c) => c.id === id);
     if (index === -1) return false;
 
-    configs.value.splice(index, 1);
-    saveToStorage();
+    persistMutation(configs, CONFIGS_STORAGE_KEY, 'Breathing preset', () => {
+      configs.value.splice(index, 1);
+    });
     return true;
   }
 
   // Session operations
-  function createSession(config: BreathingConfig): Session {
+  function createSession(config: BreathingConfig, checkIn?: SessionCheckIn): Session {
     // Ensure the snapshot is an immutable, non-reactive copy of the config
     const configSnapshot = cloneConfig(config);
 
@@ -196,10 +235,12 @@ export function useStorage() {
       targetSets: config.targetSets,
       completedSets: 0,
       startedAt: new Date(),
+      ...(checkIn ? { checkIn: SessionCheckInSchema.parse(checkIn) } : {}),
     };
-    sessions.value.unshift(session); // Add to beginning
-    saveToStorage();
-    return session;
+    return persistMutation(sessions, SESSIONS_STORAGE_KEY, 'Breathing session', () => {
+      sessions.value.unshift(session); // Add to beginning
+      return session;
+    });
   }
 
   function getSession(id: string): Session | undefined {
@@ -218,22 +259,24 @@ export function useStorage() {
     const index = sessions.value.findIndex((s) => s.id === id);
     if (index === -1) return undefined;
 
-    sessions.value[index] = {
-      ...sessions.value[index],
-      ...updates,
-    };
-    saveToStorage();
-    return sessions.value[index];
+    return persistMutation(sessions, SESSIONS_STORAGE_KEY, 'Breathing session', () => {
+      sessions.value[index] = {
+        ...sessions.value[index],
+        ...updates,
+      };
+      return sessions.value[index];
+    });
   }
 
   function addSetToSession(sessionId: string, set: SessionSet): Session | undefined {
     const session = getSession(sessionId);
     if (!session) return undefined;
 
-    session.sets.push(set);
-    session.completedSets = session.sets.filter((s) => s.completedAt).length;
-    saveToStorage();
-    return session;
+    return persistMutation(sessions, SESSIONS_STORAGE_KEY, 'Breathing session', () => {
+      session.sets.push(set);
+      session.completedSets = session.sets.filter((s) => s.completedAt).length;
+      return session;
+    });
   }
 
   function addExtendedHoldToSet(
@@ -244,9 +287,10 @@ export function useStorage() {
     const session = getSession(sessionId);
     if (!session || !session.sets[setIndex]) return undefined;
 
-    session.sets[setIndex].extendedHolds.push(hold);
-    saveToStorage();
-    return session;
+    return persistMutation(sessions, SESSIONS_STORAGE_KEY, 'Breathing session', () => {
+      session.sets[setIndex].extendedHolds.push(hold);
+      return session;
+    });
   }
 
   function completeSession(id: string): Session | undefined {
@@ -278,14 +322,16 @@ export function useStorage() {
     const index = sessions.value.findIndex((s) => s.id === id);
     if (index === -1) return false;
 
-    sessions.value.splice(index, 1);
-    saveToStorage();
+    persistMutation(sessions, SESSIONS_STORAGE_KEY, 'Breathing session', () => {
+      sessions.value.splice(index, 1);
+    });
     return true;
   }
 
   function deleteAllSessions(): void {
-    sessions.value = [];
-    saveToStorage();
+    persistMutation(sessions, SESSIONS_STORAGE_KEY, 'Breathing history', () => {
+      sessions.value = [];
+    });
   }
 
   // Stats
@@ -311,8 +357,14 @@ export function useStorage() {
   }
 
   function setSoundTheme(theme: SoundTheme) {
+    const previous = soundTheme.value;
     soundTheme.value = theme;
-    saveToStorage();
+    try {
+      localStorage.setItem(SOUND_THEME_STORAGE_KEY, theme);
+    } catch (error) {
+      soundTheme.value = previous;
+      throw new PracticeStorageError('Sound preference', { cause: error });
+    }
   }
 
   // Backup repository operations

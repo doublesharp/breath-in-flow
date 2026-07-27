@@ -1055,12 +1055,19 @@
       <FeelingCheckIn
         :open="showBeforeCheckIn"
         stage="before"
+        :error-message="beforeCheckInError"
         @submit="submitBeforeCheckIn"
         @skip="continueSessionStart()"
       />
 
       <!-- Optional post-session comfort check-in -->
-      <FeelingCheckIn :open="showAfterCheckIn" stage="after" @submit="saveAfterCheckIn" @skip="skipAfterCheckIn" />
+      <FeelingCheckIn
+        :open="showAfterCheckIn"
+        stage="after"
+        :error-message="afterCheckInError"
+        @submit="saveAfterCheckIn"
+        @skip="skipAfterCheckIn"
+      />
     </Teleport>
   </div>
 </template>
@@ -1210,8 +1217,10 @@ const sessionNotes = ref('');
 // session id so its response can be saved after completion is already persisted.
 const showBeforeCheckIn = ref(false);
 const pendingStartConfig = ref<BreathingConfig | null>(null);
+const beforeCheckInError = ref('');
 const showAfterCheckIn = ref(false);
 const completedSessionId = ref<string | null>(null);
+const afterCheckInError = ref('');
 
 // Load last used config on mount
 onMounted(async () => {
@@ -1548,18 +1557,26 @@ function handleSystemBack(): boolean {
 
 defineExpose({ handleSystemBack });
 
-function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScore) {
+function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScore): boolean {
   Object.assign(config, candidate);
 
   // Create the session first; a rejected start leaves no session, so a submitted
   // pre-session score is never persisted as an orphan check-in.
-  const session = storage.createSession(candidate);
-  if (!session?.id) return;
-  currentSession.value = session;
-
-  if (before !== undefined) {
-    storage.setSessionCheckIn(session.id, { before });
+  let session: Session | undefined;
+  try {
+    session = storage.createSession(candidate, before === undefined ? undefined : { before });
+  } catch (error) {
+    beforeCheckInError.value =
+      error instanceof Error
+        ? error.message
+        : 'This session could not be saved. Please free some storage and try again.';
+    return false;
   }
+  if (!session?.id) {
+    beforeCheckInError.value = 'This session could not be saved. Please try again.';
+    return false;
+  }
+  currentSession.value = session;
 
   sessionNotes.value = '';
 
@@ -1572,6 +1589,7 @@ function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScor
   };
 
   timer.start();
+  return true;
 }
 
 // Single seam for beginning a session. A start request opens the optional
@@ -1579,15 +1597,17 @@ function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScor
 // continued or skipped. Callers (start, repeat, Start Practice) stay the same.
 function requestSessionStart(candidate: BreathingConfig) {
   pendingStartConfig.value = BreathingConfigSchema.parse(candidate);
+  beforeCheckInError.value = '';
   showBeforeCheckIn.value = true;
 }
 
 function continueSessionStart(before?: FeelingScore) {
   const candidate = pendingStartConfig.value;
+  if (!candidate) return;
+  if (!startValidatedExercise(candidate, before)) return;
   showBeforeCheckIn.value = false;
   pendingStartConfig.value = null;
-  if (!candidate) return;
-  startValidatedExercise(candidate, before);
+  beforeCheckInError.value = '';
 }
 
 function submitBeforeCheckIn(payload: { score: FeelingScore }) {
@@ -1598,24 +1618,45 @@ function submitBeforeCheckIn(payload: { score: FeelingScore }) {
 // completed session id is retained so a submitted response can be saved without
 // completing the session a second time.
 function finalizeCompletedSession(id: string) {
-  storage.completeSession(id);
+  try {
+    storage.completeSession(id);
+  } catch (error) {
+    successMessage.value =
+      error instanceof Error
+        ? error.message
+        : 'The completed session could not be saved. Please try again.';
+    showSuccessNotification.value = true;
+    return;
+  }
   completedSessionId.value = id;
+  afterCheckInError.value = '';
   showAfterCheckIn.value = true;
 }
 
 function saveAfterCheckIn(payload: { score: FeelingScore; comment?: string }) {
   const id = completedSessionId.value;
-  showAfterCheckIn.value = false;
-  completedSessionId.value = null;
   if (!id) return;
   const updates: Partial<SessionCheckIn> = { after: payload.score };
   if (payload.comment) updates.comment = payload.comment;
-  storage.setSessionCheckIn(id, updates);
+  try {
+    const saved = storage.setSessionCheckIn(id, updates);
+    if (!saved) throw new Error('Your check-in could not be saved. Please try again.');
+  } catch (error) {
+    afterCheckInError.value =
+      error instanceof Error
+        ? error.message
+        : 'Your check-in could not be saved. Please try again.';
+    return;
+  }
+  showAfterCheckIn.value = false;
+  completedSessionId.value = null;
+  afterCheckInError.value = '';
 }
 
 function skipAfterCheckIn() {
   showAfterCheckIn.value = false;
   completedSessionId.value = null;
+  afterCheckInError.value = '';
 }
 
 function startExercise() {

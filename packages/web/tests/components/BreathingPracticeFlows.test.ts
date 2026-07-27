@@ -195,6 +195,7 @@ describe('BreathingPractice flows', () => {
     updateSessionMock.mockReset();
     createConfigMock.mockReset();
     setSessionCheckInMock.mockReset();
+    setSessionCheckInMock.mockReturnValue({ id: 'saved-check-in' });
     cancelSessionMock.mockReset();
     sessionsRef.value = [];
 
@@ -598,7 +599,35 @@ describe('BreathingPractice flows', () => {
     await clickCheckInControl('checkin-submit');
 
     expect(createSessionMock).toHaveBeenCalledTimes(1);
-    expect(setSessionCheckInMock).toHaveBeenCalledWith('attach-before', { before: 2 });
+    expect(createSessionMock).toHaveBeenCalledWith(expect.any(Object), { before: 2 });
+    expect(setSessionCheckInMock).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('keeps the pre-session response available for retry when session storage fails', async () => {
+    createSessionMock.mockImplementationOnce(() => {
+      throw new Error('Breathing session could not be saved.');
+    });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+    await findByText(wrapper, 'start practice')!.trigger('click');
+    await nextTick();
+    await clickCheckInControl('feeling-score-2');
+    await clickCheckInControl('checkin-submit');
+
+    expect(document.body.querySelector('[data-testid="feeling-checkin"]')).not.toBeNull();
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toContain(
+      'could not be saved'
+    );
+
+    createSessionMock.mockReturnValueOnce({ id: 'retry-before', sets: [] });
+    await clickCheckInControl('checkin-submit');
+    expect(createSessionMock).toHaveBeenCalledTimes(2);
     wrapper.unmount();
   });
 
@@ -703,6 +732,40 @@ describe('BreathingPractice flows', () => {
     });
     // Dismissing the prompt must never re-run completion.
     expect(completeSessionMock).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it('keeps a post-session response available until a failed save is retried', async () => {
+    createSessionMock.mockReturnValue({ id: 'post-retry', sets: [] });
+    setSessionCheckInMock
+      .mockImplementationOnce(() => {
+        throw new Error('Check-in could not be saved.');
+      })
+      .mockReturnValueOnce({ id: 'post-retry' });
+
+    const wrapper = mount(BreathingPractice, {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    });
+    await startPracticeAndSkip(wrapper);
+    (
+      wrapper.vm as unknown as { timer: { triggerSessionComplete: () => void } }
+    ).timer.triggerSessionComplete();
+    await nextTick();
+    await clickCheckInControl('feeling-score-4');
+    await setCheckInComment('Keep this note');
+    await clickCheckInControl('checkin-submit');
+
+    expect(document.body.querySelector('[data-testid="feeling-checkin"]')).not.toBeNull();
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toContain(
+      'could not be saved'
+    );
+
+    await clickCheckInControl('checkin-submit');
+    expect(setSessionCheckInMock).toHaveBeenCalledTimes(2);
+    expect(document.body.querySelector('[data-testid="feeling-checkin"]')).toBeNull();
     wrapper.unmount();
   });
 

@@ -91,6 +91,7 @@ export const guidedPresets: GuidedPreset[] = [
       exhaleTime: 5,
       exhaleHoldTime: 0,
       repetitions: 6,
+      targetSets: 1,
       soundTheme: 'water',
       ttsEnabled: true,
     },

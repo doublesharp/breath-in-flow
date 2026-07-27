@@ -682,13 +682,12 @@ describe('useStorage', () => {
       expect(storage.DEFAULT_BREATHING_CONFIG).toBeDefined();
     });
 
-    it('handles localStorage.setItem throwing error', () => {
-      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-        throw new Error('Storage full');
+    it('throws and rolls back in-memory state when a durable write fails', () => {
+      const storage = useStorage();
+      localStorageMock.setItem.mockImplementationOnce(() => {
+        throw new DOMException('Storage full', 'QuotaExceededError');
       });
 
-      const storage = useStorage();
-      // createConfig should handle storage errors gracefully and not throw
       expect(() =>
         storage.createConfig({
           name: 'Test Config',
@@ -711,7 +710,33 @@ describe('useStorage', () => {
           soundTheme: 'wood',
           ttsEnabled: false,
         })
-      ).not.toThrow();
+      ).toThrow(/could not be saved/i);
+      expect(storage.getAllConfigs()).toHaveLength(0);
+    });
+
+    it('rolls back a nested session mutation when persistence fails', () => {
+      const storage = useStorage();
+      const config = storage.createConfig(createTestConfigInput({ name: 'Rollback Session' }));
+      const session = storage.createSession(config);
+      localStorageMock.setItem.mockImplementationOnce(() => {
+        throw new DOMException('Storage full', 'QuotaExceededError');
+      });
+
+      expect(() =>
+        storage.addSetToSession(session.id!, {
+          setNumber: 1,
+          completedRepetitions: 3,
+          startedAt: new Date(),
+          completedAt: new Date(),
+          extendedHolds: [],
+        })
+      ).toThrow(/could not be saved/i);
+      expect(storage.getSession(session.id!)).toMatchObject({
+        id: session.id,
+        status: 'IN_PROGRESS',
+        completedSets: 0,
+        sets: [],
+      });
     });
 
     it('handles invalid JSON in localStorage', () => {
@@ -724,6 +749,45 @@ describe('useStorage', () => {
   });
 
   describe('useStorage loadFromStorage behavior', () => {
+    it('reconciles sessions left in progress by an interrupted app process', async () => {
+      vi.resetModules();
+      const startedAt = new Date('2026-07-25T10:00:00.000Z');
+      const configId = crypto.randomUUID();
+      const sessionId = crypto.randomUUID();
+      const mockLS = {
+        getItem: vi.fn((key: string) =>
+          key === 'breath-in-flow-sessions'
+            ? JSON.stringify([
+                {
+                  id: sessionId,
+                  configId,
+                  configSnapshot: { id: configId, ...DEFAULT_BREATHING_CONFIG },
+                  status: 'IN_PROGRESS',
+                  sets: [],
+                  targetSets: 1,
+                  completedSets: 0,
+                  startedAt: startedAt.toISOString(),
+                },
+              ])
+            : null
+        ),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      };
+      Object.defineProperty(globalThis, 'localStorage', { value: mockLS });
+
+      const mod = await import('../../src/composables/useStorage');
+      const recovered = mod.useStorage().getSession(sessionId);
+
+      expect(recovered?.status).toBe('CANCELLED');
+      expect(recovered?.completedAt).toBeInstanceOf(Date);
+      expect(mockLS.setItem).toHaveBeenCalledWith(
+        'breath-in-flow-sessions',
+        expect.stringContaining('"status":"CANCELLED"')
+      );
+    });
+
     it('parses sessions from localStorage and converts date strings to Date objects', async () => {
       vi.resetModules();
 
@@ -987,7 +1051,7 @@ describe('useStorage', () => {
       expect(storage.getAllSessions().length).toBeGreaterThanOrEqual(0);
     });
 
-    it('handles setItem throwing when saving', () => {
+    it('reports setItem failures and leaves no unsaved in-memory record', () => {
       const mockLS = {
         getItem: vi.fn(() => null),
         setItem: vi.fn(() => {
@@ -1007,8 +1071,8 @@ describe('useStorage', () => {
       const storage = useStorage();
       const config = createTestConfigInput();
 
-      // Should not throw even if setItem fails
-      expect(() => storage.createConfig(config)).not.toThrow();
+      expect(() => storage.createConfig(config)).toThrow(/could not be saved/i);
+      expect(storage.getAllConfigs()).toHaveLength(0);
 
       consoleErrorSpy.mockRestore();
     });

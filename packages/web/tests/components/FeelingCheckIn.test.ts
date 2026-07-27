@@ -94,6 +94,23 @@ describe('FeelingCheckIn', () => {
     expect(wrapper.emitted('submit')).toEqual([[{ score: 3 }]]);
   });
 
+  it('shows a retryable storage error without clearing the selected response', async () => {
+    const wrapper = mount(FeelingCheckIn, {
+      props: {
+        open: true,
+        stage: 'after',
+        errorMessage: 'Your check-in could not be saved. Please try again.',
+      },
+    });
+    await wrapper.get('[data-testid="feeling-score-4"]').setValue();
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('could not be saved');
+    expect(
+      (wrapper.get('[data-testid="feeling-score-4"]').element as HTMLInputElement).checked
+    ).toBe(true);
+    expect(wrapper.get('[data-testid="checkin-submit"]').text()).toBe('Save');
+  });
+
   it('emits skip when Escape is pressed', async () => {
     const wrapper = mount(FeelingCheckIn, {
       props: { open: true, stage: 'before' },

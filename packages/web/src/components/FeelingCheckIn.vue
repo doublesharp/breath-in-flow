@@ -50,6 +50,14 @@
         ></textarea>
       </div>
 
+      <p
+        v-if="errorMessage"
+        role="alert"
+        class="mt-5 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-sm font-medium text-rose-100"
+      >
+        {{ errorMessage }}
+      </p>
+
       <div class="mt-6 flex justify-end gap-3">
         <button data-testid="checkin-skip" class="btn-secondary" @click="skip">Skip</button>
         <button data-testid="checkin-submit" class="btn-primary" :disabled="selectedScore === null" @click="submit">
@@ -69,6 +77,7 @@ const props = defineProps<{
   open: boolean;
   stage: 'before' | 'after';
   initialScore?: FeelingScore;
+  errorMessage?: string;
 }>();
 
 const emit = defineEmits<{
