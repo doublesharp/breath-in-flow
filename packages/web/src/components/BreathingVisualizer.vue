@@ -40,7 +40,22 @@
 
         <!-- Inner content -->
         <div class="relative z-10 text-center">
-          <div class="text-6xl sm:text-7xl font-mono font-bold text-white drop-shadow-2xl tabular-nums">
+          <svg
+            v-if="phase === 'SESSION_COMPLETE'"
+            data-testid="completion-mark"
+            class="mx-auto h-16 w-16 text-white drop-shadow-2xl"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+          </svg>
+          <div
+            v-else
+            data-testid="phase-time"
+            class="text-6xl sm:text-7xl font-mono font-bold text-white drop-shadow-2xl tabular-nums"
+          >
             {{ displayTime }}
           </div>
           <div class="text-white/90 text-base sm:text-lg mt-3 font-medium tracking-wide">

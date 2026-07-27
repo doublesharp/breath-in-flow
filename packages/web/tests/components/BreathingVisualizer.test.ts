@@ -94,6 +94,21 @@ describe('BreathingVisualizer', () => {
     expect(wrapper.text()).toContain('4');
   });
 
+  it('shows a completion mark instead of a meaningless zero timer', () => {
+    const wrapper = mount(BreathingVisualizer, {
+      props: {
+        phase: 'SESSION_COMPLETE',
+        currentTime: 0,
+        totalTime: 0,
+        scale: 1,
+        isRunning: false,
+      },
+    });
+
+    expect(wrapper.find('[data-testid="completion-mark"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="phase-time"]').exists()).toBe(false);
+  });
+
   it('should apply correct color classes for different phases', async () => {
     const wrapper = mount(BreathingVisualizer, {
       props: {

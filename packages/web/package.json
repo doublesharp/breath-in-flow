@@ -28,10 +28,12 @@
     "ios:simulator": "pnpm build && cap sync ios && cap run ios --target 'iPhone 16 Pro'",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:update": "playwright test --update-snapshots",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --silent",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.e2e.json"
   },
   "dependencies": {
     "@breath-in-flow/shared": "workspace:*",
@@ -54,6 +56,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.2",
+    "@playwright/test": "^1.62.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.1.1",
     "@vitejs/plugin-vue": "^6.0.8",

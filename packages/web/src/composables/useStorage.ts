@@ -149,14 +149,39 @@ export function resetStorageForTesting() {
   soundTheme.value = 'wood';
 }
 
-// Produces a detached, non-reactive deep copy. structuredClone preserves Date
-// instances; the JSON fallback is only reached in environments without it.
-function detachForExport<T>(value: T): T {
+function unwrapReactiveValue(value: unknown, seen = new WeakMap<object, unknown>()): unknown {
+  if (value === null || typeof value !== 'object') return value;
+
   const source = isProxy(value) ? toRaw(value) : value;
+  if (source instanceof Date) return new Date(source.getTime());
+
+  const existing = seen.get(source);
+  if (existing) return existing;
+
+  if (Array.isArray(source)) {
+    const result: unknown[] = [];
+    seen.set(source, result);
+    source.forEach((item) => result.push(unwrapReactiveValue(item, seen)));
+    return result;
+  }
+
+  const result: Record<string | symbol, unknown> = {};
+  seen.set(source, result);
+  for (const key of Reflect.ownKeys(source)) {
+    result[key] = unwrapReactiveValue(Reflect.get(source, key), seen);
+  }
+  return result;
+}
+
+// Produces a detached, non-reactive deep copy. Vue's toRaw is shallow, so
+// recursively unwrap nested proxies before asking structuredClone to preserve
+// Date instances and other supported platform values.
+function detachForExport<T>(value: T): T {
+  const source = unwrapReactiveValue(value);
 
   try {
     if (typeof structuredClone === 'function') {
-      return structuredClone(source);
+      return structuredClone(source) as T;
     }
   } catch (error) {
     console.warn('structuredClone failed, falling back to JSON copy', error);

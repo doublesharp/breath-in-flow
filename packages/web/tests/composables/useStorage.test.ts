@@ -1385,6 +1385,24 @@ describe('useStorage', () => {
       expect(storage.getAllSessions()[0].status).toBe('IN_PROGRESS');
     });
 
+    it('detaches nested reactive session data without clone warnings or losing dates', () => {
+      const storage = useStorage();
+      const config = storage.createConfig(createTestConfigInput({ name: 'Reactive Config' }));
+      const session = storage.createSession(config);
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      storage.updateSession(session.id!, {
+        checkIn: { before: 3, after: 4, comment: 'Comfortable' },
+      });
+
+      const snapshot = storage.exportPracticeState();
+      expect(consoleWarnSpy).not.toHaveBeenCalled();
+      expect(snapshot.sessions[0].startedAt).toBeInstanceOf(Date);
+      expect(snapshot.sessions[0].configSnapshot.createdAt).toBeInstanceOf(Date);
+
+      consoleWarnSpy.mockRestore();
+    });
+
     it('replacePracticeState swaps every record and the theme', () => {
       const storage = useStorage();
       storage.createConfig(createTestConfigInput({ name: 'Stale' }));

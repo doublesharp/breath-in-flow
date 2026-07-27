@@ -36,6 +36,8 @@ packages/database/prisma/*.db
 
 # Test coverage
 coverage/
+packages/web/playwright-report/
+packages/web/test-results/
 
 # Capacitor
 packages/web/android/app/build/

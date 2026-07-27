@@ -11,6 +11,7 @@
     "build": "pnpm --filter @breath-in-flow/shared build && pnpm --filter @breath-in-flow/web build",
     "preview": "pnpm --filter @breath-in-flow/web preview",
     "test": "pnpm test:build-script && pnpm --filter @breath-in-flow/shared test && pnpm --filter @breath-in-flow/database test && pnpm --filter @breath-in-flow/web test",
+    "test:e2e": "pnpm --filter @breath-in-flow/web test:e2e",
     "test:build-script": "bash scripts/tests/build-script.test.sh",
     "test:coverage": "pnpm -r test:coverage",
     "db:generate": "pnpm --filter @breath-in-flow/database generate",
