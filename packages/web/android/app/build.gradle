@@ -4,7 +4,7 @@ def appVersionCode = (project.findProperty("appVersionCode") ?: "3") as Integer
 def appVersionName = project.findProperty("appVersionName") ?: "0.0.3"
 
 android {
-    namespace "com.breathinflow.app"
+    namespace = "com.breathinflow.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.breathinflow.app"
@@ -16,7 +16,7 @@ android {
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
     buildTypes {
@@ -43,16 +43,6 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-}
-
-// Force Kotlin stdlib version alignment to resolve duplicate class conflicts
-// between kotlin-stdlib (1.8+) and legacy kotlin-stdlib-jdk7/jdk8
-configurations.all {
-    resolutionStrategy {
-        force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.25'
-        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.25'
-        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.25'
-    }
 }
 
 apply from: 'capacitor.build.gradle'

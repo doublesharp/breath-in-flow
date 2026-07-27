@@ -120,9 +120,16 @@ verify_native_web_assets() {
     esac
 
     require_directory "$native_public_dir" "$platform native web assets"
-    if ! diff -qr --exclude='.DS_Store' "$WEB_DIR/dist" "$native_public_dir" >/dev/null; then
+    # Capacitor generates these bridge shims during sync; they do not come from
+    # the Vite build and therefore must not count as stale application assets.
+    local -a generated_asset_exclusions=(
+        "--exclude=.DS_Store"
+        "--exclude=cordova.js"
+        "--exclude=cordova_plugins.js"
+    )
+    if ! diff -qr "${generated_asset_exclusions[@]}" "$WEB_DIR/dist" "$native_public_dir" >/dev/null; then
         print_error "$platform native web assets do not match the current web build"
-        diff -qr --exclude='.DS_Store' "$WEB_DIR/dist" "$native_public_dir" || true
+        diff -qr "${generated_asset_exclusions[@]}" "$WEB_DIR/dist" "$native_public_dir" || true
         return 1
     fi
     print_success "$platform native web assets match the current web build"

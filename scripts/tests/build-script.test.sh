@@ -52,6 +52,8 @@ if [[ "${1:-}" == "exec" && "${2:-}" == "cap" && "${3:-}" == "sync" && "${4:-}" 
   if [[ "${BUILD_TEST_STALE_NATIVE:-0}" != "1" ]]; then
     mkdir -p "$PWD/android/app/src/main/assets/public"
     cp -R "$PWD/dist/." "$PWD/android/app/src/main/assets/public/"
+    printf 'generated bridge shim\n' > "$PWD/android/app/src/main/assets/public/cordova.js"
+    printf 'generated plugin registry\n' > "$PWD/android/app/src/main/assets/public/cordova_plugins.js"
   fi
 fi
 
