@@ -119,9 +119,10 @@ const maxHold = computed(() => {
 const improvement = computed(() => {
   if (holdData.value.length < 2) return null;
 
-  // Compare first 3 vs last 3 holds
-  const firstHolds = holdData.value.slice(0, 3);
-  const lastHolds = holdData.value.slice(-3);
+  // Compare equally sized, non-overlapping groups of up to three holds.
+  const groupSize = Math.min(3, Math.floor(holdData.value.length / 2));
+  const firstHolds = holdData.value.slice(0, groupSize);
+  const lastHolds = holdData.value.slice(-groupSize);
 
   const firstAvg = firstHolds.reduce((sum, h) => sum + h.duration, 0) / firstHolds.length;
   const lastAvg = lastHolds.reduce((sum, h) => sum + h.duration, 0) / lastHolds.length;

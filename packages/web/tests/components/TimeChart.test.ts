@@ -1,4 +1,4 @@
-import { shallowMount } from '@vue/test-utils';
+import { shallowMount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 // The project uses `HoldTimeChart.vue` as the time chart component.
 import HoldTimeChart from '@/components/charts/HoldTimeChart.vue';
@@ -43,6 +43,12 @@ function makeStressPoint(value: number, timestamp: string): StressDataPoint {
   };
 }
 
+function statValue(wrapper: VueWrapper, label: string) {
+  const labelNode = wrapper.findAll('.uppercase').find((node) => node.text() === label);
+  expect(labelNode, `Missing ${label} statistic`).toBeDefined();
+  return labelNode!.element.nextElementSibling!.textContent!.trim();
+}
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -50,7 +56,7 @@ afterEach(() => {
 describe('HoldTimeChart.vue', () => {
   it('mounts with empty data without throwing', () => {
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions: [] } });
-    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.text()).toContain('No hold data available');
   });
 
   it('renders stats when sessions contain holds', () => {
@@ -124,8 +130,9 @@ describe('HoldTimeChart.vue', () => {
     expect(text).toContain('Best');
     expect(text).toContain('Sessions');
 
-    // Sessions count should reflect total sessions passed
-    expect(text).toContain('3'); // three holds total
+    expect(statValue(wrapper, 'Average')).toBe('20s');
+    expect(statValue(wrapper, 'Best')).toBe('30s');
+    expect(statValue(wrapper, 'Sessions')).toBe('2');
   });
 
   it('displays improvement when enough data exists', () => {
@@ -191,9 +198,33 @@ describe('HoldTimeChart.vue', () => {
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions } });
     const text = wrapper.text();
 
-    // Should show improvement data
-    expect(text).toContain('Best');
-    expect(text).toContain('Average');
+    expect(text).toContain('↑ 16.7s');
+    expect(statValue(wrapper, 'Best')).toBe('30s');
+  });
+
+  it.each([
+    [[10, 20], '↑ 10.0s'],
+    [[20, 10], '↓ 10.0s'],
+    [[10, 10], '→ 0.0s'],
+    [[10, 15, 20], '↑ 10.0s'],
+    [[10, 20, 30, 40], '↑ 20.0s'],
+  ])('compares separate groups for hold durations %j', (durations, expected) => {
+    const session = makeSession('holds', new Date('2026-01-01'));
+    session.sets = [
+      {
+        setNumber: 1,
+        completedRepetitions: 1,
+        startedAt: session.startedAt,
+        extendedHolds: durations.map((actualDuration, index) => ({
+          completedAt: new Date(Date.UTC(2026, 0, index + 1)),
+          actualDuration,
+          type: 'EXHALE',
+          mode: 'TOLERANCE',
+        })),
+      },
+    ];
+    const wrapper = shallowMount(HoldTimeChart, { props: { sessions: [session] } });
+    expect(wrapper.text()).toContain(expected);
   });
 
   it('handles single hold correctly', () => {
@@ -280,7 +311,10 @@ describe('HoldTimeChart.vue', () => {
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions } });
     const text = wrapper.text();
 
-    expect(text).toContain('2'); // Two holds total
+    expect(statValue(wrapper, 'Average')).toBe('23s');
+    expect(statValue(wrapper, 'Best')).toBe('25s');
+    expect(statValue(wrapper, 'Sessions')).toBe('1');
+    expect(text).toContain('↑ 5.0s');
   });
 
   it('displays improvement metrics when there are multiple holds', () => {
@@ -345,7 +379,10 @@ describe('HoldTimeChart.vue', () => {
     // Should show stats
     expect(text).toContain('Best');
     expect(text).toContain('Average');
-    expect(text).toContain('2'); // 2 holds total
+    expect(text).toContain('↑ 5.0s');
+    expect(statValue(wrapper, 'Average')).toBe('23s');
+    expect(statValue(wrapper, 'Best')).toBe('25s');
+    expect(statValue(wrapper, 'Sessions')).toBe('2');
   });
 
   it('renders with INHALE hold type', () => {
