@@ -266,6 +266,36 @@ describe('useBreathingTimer', () => {
       expect(vi.getTimerCount()).toBe(0);
     });
 
+    it('preserves phase overflow when pausing between its deadline and next tick', () => {
+      const timer = useBreathingTimer({
+        ...config,
+        inhaleTime: 1.25,
+        exhaleTime: 1.25,
+        inhaleHoldTime: 0,
+        exhaleHoldTime: 0,
+      });
+      timer.start();
+      vi.advanceTimersByTime(1275);
+      timer.pause();
+      vi.advanceTimersByTime(1000);
+      timer.resume();
+      vi.advanceTimersByTime(100);
+      expect(timer.phase.value).toBe('EXHALE');
+      expect(timer.currentTime.value).toBeCloseTo(1.125, 6);
+    });
+
+    it('preserves time elapsed between the last tick and pause', () => {
+      const timer = useBreathingTimer(config);
+      timer.start();
+      vi.advanceTimersByTime(350);
+      timer.pause();
+      expect(timer.currentTime.value).toBeCloseTo(1.65, 6);
+      vi.advanceTimersByTime(5000);
+      timer.resume();
+      vi.advanceTimersByTime(100);
+      expect(timer.currentTime.value).toBeCloseTo(1.55, 6);
+    });
+
     it('ignores wall clock changes during a running phase', () => {
       const timer = useBreathingTimer(config);
       timer.start();
@@ -522,10 +552,11 @@ describe('useBreathingTimer', () => {
       };
       const timer = useBreathingTimer(baseConfig, { onExtendedHoldEnd });
 
-      // Simulate being in the first extended hold
-      timer.state.value.phase = 'EXTENDED_EXHALE_HOLD';
-      timer.state.value.isFirstExtendedHold = true;
-      timer.state.value.extendedHoldElapsed = 3.5;
+      timer.start();
+      timer.skipPhase();
+      timer.skipPhase();
+      expect(timer.phase.value).toBe('EXTENDED_EXHALE_HOLD');
+      vi.advanceTimersByTime(3500);
 
       timer.endExtendedHold();
 
@@ -559,9 +590,12 @@ describe('useBreathingTimer', () => {
       };
       const timer = useBreathingTimer(baseConfig);
 
-      timer.state.value.phase = 'EXTENDED_INHALE_HOLD';
-      timer.state.value.isFirstExtendedHold = true;
-      timer.state.value.extendedHoldElapsed = 4;
+      timer.start();
+      timer.skipPhase();
+      timer.skipPhase();
+      timer.skipPhase();
+      expect(timer.phase.value).toBe('EXTENDED_INHALE_HOLD');
+      vi.advanceTimersByTime(4000);
 
       timer.endExtendedHold();
 
@@ -721,15 +755,13 @@ describe('useBreathingTimer', () => {
       timer.start();
       expect(timer.phase.value).toBe('INHALE');
 
-      // Set recovery flag and trigger a phase transition via skipPhase()
-      timer.state.value.isRecoveryBreath = true;
       timer.skipPhase();
-
-      // Trigger next tick to process the transition
-      vi.advanceTimersByTime(16);
-
-      // After transition, check that we're progressing (may not be at extended hold yet with new logic)
-      expect(timer.phase.value).not.toBe('IDLE');
+      timer.skipPhase();
+      expect(timer.phase.value).toBe('INHALE');
+      expect(timer.isRecoveryBreath.value).toBe(true);
+      timer.skipPhase();
+      expect(timer.phase.value).toBe('EXTENDED_INHALE_HOLD');
+      expect(timer.isRecoveryBreath.value).toBe(false);
     });
 
     it('skipPhase ends tolerance extended hold', () => {
@@ -757,15 +789,13 @@ describe('useBreathingTimer', () => {
       const onExtendedHoldEnd = vi.fn();
       const timer = useBreathingTimer(baseConfig, { onExtendedHoldEnd });
 
-      // Put the timer into an extended hold state
-      timer.state.value.phase = 'EXTENDED_EXHALE_HOLD';
-      timer.state.value.isFirstExtendedHold = true;
-      timer.state.value.extendedHoldElapsed = 4;
-      timer.state.value.isRunning = true;
-
+      timer.start();
       timer.skipPhase();
-
-      expect(onExtendedHoldEnd).toHaveBeenCalled();
+      timer.skipPhase();
+      vi.advanceTimersByTime(4050);
+      timer.skipPhase();
+      expect(onExtendedHoldEnd).toHaveBeenCalledExactlyOnceWith(4.05, 'EXHALE', expect.any(Object));
+      expect(timer.phase.value).toBe('SET_COMPLETE');
     });
 
     it('pauses and resumes tolerance extended hold without time jump', () => {
@@ -858,9 +888,8 @@ describe('useBreathingTimer', () => {
       // End the first extended exhale hold
       timer.endExtendedHold();
       expect(timer.isFirstExtendedHold.value).toBe(false);
-      // After ending the first hold, the timer advances to prepare for or start the second hold
-      // Check that we're not idle
-      expect(timer.phase.value).not.toBe('IDLE');
+      expect(timer.phase.value).toBe('EXTENDED_EXHALE_HOLD');
+      expect(timer.currentTime.value).toBe(5);
     });
   });
 
@@ -928,11 +957,10 @@ describe('useBreathingTimer', () => {
       };
 
       const timer = useBreathingTimer(lineConfig);
-      timer.state.value = { ...timer.state.value, totalPhaseTime: 0, currentTime: 0 };
       expect(timer.progress.value).toBe(0);
-
-      timer.state.value = { ...timer.state.value, totalPhaseTime: 4, currentTime: 2 };
-      expect(timer.progress.value).toBeCloseTo(1 - 2 / 4, 6);
+      timer.start();
+      vi.advanceTimersByTime(2000);
+      expect(timer.progress.value).toBe(0.5);
     });
 
     it('breathingScale returns expected values for EXHALE_HOLD and IDLE', () => {
@@ -944,15 +972,13 @@ describe('useBreathingTimer', () => {
 
       const timer = useBreathingTimer(config);
 
-      timer.state.value = {
-        ...timer.state.value,
-        phase: 'EXHALE_HOLD',
-        currentTime: 1,
-        totalPhaseTime: 2,
-      };
+      config.exhaleHoldTime = 2;
+      timer.start();
+      vi.advanceTimersByTime(4000);
+      expect(timer.phase.value).toBe('EXHALE_HOLD');
       expect(timer.breathingScale.value).toBeCloseTo(0.6, 3);
 
-      timer.state.value = { ...timer.state.value, phase: 'IDLE' };
+      timer.stop();
       expect(timer.breathingScale.value).toBeCloseTo(0.8, 3);
     });
 
@@ -967,20 +993,11 @@ describe('useBreathingTimer', () => {
       };
 
       const timer = useBreathingTimer(exhaleConfig);
-      // Set phase to EXHALE with known timing
-      timer.state.value = {
-        ...timer.state.value,
-        phase: 'EXHALE',
-        currentTime: 1,
-        totalPhaseTime: 2,
-      };
-
-      // expected: 1.0 - eased * 0.4 where eased = (1 - cos(progress * PI)) / 2, progress = 1 - time/total
-      const progress = 1 - 1 / 2;
-      const eased = (1 - Math.cos(progress * Math.PI)) / 2;
-      const expected = 1.0 - eased * 0.4;
-
-      expect(timer.breathingScale.value).toBeCloseTo(expected, 6);
+      timer.start();
+      timer.skipPhase();
+      vi.advanceTimersByTime(1000);
+      expect(timer.phase.value).toBe('EXHALE');
+      expect(timer.breathingScale.value).toBeCloseTo(0.8, 6);
     });
 
     it('endExtendedHold invokes onExtendedHoldEnd with elapsed duration', async () => {
@@ -1008,16 +1025,18 @@ describe('useBreathingTimer', () => {
       };
       const timer = useBreathingTimer(baseConfig, { onExtendedHoldEnd });
 
-      timer.state.value.phase = 'EXTENDED_INHALE_HOLD';
-      timer.state.value.extendedHoldElapsed = 5.2;
-      timer.state.value.isRunning = true;
+      timer.start();
+      timer.skipPhase();
+      timer.skipPhase();
+      expect(timer.phase.value).toBe('EXTENDED_EXHALE_HOLD');
+      vi.advanceTimersByTime(5250);
 
       timer.endExtendedHold();
 
       expect(onExtendedHoldEnd).toHaveBeenCalled();
-      // first argument should be close to 5.2 (the duration passed)
+      // Include the 50 ms since the last display update.
       const calledWith = onExtendedHoldEnd.mock.calls[0][0];
-      expect(calledWith).toBeCloseTo(5.2, 1);
+      expect(calledWith).toBeCloseTo(5.25, 6);
     });
 
     it('endExtendedHold is a no-op when not in extended hold', () => {
@@ -1079,10 +1098,9 @@ describe('useBreathingTimer', () => {
 
       const timer = useBreathingTimer(nextSetConfig);
 
-      // Simulate set complete state
-      timer.state.value.phase = 'SET_COMPLETE';
-      timer.state.value.currentSet = 1;
-      timer.state.value.currentRepetition = 1;
+      timer.start();
+      vi.advanceTimersByTime(4000);
+      expect(timer.phase.value).toBe('SET_COMPLETE');
 
       timer.nextSet();
 
@@ -1180,9 +1198,8 @@ describe('useBreathingTimer', () => {
       };
 
       const timer = useBreathingTimer(baseConfig);
-      timer.state.value.isRunning = true;
-      timer.state.value.phase = 'INHALE';
-      timer.state.value.currentTime = 0.05;
+      timer.start();
+      vi.advanceTimersByTime(950);
 
       timer.skipPhase();
       vi.advanceTimersByTime(16);

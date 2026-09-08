@@ -23,7 +23,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
   const pausedPhase = ref<BreathingPhase | null>(null);
   let intervalId: ReturnType<typeof setInterval> | null = null;
   let phaseStartTime = 0; // Timestamp when current phase started
-  let pausedTimeRemaining = 0; // Time remaining when paused
+  let pausedElapsedMs = 0; // Preserve elapsed time, including any unsampled phase overflow
   let lastSoundedSecond = -1; // Track last second we played a sound for
 
   const phase = computed(() => state.value.phase);
@@ -98,12 +98,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
   function getCurrentExtendedHoldElapsed(): number {
     if (!isExtendedHoldPhase(state.value.phase)) return state.value.extendedHoldElapsed;
-    if (isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)) {
-      return state.value.extendedHoldElapsed;
-    }
-
-    const elapsed = phaseStartTime > 0 ? (performance.now() - phaseStartTime) / 1000 : 0;
-    return Math.min(state.value.totalPhaseTime, Math.max(0, elapsed));
+    const elapsed = Math.max(0, (performance.now() - phaseStartTime) / 1000);
+    return isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)
+      ? elapsed
+      : Math.min(state.value.totalPhaseTime, elapsed);
   }
 
   function updateTime(now: number) {
@@ -337,8 +335,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
   function pause() {
     if (!state.value.isRunning || state.value.isPaused) return;
 
+    const now = performance.now();
+    if (hasActivePhase()) updateTime(now);
     pausedPhase.value = state.value.phase;
-    pausedTimeRemaining = state.value.currentTime;
+    pausedElapsedMs = Math.max(0, now - phaseStartTime);
     state.value = { ...state.value, isPaused: true, phase: 'PAUSED' };
     stopInterval();
     options.onPhaseChange?.('PAUSED', state.value);
@@ -350,16 +350,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     state.value = { ...state.value, isPaused: false, phase: pausedPhase.value };
     pausedPhase.value = null;
 
-    // Adjust phase start time to account for pause duration
-    const wasToleranceHold = isToleranceExtendedHold(
-      state.value.phase,
-      state.value.isFirstExtendedHold
-    );
-    // Ensure non-negative time remaining
-    const safeTimeRemaining = Math.max(0, pausedTimeRemaining);
-    phaseStartTime = wasToleranceHold
-      ? performance.now() - safeTimeRemaining * 1000
-      : performance.now() - (state.value.totalPhaseTime - safeTimeRemaining) * 1000;
+    phaseStartTime = performance.now() - pausedElapsedMs;
 
     startInterval();
     options.onPhaseChange?.(state.value.phase, state.value);
@@ -370,7 +361,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     state.value = { ...INITIAL_TIMER_STATE };
     pausedPhase.value = null;
     phaseStartTime = 0;
-    pausedTimeRemaining = 0;
+    pausedElapsedMs = 0;
     lastSoundedSecond = -1;
     options.onPhaseChange?.('IDLE', state.value);
   }
@@ -383,6 +374,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       return;
     }
 
+    updateTime(performance.now());
     const holdType = state.value.phase === 'EXTENDED_INHALE_HOLD' ? 'INHALE' : 'EXHALE';
     const duration = getCurrentExtendedHoldElapsed();
 
