@@ -25,7 +25,6 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
   let phaseStartTime = 0; // Timestamp when current phase started
   let pausedTimeRemaining = 0; // Time remaining when paused
   let lastSoundedSecond = -1; // Track last second we played a sound for
-  let transitionPending = false; // Prevent multiple queued transitions per phase
 
   const phase = computed(() => state.value.phase);
   const currentTime = computed(() => state.value.currentTime);
@@ -93,115 +92,96 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     return phase === 'EXTENDED_INHALE_HOLD' || phase === 'EXTENDED_EXHALE_HOLD';
   }
 
+  function hasActivePhase() {
+    return state.value.isRunning && !state.value.isPaused && state.value.phase !== 'SET_COMPLETE';
+  }
+
   function getCurrentExtendedHoldElapsed(): number {
     if (!isExtendedHoldPhase(state.value.phase)) return state.value.extendedHoldElapsed;
     if (isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)) {
       return state.value.extendedHoldElapsed;
     }
 
-    const elapsed = phaseStartTime > 0 ? (Date.now() - phaseStartTime) / 1000 : 0;
+    const elapsed = phaseStartTime > 0 ? (performance.now() - phaseStartTime) / 1000 : 0;
     return Math.min(state.value.totalPhaseTime, Math.max(0, elapsed));
   }
 
-  function tick() {
-    if (state.value.isPaused) return;
-
-    // Determine current extended hold mode
-    const isToleranceMode = isToleranceExtendedHold(
-      state.value.phase,
-      state.value.isFirstExtendedHold
-    );
-
-    // Handle extended hold tolerance mode (counting up)
-    if (isToleranceMode) {
-      const elapsed = (Date.now() - phaseStartTime) / 1000;
-      state.value = {
-        ...state.value,
-        extendedHoldElapsed: elapsed,
-        currentTime: elapsed,
-      };
-      return;
-    }
-
-    // Calculate time remaining based on actual elapsed time (no drift)
-    const elapsed = (Date.now() - phaseStartTime) / 1000;
-    const newTime = Math.max(0, state.value.totalPhaseTime - elapsed);
+  function updateTime(now: number) {
+    const elapsed = Math.max(0, (now - phaseStartTime) / 1000);
+    const tolerance = isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold);
+    const currentTime = tolerance ? elapsed : Math.max(0, state.value.totalPhaseTime - elapsed);
     const extendedHoldElapsed = isExtendedHoldPhase(state.value.phase)
-      ? Math.min(state.value.totalPhaseTime, Math.max(0, elapsed))
+      ? tolerance
+        ? elapsed
+        : Math.min(state.value.totalPhaseTime, elapsed)
       : state.value.extendedHoldElapsed;
-
-    // Use floor to determine when we've crossed into a new second
-    const currentSecond = Math.floor(newTime);
-
-    // Play click when we cross a second boundary (skip the starting second and only play for countdown)
-    // For a 4s phase: starts at 4, plays when crossing to 3, 2, 1, 0
-    if (currentSecond !== lastSoundedSecond) {
-      // Only play if we're not at the starting second
-      if (currentSecond < state.value.totalPhaseTime) {
-        lastSoundedSecond = currentSecond;
-        soundService.playClick();
-      } else {
-        // Just update the tracker without playing
-        lastSoundedSecond = currentSecond;
-      }
-    }
-
-    state.value = { ...state.value, currentTime: newTime, extendedHoldElapsed };
-
-    // When we've elapsed the full duration, transition to next phase
-    // Use lastSoundedSecond === 0 to ensure we've played the final click before transitioning
-    if (elapsed >= state.value.totalPhaseTime && lastSoundedSecond === 0 && !transitionPending) {
-      transitionPending = true;
-      setTimeout(() => {
-        // Only transition if still pending (prevents double transitions if tick() called rapidly)
-        if (transitionPending) {
-          transitionPending = false;
-          transitionToNextPhase();
-        }
-      }, 0);
+    if (
+      currentTime !== state.value.currentTime ||
+      extendedHoldElapsed !== state.value.extendedHoldElapsed
+    ) {
+      state.value = { ...state.value, currentTime, extendedHoldElapsed };
     }
   }
 
-  function transitionToNextPhase() {
+  function tick() {
+    const now = performance.now();
+    while (hasActivePhase()) {
+      updateTime(now);
+      if (isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)) return;
+
+      const currentSecond = Math.floor(state.value.currentTime);
+      if (currentSecond !== lastSoundedSecond) {
+        lastSoundedSecond = currentSecond;
+        soundService.playClick();
+      }
+
+      if (state.value.currentTime > 0) return;
+      // Carry the scheduled deadline forward, so fractional durations and late
+      // callbacks do not add delay to every subsequent breathing phase.
+      transitionToNextPhase(phaseStartTime + state.value.totalPhaseTime * 1000);
+    }
+  }
+
+  function transitionToNextPhase(startedAt = performance.now()) {
     const { phase: currentPhase } = state.value;
 
     // Handle recovery breath transition
     if (state.value.isRecoveryBreath && currentPhase === 'INHALE') {
       state.value = { ...state.value, isRecoveryBreath: false };
-      startExtendedHold();
+      startExtendedHold(startedAt);
       return;
     }
 
     // Handle recovery exhale transition
     if (state.value.isRecoveryExhale && currentPhase === 'EXHALE') {
       state.value = { ...state.value, isRecoveryExhale: false };
-      startExtendedHold();
+      startExtendedHold(startedAt);
       return;
     }
 
     switch (currentPhase) {
       case 'INHALE':
         if (config.inhaleHoldTime > 0) {
-          setPhase('INHALE_HOLD', config.inhaleHoldTime);
+          setPhase('INHALE_HOLD', config.inhaleHoldTime, startedAt);
         } else {
-          setPhase('EXHALE', config.exhaleTime);
+          setPhase('EXHALE', config.exhaleTime, startedAt);
         }
         break;
 
       case 'INHALE_HOLD':
-        setPhase('EXHALE', config.exhaleTime);
+        setPhase('EXHALE', config.exhaleTime, startedAt);
         break;
 
       case 'EXHALE':
         if (config.exhaleHoldTime > 0) {
-          setPhase('EXHALE_HOLD', config.exhaleHoldTime);
+          setPhase('EXHALE_HOLD', config.exhaleHoldTime, startedAt);
         } else {
-          handleRepetitionEnd();
+          handleRepetitionEnd(startedAt);
         }
         break;
 
       case 'EXHALE_HOLD':
-        handleRepetitionEnd();
+        handleRepetitionEnd(startedAt);
         break;
 
       case 'EXTENDED_INHALE_HOLD':
@@ -211,25 +191,25 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
         const actualDuration = getCurrentExtendedHoldElapsed();
 
         options.onExtendedHoldEnd?.(actualDuration, holdType, state.value);
-        handlePostExtendedHold();
+        handlePostExtendedHold(startedAt);
         break;
 
       case 'SET_REST':
-        startNextSet();
+        startNextSet(startedAt);
         break;
     }
   }
 
-  function handleRepetitionEnd() {
+  function handleRepetitionEnd(startedAt = performance.now()) {
     options.onRepetitionComplete?.(state.value.currentRepetition, state.value);
 
     if (config.extendedHoldEnabled && state.value.currentRepetition >= config.repetitions) {
-      startExtendedHold();
+      startExtendedHold(startedAt);
       return;
     }
 
     if (state.value.currentRepetition >= config.repetitions) {
-      completeSet();
+      completeSet(startedAt);
       return;
     }
 
@@ -237,10 +217,10 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       ...state.value,
       currentRepetition: state.value.currentRepetition + 1,
     };
-    setPhase('INHALE', config.inhaleTime);
+    setPhase('INHALE', config.inhaleTime, startedAt);
   }
 
-  function startExtendedHold() {
+  function startExtendedHold(startedAt = performance.now()) {
     const isFirst = state.value.isFirstExtendedHold;
     const holdType = isFirst ? config.extendedHoldType : config.secondExtendedHoldType;
     const holdMode = isFirst ? config.extendedHoldMode : config.secondExtendedHoldMode;
@@ -250,14 +230,14 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     state.value = { ...state.value, extendedHoldElapsed: 0 };
 
     const enterExtendedHold = (phase: 'EXTENDED_INHALE_HOLD' | 'EXTENDED_EXHALE_HOLD') => {
-      setPhase(phase, holdMode === 'TIMED' ? holdDuration : 0);
+      setPhase(phase, holdMode === 'TIMED' ? holdDuration : 0, startedAt);
       options.onExtendedHoldStart?.(holdType, state.value);
     };
 
     if (holdType === 'INHALE') {
       if (currentPhase !== 'INHALE') {
         state.value = { ...state.value, isRecoveryBreath: true };
-        setPhase('INHALE', config.inhaleTime);
+        setPhase('INHALE', config.inhaleTime, startedAt);
         return;
       }
       enterExtendedHold('EXTENDED_INHALE_HOLD');
@@ -266,7 +246,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     }
   }
 
-  function handlePostExtendedHold() {
+  function handlePostExtendedHold(startedAt = performance.now()) {
     if (state.value.isFirstExtendedHold && config.secondExtendedHoldEnabled) {
       state.value = {
         ...state.value,
@@ -276,47 +256,47 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       // If second hold is INHALE type (Recovery Breath), we need to inhale first
       if (config.secondExtendedHoldType === 'INHALE') {
         state.value = { ...state.value, isRecoveryBreath: true };
-        setPhase('INHALE', config.inhaleTime);
+        setPhase('INHALE', config.inhaleTime, startedAt);
       } else {
         // If second hold is EXHALE type and we just finished an INHALE hold, add a recovery exhale.
         const justFinishedInhaleHold = state.value.phase === 'EXTENDED_INHALE_HOLD';
         if (justFinishedInhaleHold && config.secondExtendedHoldType === 'EXHALE') {
           state.value = { ...state.value, isRecoveryExhale: true };
-          setPhase('EXHALE', config.exhaleTime);
+          setPhase('EXHALE', config.exhaleTime, startedAt);
         } else {
-          startExtendedHold();
+          startExtendedHold(startedAt);
         }
       }
       return;
     }
 
-    completeSet();
+    completeSet(startedAt);
   }
 
-  function completeSet() {
+  function completeSet(startedAt = performance.now()) {
     options.onSetComplete?.(state.value.currentSet, state.value);
 
     if (config.targetSets > 0 && state.value.currentSet >= config.targetSets) {
-      completeSession();
+      completeSession(startedAt);
       return;
     }
 
     if (config.restBetweenSetsSeconds > 0) {
-      setPhase('SET_REST', config.restBetweenSetsSeconds);
+      setPhase('SET_REST', config.restBetweenSetsSeconds, startedAt);
     } else {
-      setPhase('SET_COMPLETE', 0);
+      setPhase('SET_COMPLETE', 0, startedAt);
       stopInterval();
     }
   }
 
-  function completeSession() {
+  function completeSession(startedAt = performance.now()) {
     stopInterval();
     state.value = { ...state.value, isRunning: false };
-    setPhase('SESSION_COMPLETE', 0);
+    setPhase('SESSION_COMPLETE', 0, startedAt);
     options.onSessionComplete?.(state.value);
   }
 
-  function setPhase(newPhase: BreathingPhase, duration: number) {
+  function setPhase(newPhase: BreathingPhase, duration: number, startedAt = performance.now()) {
     state.value = {
       ...state.value,
       phase: newPhase,
@@ -325,10 +305,9 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     };
 
     // Set timestamp AFTER updating state
-    phaseStartTime = Date.now();
+    phaseStartTime = startedAt;
     // Initialize lastSoundedSecond to prevent immediate tick
     lastSoundedSecond = Math.floor(duration);
-    transitionPending = false;
 
     options.onPhaseChange?.(newPhase, state.value);
   }
@@ -379,8 +358,8 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     // Ensure non-negative time remaining
     const safeTimeRemaining = Math.max(0, pausedTimeRemaining);
     phaseStartTime = wasToleranceHold
-      ? Date.now() - safeTimeRemaining * 1000
-      : Date.now() - (state.value.totalPhaseTime - safeTimeRemaining) * 1000;
+      ? performance.now() - safeTimeRemaining * 1000
+      : performance.now() - (state.value.totalPhaseTime - safeTimeRemaining) * 1000;
 
     startInterval();
     options.onPhaseChange?.(state.value.phase, state.value);
@@ -411,7 +390,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     handlePostExtendedHold();
   }
 
-  function startNextSet() {
+  function startNextSet(startedAt = performance.now()) {
     state.value = {
       ...state.value,
       currentSet: state.value.currentSet + 1,
@@ -420,7 +399,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       extendedHoldElapsed: 0,
     };
 
-    setPhase('INHALE', config.inhaleTime);
+    setPhase('INHALE', config.inhaleTime, startedAt);
     startInterval();
   }
 
@@ -436,7 +415,6 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
       return;
     }
 
-    transitionPending = false;
     state.value = { ...state.value, currentTime: 0 };
     transitionToNextPhase();
   }

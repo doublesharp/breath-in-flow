@@ -53,13 +53,17 @@ describe('useBreathingTimer', () => {
       timer.start();
       expect(timer.phase.value).toBe('INHALE');
 
-      // After some time, should have transitioned to at least INHALE_HOLD
-      vi.advanceTimersByTime(3000);
-      expect(['INHALE_HOLD', 'EXHALE', 'EXHALE_HOLD']).toContain(timer.phase.value);
-
-      // After more time, should be past EXHALE_HOLD
-      vi.advanceTimersByTime(3000);
-      expect(['EXHALE_HOLD', 'INHALE']).toContain(timer.phase.value);
+      for (const [milliseconds, phase, remaining] of [
+        [2000, 'INHALE_HOLD', 1],
+        [1000, 'EXHALE', 2],
+        [2000, 'EXHALE_HOLD', 1],
+        [1000, 'INHALE', 2],
+      ] as const) {
+        vi.advanceTimersByTime(milliseconds);
+        expect(timer.phase.value).toBe(phase);
+        expect(timer.currentTime.value).toBe(remaining);
+      }
+      expect(timer.currentRepetition.value).toBe(2);
     });
 
     it('should pause and resume', () => {
@@ -151,12 +155,15 @@ describe('useBreathingTimer', () => {
       // At start of inhale (scale should be around 0.6)
       expect(timer.breathingScale.value).toBeCloseTo(0.6, 1);
 
-      // After enough time to transition to INHALE_HOLD, scale should be 1.0
-      vi.advanceTimersByTime(3000);
-      // If we're in INHALE_HOLD or later, scale should be 1.0 for hold phases
-      if (timer.phase.value.includes('HOLD') || timer.phase.value === 'EXHALE') {
-        expect(timer.breathingScale.value).toBeCloseTo(1.0, 0);
-      }
+      vi.advanceTimersByTime(1000);
+      expect(timer.phase.value).toBe('INHALE');
+      expect(timer.breathingScale.value).toBeCloseTo(0.8, 6);
+      vi.advanceTimersByTime(1000);
+      expect(timer.phase.value).toBe('INHALE_HOLD');
+      expect(timer.breathingScale.value).toBe(1);
+      vi.advanceTimersByTime(2000);
+      expect(timer.phase.value).toBe('EXHALE');
+      expect(timer.breathingScale.value).toBeCloseTo(0.8, 6);
     });
 
     it('should format display time correctly', () => {
@@ -234,6 +241,47 @@ describe('useBreathingTimer', () => {
 
       expect(timer.phase.value).toBe('INHALE');
       expect(timer.currentSet.value).toBe(2);
+    });
+  });
+
+  describe('Clock accuracy and scheduling', () => {
+    it('does not accumulate sampling delay across fractional phases', () => {
+      const onSessionComplete = vi.fn();
+      const timer = useBreathingTimer(
+        {
+          ...config,
+          inhaleTime: 1.25,
+          exhaleTime: 1.25,
+          inhaleHoldTime: 0,
+          exhaleHoldTime: 0,
+          repetitions: 10,
+          targetSets: 1,
+        },
+        { onSessionComplete }
+      );
+      timer.start();
+      vi.advanceTimersByTime(25000);
+      expect(timer.phase.value).toBe('SESSION_COMPLETE');
+      expect(onSessionComplete).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('ignores wall clock changes during a running phase', () => {
+      const timer = useBreathingTimer(config);
+      timer.start();
+      vi.advanceTimersByTime(500);
+      vi.setSystemTime(Date.now() + 60000);
+      vi.advanceTimersByTime(100);
+      expect(timer.phase.value).toBe('INHALE');
+      expect(timer.currentTime.value).toBeCloseTo(1.4, 6);
+    });
+
+    it('does not leave a deferred transition at the phase deadline', () => {
+      const timer = useBreathingTimer(config);
+      timer.start();
+      vi.advanceTimersByTime(2000);
+      timer.stop();
+      expect(vi.getTimerCount()).toBe(0);
     });
   });
 
