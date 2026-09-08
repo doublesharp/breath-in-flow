@@ -102,6 +102,12 @@ test('onboarding and check-in actions remain reachable in landscape with enlarge
   await onboarding.getByTestId('goal-relax').check();
   const continueButton = onboarding.getByTestId('save-goal');
   await expect(continueButton).toBeInViewport();
+  // Radio selection may scroll its container. Capture a deliberate position
+  // instead of depending on the browser's automatic focus scrolling.
+  await onboarding.getByTestId('goal-onboarding-card').evaluate((card) => {
+    card.scrollTop = 0;
+  });
+  await expect(onboarding.getByRole('heading')).toBeInViewport();
   await reviewScreenshot(page, testInfo, '06-landscape-large-text-onboarding');
   await continueButton.click();
 
