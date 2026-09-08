@@ -123,14 +123,18 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
   function tick() {
     const now = performance.now();
+    let sounded = false;
     while (hasActivePhase()) {
       updateTime(now);
       if (isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)) return;
 
-      const currentSecond = Math.floor(state.value.currentTime);
+      const currentSecond = Math.ceil(state.value.currentTime);
       if (currentSecond !== lastSoundedSecond) {
         lastSoundedSecond = currentSecond;
-        soundService.playClick();
+        if (!sounded) {
+          soundService.playClick();
+          sounded = true;
+        }
       }
 
       if (state.value.currentTime > 0) return;
@@ -305,7 +309,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     // Set timestamp AFTER updating state
     phaseStartTime = startedAt;
     // Initialize lastSoundedSecond to prevent immediate tick
-    lastSoundedSecond = Math.floor(duration);
+    lastSoundedSecond = Math.ceil(duration);
 
     options.onPhaseChange?.(newPhase, state.value);
   }

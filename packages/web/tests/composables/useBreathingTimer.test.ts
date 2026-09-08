@@ -266,6 +266,26 @@ describe('useBreathingTimer', () => {
       expect(vi.getTimerCount()).toBe(0);
     });
 
+    it('catches up delayed callbacks without overlapping overdue clicks', () => {
+      const click = vi.spyOn(soundService, 'playClick').mockImplementation(() => {});
+      const timer = useBreathingTimer({
+        ...config,
+        inhaleTime: 1,
+        exhaleTime: 1,
+        inhaleHoldTime: 0,
+        exhaleHoldTime: 0,
+        repetitions: 5,
+      });
+      timer.start();
+      // Move the clock without delivering the intervening interval callbacks.
+      vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 9000);
+      vi.advanceTimersByTime(100);
+      expect(timer.phase.value).toBe('EXHALE');
+      expect(timer.currentRepetition.value).toBe(5);
+      expect(timer.currentTime.value).toBe(1);
+      expect(click).toHaveBeenCalledTimes(1);
+    });
+
     it('preserves phase overflow when pausing between its deadline and next tick', () => {
       const timer = useBreathingTimer({
         ...config,
@@ -908,54 +928,35 @@ describe('useBreathingTimer', () => {
   });
 
   describe('Sound Handling', () => {
-    it('plays click when countdown hits an integer second', async () => {
-      const baseConfig: BreathingConfig = {
-        name: 'Test',
-        inhaleTime: 1,
-        inhaleHoldTime: 0,
-        exhaleTime: 1,
-        exhaleHoldTime: 0,
-        repetitions: 1,
-        extendedHoldEnabled: true,
-        extendedHoldMode: 'TOLERANCE',
-        extendedHoldType: 'EXHALE',
-        extendedHoldDuration: 10,
-        secondExtendedHoldEnabled: true,
-        secondExtendedHoldMode: 'TIMED',
-        secondExtendedHoldType: 'INHALE',
-        secondExtendedHoldDuration: 15,
-        targetSets: 0,
-        restBetweenSetsSeconds: 0,
-        soundEnabled: false,
-        soundTheme: 'wood',
-        ttsEnabled: false,
-      };
-
-      const timer = useBreathingTimer(baseConfig);
+    it('plays clicks at the countdown boundaries shown on screen', () => {
+      const click = vi.spyOn(soundService, 'playClick').mockImplementation(() => {});
+      const timer = useBreathingTimer({ ...config, inhaleTime: 3 });
       timer.start();
-
-      // Just verify timer started without error and is running
-      expect(timer.phase.value).toBe('INHALE');
-      expect(timer.isRunning.value).toBe(true);
+      vi.advanceTimersByTime(900);
+      expect(timer.displayTime.value).toBe('3');
+      expect(click).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(100);
+      expect(timer.displayTime.value).toBe('2');
+      expect(click).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1000);
+      expect(timer.displayTime.value).toBe('1');
+      expect(click).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(1000);
+      expect(timer.phase.value).toBe('INHALE_HOLD');
+      expect(click).toHaveBeenCalledTimes(3);
     });
 
-    it('does not play click when not crossing integer boundary', () => {
-      const noIntConfig = {
-        ...DEFAULT_BREATHING_CONFIG,
-        inhaleTime: 2.1,
-        exhaleTime: 2,
-        inhaleHoldTime: 0,
-        exhaleHoldTime: 0,
-        repetitions: 1,
-        soundEnabled: true,
-      };
-
-      const timer = useBreathingTimer(noIntConfig);
+    it('does not repeat clicks within the same displayed second', () => {
+      const click = vi.spyOn(soundService, 'playClick').mockImplementation(() => {});
+      const timer = useBreathingTimer({ ...config, inhaleTime: 2.5 });
       timer.start();
-
-      // Timer should start and be in INHALE phase
-      expect(timer.phase.value).toBe('INHALE');
-      expect(timer.isRunning.value).toBe(true);
+      vi.advanceTimersByTime(400);
+      expect(click).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(100);
+      expect(timer.displayTime.value).toBe('2');
+      expect(click).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(900);
+      expect(click).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1285,9 +1286,9 @@ describe('useBreathingTimer', () => {
       const timer = useBreathingTimer(clickConfig);
       timer.start();
 
-      // Advance one tick (100ms) so tick runs and sees an integer currentTime (3)
-      vi.advanceTimersByTime(100);
-      expect(spy).toHaveBeenCalled();
+      // The first click accompanies the displayed countdown changing from 3 to 2.
+      vi.advanceTimersByTime(1000);
+      expect(spy).toHaveBeenCalledTimes(1);
     });
   });
 
