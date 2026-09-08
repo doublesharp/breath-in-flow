@@ -306,8 +306,9 @@ export class BreathingTimer {
 
 // Utility functions
 export function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.max(0, Math.ceil(seconds % 60));
+  const roundedSeconds = Math.max(0, Math.ceil(seconds));
+  const mins = Math.floor(roundedSeconds / 60);
+  const secs = roundedSeconds % 60;
 
   if (mins > 0) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;

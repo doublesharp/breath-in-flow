@@ -559,6 +559,16 @@ describe('calculateSessionTime', () => {
 });
 
 describe('formatTime', () => {
+  it.each([
+    [59.1, '1:00'],
+    [59.99, '1:00'],
+    [60, '1:00'],
+    [119.1, '2:00'],
+    [3599.9, '60:00'],
+  ])('carries rounded seconds into minutes for %s', (seconds, expected) => {
+    expect(formatTime(seconds)).toBe(expected);
+  });
+
   it('should format whole seconds', () => {
     expect(formatTime(5.35)).toBe('6');
     expect(formatTime(0.15)).toBe('1');
