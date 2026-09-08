@@ -59,10 +59,8 @@ describe('preprocessIBI', () => {
     const intervals = [800, 800, 800, 1300, 800, 800, 800];
     const timestamps = makeTimestamps(intervals);
     const result = preprocessIBI(intervals, timestamps);
-    // After correction, the ectopic interval should be replaced
-    if (result.artifactIndices.includes(3)) {
-      expect(result.cleanedIntervals[3]).toBeLessThan(1300);
-    }
+    expect(result.artifactIndices).toEqual([3]);
+    expect(result.cleanedIntervals).toEqual([800, 800, 800, 800, 800, 800, 800]);
   });
 
   it('handles empty input', () => {
