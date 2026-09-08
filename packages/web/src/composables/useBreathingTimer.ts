@@ -352,7 +352,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
     phaseStartTime = performance.now() - pausedElapsedMs;
 
-    startInterval();
+    if (hasActivePhase()) startInterval();
     options.onPhaseChange?.(state.value.phase, state.value);
   }
 

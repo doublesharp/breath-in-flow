@@ -306,6 +306,20 @@ describe('useBreathingTimer', () => {
       expect(timer.currentTime.value).toBeCloseTo(1.4, 6);
     });
 
+    it('does not restart background ticks when resuming between sets', () => {
+      const timer = useBreathingTimer(config);
+      timer.start();
+      vi.advanceTimersByTime(13000);
+      expect(timer.phase.value).toBe('SET_COMPLETE');
+      timer.pause();
+      timer.resume();
+      expect(timer.phase.value).toBe('SET_COMPLETE');
+      expect(vi.getTimerCount()).toBe(0);
+      timer.nextSet();
+      vi.advanceTimersByTime(2000);
+      expect(timer.phase.value).toBe('INHALE_HOLD');
+    });
+
     it('does not leave a deferred transition at the phase deadline', () => {
       const timer = useBreathingTimer(config);
       timer.start();
