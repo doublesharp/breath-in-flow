@@ -26,4 +26,7 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+  onnxruntime-node: true
   prisma: true
+  protobufjs: false
+  sharp: false

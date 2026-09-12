@@ -1,0 +1,10 @@
+{
+  "voice": "af_heart",
+  "cues": [
+    { "id": "inhale", "text": "Full Breath In" },
+    { "id": "exhale", "text": "Full Breath Out" },
+    { "id": "hold", "text": "Hold" },
+    { "id": "warmup", "text": "Warmup starting" },
+    { "id": "rest", "text": "Rest quietly" }
+  ]
+}

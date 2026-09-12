@@ -1,0 +1,12 @@
+Kokoro Heart breathing cues
+
+Generated locally with hexgrad's Kokoro-82M v1.0 model and kokoro-js 1.2.1.
+Voice: af_heart. Text is listed in af_heart/provenance.json.
+
+Model: https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX
+Original model: https://huggingface.co/hexgrad/Kokoro-82M
+Generator: https://github.com/hexgrad/kokoro/tree/main/kokoro.js
+
+Kokoro model weights and kokoro-js are provided under the Apache License 2.0.
+A copy of that license is included in LICENSE.txt. The model revision and
+SHA-256 hashes of the generation inputs are recorded in provenance.json.
