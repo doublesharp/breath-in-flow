@@ -221,6 +221,27 @@ describe('BreathingPractice.vue', () => {
         default: true,
         localService: true,
       },
+      {
+        voiceURI: 'kokoro:af_bella',
+        name: 'Kokoro Bella',
+        lang: 'en-US',
+        default: false,
+        localService: true,
+      },
+      {
+        voiceURI: 'kokoro:am_michael',
+        name: 'Kokoro Michael',
+        lang: 'en-US',
+        default: false,
+        localService: true,
+      },
+      {
+        voiceURI: 'kokoro:bf_emma',
+        name: 'Kokoro Emma',
+        lang: 'en-GB',
+        default: false,
+        localService: true,
+      },
       { voiceURI: 'device:alex', name: 'Alex', lang: 'en-US', default: true, localService: true },
     ]);
     localStorage.setItem('herb_breathing_last_config', JSON.stringify({ ttsEnabled: true }));
@@ -231,7 +252,25 @@ describe('BreathingPractice.vue', () => {
     const voiceOptions = Array.from(document.body.querySelectorAll('option')).filter(
       (option) => option.value.startsWith('kokoro:') || option.value.startsWith('device:')
     );
-    expect(voiceOptions.map((option) => option.value)).toEqual(['kokoro:af_heart', 'device:alex']);
+    expect(voiceOptions.map((option) => option.value)).toEqual([
+      'kokoro:af_heart',
+      'kokoro:af_bella',
+      'kokoro:am_michael',
+      'kokoro:bf_emma',
+      'device:alex',
+    ]);
+    const picker = document.body.querySelector<HTMLSelectElement>('#guidance-voice')!;
+    expect(picker).not.toBeNull();
+    picker.value = 'kokoro:af_bella';
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    await nextTick();
+    const preview = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Preview voice'
+    );
+    expect(preview).toBeDefined();
+    preview!.click();
+    expect(setVoiceMock).toHaveBeenLastCalledWith('kokoro:af_bella');
+    expect(speakMock).toHaveBeenLastCalledWith('Full Breath In');
   });
 
   it('calls start when Start button clicked', async () => {

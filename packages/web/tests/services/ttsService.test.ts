@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { ASSESSMENT_TRIALS } from '@breath-in-flow/shared';
 import { ttsService } from '@/services/ttsService';
 
 const { nativeGetVoicesMock, nativeSpeakMock, nativeStopMock } = vi.hoisted(() => ({
@@ -39,6 +40,19 @@ const kokoroVoice = {
   localService: true,
   default: true,
 };
+const kokoroVoices = [
+  kokoroVoice,
+  { ...kokoroVoice, voiceURI: 'kokoro:af_bella', name: 'Kokoro Bella', default: false },
+  { ...kokoroVoice, voiceURI: 'kokoro:am_michael', name: 'Kokoro Michael', default: false },
+  {
+    ...kokoroVoice,
+    voiceURI: 'kokoro:bf_emma',
+    name: 'Kokoro Emma',
+    lang: 'en-GB',
+    default: false,
+  },
+];
+
 let audioInstances: Array<{
   src: string;
   play: ReturnType<typeof vi.fn>;
@@ -161,6 +175,9 @@ describe('ttsService', () => {
 
     expect(loaded.map((voice) => voice.voiceURI)).toEqual([
       'kokoro:af_heart',
+      'kokoro:af_bella',
+      'kokoro:am_michael',
+      'kokoro:bf_emma',
       'voice-en-us',
       'voice-es',
     ]);
@@ -177,7 +194,7 @@ describe('ttsService', () => {
     getVoicesMock.mockReturnValue(mockVoices);
     handler?.();
 
-    await expect(pendingVoices).resolves.toEqual([kokoroVoice, ...mockVoices]);
+    await expect(pendingVoices).resolves.toEqual([...kokoroVoices, ...mockVoices]);
     expect(removeEventListenerMock).toHaveBeenCalledWith('voiceschanged', handler);
     expect(ttsService.voicesReady.value).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
@@ -190,7 +207,7 @@ describe('ttsService', () => {
     const pendingVoices = ttsService.loadVoices();
     await vi.advanceTimersByTimeAsync(600);
 
-    await expect(pendingVoices).resolves.toEqual([kokoroVoice]);
+    await expect(pendingVoices).resolves.toEqual(kokoroVoices);
     expect(removeEventListenerMock).toHaveBeenCalledWith('voiceschanged', expect.any(Function));
   });
 
@@ -201,8 +218,8 @@ describe('ttsService', () => {
       voices: [mockVoices[0], mockVoices[0], mockVoices[1]],
     });
 
-    await expect(ttsService.loadVoices()).resolves.toEqual([kokoroVoice, ...mockVoices]);
-    expect(ttsService.getVoices()).toEqual([kokoroVoice, ...mockVoices]);
+    await expect(ttsService.loadVoices()).resolves.toEqual([...kokoroVoices, ...mockVoices]);
+    expect(ttsService.getVoices()).toEqual([...kokoroVoices, ...mockVoices]);
     expect(ttsService.hasNativeSupport()).toBe(true);
   });
 
@@ -212,7 +229,7 @@ describe('ttsService', () => {
     nativeGetVoicesMock.mockRejectedValue(new Error('native voices unavailable'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    await expect(ttsService.loadVoices()).resolves.toEqual([kokoroVoice]);
+    await expect(ttsService.loadVoices()).resolves.toEqual(kokoroVoices);
 
     expect(ttsService.hasNativeSupport()).toBe(false);
     expect(ttsService.voicesReady.value).toBe(true);
@@ -306,10 +323,37 @@ describe('ttsService', () => {
     ttsService.setEnabled(true);
     await ttsService.speak('Full Breath In');
     expect(audioInstances).toHaveLength(1);
-    expect(audioInstances[0].src).toBe('/audio/kokoro/af_heart/inhale.wav');
+    expect(audioInstances[0].src).toBe('/audio/kokoro/af_heart/inhale.mp3');
     expect(audioInstances[0].play).toHaveBeenCalledOnce();
     expect(speakMock).not.toHaveBeenCalled();
   });
+
+  it.each(['af_heart', 'af_bella', 'am_michael', 'bf_emma'])(
+    'plays every practice and assessment cue with %s',
+    async (voice) => {
+      ttsService.setEnabled(true);
+      ttsService.setVoiceByUri(`kokoro:${voice}`);
+      const cues = [
+        ['inhale', 'Full Breath In'],
+        ['exhale', 'Full Breath Out'],
+        ['hold', 'Hold'],
+        ['warmup', 'Warmup starting'],
+        ['rest', 'Rest quietly'],
+        ...ASSESSMENT_TRIALS.map((trial, index) => [
+          `trial-${index + 1}`,
+          `Trial ${index + 1} starting at ${trial.rate} breaths per minute`,
+        ]),
+      ];
+      for (const [id, text] of cues) {
+        await ttsService.speak(text);
+        expect(audioInstances.at(-1)?.src).toBe(`/audio/kokoro/${voice}/${id}.mp3`);
+        expect(audioInstances.at(-1)?.play).toHaveBeenCalledOnce();
+      }
+      expect(audioInstances).toHaveLength(10);
+      expect(speakMock).not.toHaveBeenCalled();
+      expect(nativeSpeakMock).not.toHaveBeenCalled();
+    }
+  );
 
   it('honors an explicitly selected device voice for standard cues', async () => {
     ttsService.setEnabled(true);

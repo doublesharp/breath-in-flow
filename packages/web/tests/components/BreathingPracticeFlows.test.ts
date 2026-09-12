@@ -1,4 +1,4 @@
-import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ref, nextTick } from 'vue';
 import BreathingPractice from '@/components/BreathingPractice.vue';
@@ -1014,6 +1014,36 @@ describe('BreathingPractice goal recommendations', () => {
     expect(vm.config.name).toBe('Adjusted');
     expect(vm.showConfigModal).toBe(true);
     expect(createSessionMock).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it.each([
+    ['start', undefined, 'kokoro:bf_emma'],
+    ['repeat', 'kokoro:af_bella', 'kokoro:af_bella'],
+    ['adjust', undefined, 'kokoro:bf_emma'],
+    ['adjust', 'kokoro:am_michael', 'kokoro:am_michael'],
+  ] as const)('preserves the intended voice for %s with %s', async (action, voice, expected) => {
+    localStorage.setItem(
+      'herb_breathing_last_config',
+      JSON.stringify({
+        ttsEnabled: true,
+        ttsVoice: 'kokoro:bf_emma',
+      })
+    );
+    createSessionMock.mockReturnValue({ id: 'voice-choice', sets: [] });
+    const wrapper = mountWithGoal();
+    await flushPromises();
+    const actions = wrapper.findComponent(RecommendedActions);
+    actions.vm.$emit(action, { ...fullConfig('Voice choice'), ttsVoice: voice });
+    await nextTick();
+    if (action !== 'adjust') {
+      await skipBeforeCheckIn(wrapper);
+      expect(createSessionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ ttsVoice: expected }),
+        undefined
+      );
+    }
+    expect(setVoiceMock).toHaveBeenLastCalledWith(expected);
     wrapper.unmount();
   });
 

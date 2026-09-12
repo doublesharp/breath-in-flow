@@ -144,29 +144,80 @@ test('Kokoro cues decode locally and real guidance stops when practice pauses', 
     const context = new AudioContext();
     try {
       const results = [];
-      for (const id of ['inhale', 'exhale', 'hold', 'warmup', 'rest']) {
-        const response = await fetch(`/audio/kokoro/af_heart/${id}.wav`);
-        if (!response.ok) throw new Error(`${id}: ${response.status}`);
-        const clip = await context.decodeAudioData(await response.arrayBuffer());
-        const samples = clip.getChannelData(0);
-        let energy = 0;
-        for (const sample of samples) energy += sample * sample;
-        results.push({ id, duration: clip.duration, rms: Math.sqrt(energy / samples.length) });
+      for (const voice of ['af_heart', 'af_bella', 'am_michael', 'bf_emma']) {
+        for (const id of [
+          'inhale',
+          'exhale',
+          'hold',
+          'warmup',
+          'rest',
+          'trial-1',
+          'trial-2',
+          'trial-3',
+          'trial-4',
+          'trial-5',
+        ]) {
+          const response = await fetch(`/audio/kokoro/${voice}/${id}.mp3`);
+          if (!response.ok) throw new Error(`${id}: ${response.status}`);
+          const clip = await context.decodeAudioData(await response.arrayBuffer());
+          const samples = clip.getChannelData(0);
+          let energy = 0;
+          for (const sample of samples) energy += sample * sample;
+          results.push({
+            id: `${voice}/${id}`,
+            duration: clip.duration,
+            rms: Math.sqrt(energy / samples.length),
+          });
+        }
       }
       return results;
     } finally {
       await context.close();
     }
   });
-  expect(decoded).toHaveLength(5);
+  expect(decoded).toHaveLength(40);
   for (const clip of decoded) {
     expect(clip.duration, clip.id).toBeGreaterThan(0.3);
-    expect(clip.duration, clip.id).toBeLessThan(4);
+    expect(clip.duration, clip.id).toBeLessThan(10);
     expect(clip.rms, `${clip.id} must contain audible samples`).toBeGreaterThan(0.01);
   }
   const onboarding = page.getByRole('dialog', { name: 'What brings you here?' });
   await onboarding.getByTestId('goal-consistency').check();
   await onboarding.getByTestId('save-goal').click();
+  await page.getByRole('button', { name: 'Configure practice' }).click();
+  // Voice guidance is off by default. Enable it using the adjacent label.
+  await page
+    .getByText('Voice guidance (TTS)', { exact: true })
+    .locator('..')
+    .getByRole('button')
+    .click();
+  for (const voice of ['af_heart', 'af_bella', 'am_michael', 'bf_emma']) {
+    await page.getByLabel('Voice', { exact: true }).selectOption(`kokoro:${voice}`);
+    await page.getByRole('button', { name: 'Preview voice' }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const clips = (window as unknown as { guidanceClips: HTMLAudioElement[] }).guidanceClips;
+          const active = clips.at(-1);
+          return {
+            path: active ? new URL(active.src).pathname : '',
+            playing: active ? !active.paused && active.currentTime > 0 : false,
+            rate: active?.playbackRate,
+            olderStopped: clips.slice(0, -1).every((clip) => clip.paused),
+          };
+        })
+      )
+      .toEqual({
+        path: `/audio/kokoro/${voice}/inhale.mp3`,
+        playing: true,
+        rate: 1,
+        olderStopped: true,
+      });
+  }
+  await page.getByRole('button', { name: 'Use these settings' }).click();
+  await page.evaluate(() => {
+    (window as unknown as { guidanceClips: HTMLAudioElement[] }).guidanceClips.length = 0;
+  });
   await page.getByTestId('start-recommended').click();
   await page.getByTestId('checkin-skip').click();
   await expect
@@ -174,7 +225,7 @@ test('Kokoro cues decode locally and real guidance stops when practice pauses', 
       page.evaluate(() => {
         const clips = (window as unknown as { guidanceClips: HTMLAudioElement[] }).guidanceClips;
         return clips.map((clip) => ({
-          file: clip.src.split('/').at(-1),
+          file: new URL(clip.src).pathname,
           playing: !clip.paused && clip.currentTime > 0,
           time: clip.currentTime,
           error: clip.error?.message,
@@ -182,7 +233,9 @@ test('Kokoro cues decode locally and real guidance stops when practice pauses', 
       })
     )
     .toEqual(
-      expect.arrayContaining([expect.objectContaining({ file: 'inhale.wav', playing: true })])
+      expect.arrayContaining([
+        expect.objectContaining({ file: '/audio/kokoro/bf_emma/inhale.mp3', playing: true }),
+      ])
     );
   const session = page.getByTestId('session-dialog');
   await session.getByRole('button', { name: /pause/i }).click();

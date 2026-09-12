@@ -1,10 +1,67 @@
 {
-  "voice": "af_heart",
+  "defaultVoice": "af_heart",
+  "voices": [
+    {
+      "id": "af_heart",
+      "name": "Kokoro Heart",
+      "lang": "en-US"
+    },
+    {
+      "id": "af_bella",
+      "name": "Kokoro Bella",
+      "lang": "en-US"
+    },
+    {
+      "id": "am_michael",
+      "name": "Kokoro Michael",
+      "lang": "en-US"
+    },
+    {
+      "id": "bf_emma",
+      "name": "Kokoro Emma",
+      "lang": "en-GB"
+    }
+  ],
   "cues": [
-    { "id": "inhale", "text": "Full Breath In" },
-    { "id": "exhale", "text": "Full Breath Out" },
-    { "id": "hold", "text": "Hold" },
-    { "id": "warmup", "text": "Warmup starting" },
-    { "id": "rest", "text": "Rest quietly" }
+    {
+      "id": "inhale",
+      "text": "Full Breath In"
+    },
+    {
+      "id": "exhale",
+      "text": "Full Breath Out"
+    },
+    {
+      "id": "hold",
+      "text": "Hold"
+    },
+    {
+      "id": "warmup",
+      "text": "Warmup starting"
+    },
+    {
+      "id": "rest",
+      "text": "Rest quietly"
+    },
+    {
+      "id": "trial-1",
+      "text": "Trial 1 starting at 6.5 breaths per minute"
+    },
+    {
+      "id": "trial-2",
+      "text": "Trial 2 starting at 6 breaths per minute"
+    },
+    {
+      "id": "trial-3",
+      "text": "Trial 3 starting at 5.5 breaths per minute"
+    },
+    {
+      "id": "trial-4",
+      "text": "Trial 4 starting at 5 breaths per minute"
+    },
+    {
+      "id": "trial-5",
+      "text": "Trial 5 starting at 4.5 breaths per minute"
+    }
   ]
 }

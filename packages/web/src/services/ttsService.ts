@@ -2,13 +2,13 @@ import { ref } from 'vue';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
 import kokoroCues from '../data/kokoroCues.json';
 
-const kokoroVoice: SpeechSynthesisVoice = {
-  voiceURI: 'kokoro:af_heart',
-  name: 'Kokoro Heart',
-  lang: 'en-US',
+const kokoroVoices: SpeechSynthesisVoice[] = kokoroCues.voices.map((voice) => ({
+  voiceURI: `kokoro:${voice.id}`,
+  name: voice.name,
+  lang: voice.lang,
   localService: true,
-  default: true,
-};
+  default: voice.id === kokoroCues.defaultVoice,
+}));
 
 type SpeakOptions = {
   targetDurationSeconds?: number;
@@ -76,7 +76,7 @@ class TtsService {
   }
 
   public async loadVoices(): Promise<SpeechSynthesisVoice[]> {
-    return [kokoroVoice, ...(await this.loadDeviceVoices())];
+    return [...kokoroVoices, ...(await this.loadDeviceVoices())];
   }
 
   private async loadDeviceVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -168,7 +168,7 @@ class TtsService {
   }
 
   public getVoices(): SpeechSynthesisVoice[] {
-    return [kokoroVoice, ...(this.hasWebSpeech ? this.voicesCache : this.nativeVoicesCache)];
+    return [...kokoroVoices, ...(this.hasWebSpeech ? this.voicesCache : this.nativeVoicesCache)];
   }
 
   public setEnabled(enabled: boolean) {
@@ -209,14 +209,14 @@ class TtsService {
     const requestId = this.requestId;
     const duration = options?.targetDurationSeconds;
     const deadline = duration && duration > 0 ? Date.now() + duration * 1000 : Infinity;
-    const cue =
-      !this.selectedVoiceUri || this.selectedVoiceUri === kokoroVoice.voiceURI
-        ? kokoroCues.cues.find((cue) => cue.text === text)
-        : undefined;
-    if (cue && typeof Audio !== 'undefined') {
-      const audio = new Audio(
-        `${import.meta.env.BASE_URL}audio/kokoro/${kokoroCues.voice}/${cue.id}.wav`
-      );
+    const voice = kokoroCues.voices.find((voice) =>
+      this.selectedVoiceUri
+        ? this.selectedVoiceUri === `kokoro:${voice.id}`
+        : voice.id === kokoroCues.defaultVoice
+    );
+    const cue = voice ? kokoroCues.cues.find((cue) => cue.text === text) : undefined;
+    if (voice && cue && typeof Audio !== 'undefined') {
+      const audio = new Audio(`${import.meta.env.BASE_URL}audio/kokoro/${voice.id}/${cue.id}.mp3`);
       this.activeAudio = audio;
       const fallback = () => {
         if (this.activeAudio !== audio || this.requestId !== requestId) return;

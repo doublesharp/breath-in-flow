@@ -1,7 +1,8 @@
-Kokoro Heart breathing cues
+Kokoro breathing cues
 
 Generated locally with hexgrad's Kokoro-82M v1.0 model and kokoro-js 1.2.1.
-Voice: af_heart. Text is listed in af_heart/provenance.json.
+Voices: af_heart, af_bella, am_michael, bf_emma.
+Text and settings are listed in each voice directory's provenance.json.
 
 Model: https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX
 Original model: https://huggingface.co/hexgrad/Kokoro-82M

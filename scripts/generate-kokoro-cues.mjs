@@ -1,9 +1,10 @@
-// Development-only generator. The app ships WAV files, never the model runtime.
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+// Development-only generator. The app ships MP3 files, never the model runtime.
+import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 import { KokoroTTS } from 'kokoro-js';
 
 const catalog = JSON.parse(
@@ -37,33 +38,57 @@ for (const file of files) {
 const require = createRequire(import.meta.url);
 const packageRoot = dirname(dirname(require.resolve('kokoro-js')));
 const packageInfo = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'));
-const voiceData = await readFile(join(packageRoot, 'voices', `${catalog.voice}.bin`));
-hashes[`voices/${catalog.voice}.bin`] = createHash('sha256').update(voiceData).digest('hex');
-const output = new URL(`../packages/web/public/audio/kokoro/${catalog.voice}/`, import.meta.url);
-await mkdir(output, { recursive: true });
+// Check the encoder before spending time on inference.
+execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
 const tts = await KokoroTTS.from_pretrained(fileURLToPath(snapshot), {
   dtype: 'fp32',
   device: 'cpu',
 });
-for (const cue of catalog.cues) {
-  const audio = await tts.generate(cue.text, { voice: catalog.voice, speed: 0.9 });
-  await audio.save(fileURLToPath(new URL(`${cue.id}.wav`, output)));
-  console.log(`Generated ${cue.id}: ${cue.text}`);
+for (const voice of catalog.voices) {
+  const voiceData = await readFile(join(packageRoot, 'voices', `${voice.id}.bin`));
+  const voiceHashes = {
+    ...hashes,
+    [`voices/${voice.id}.bin`]: createHash('sha256').update(voiceData).digest('hex'),
+  };
+  const output = new URL(`../packages/web/public/audio/kokoro/${voice.id}/`, import.meta.url);
+  await mkdir(output, { recursive: true });
+  for (const cue of catalog.cues) {
+    const audio = await tts.generate(cue.text, { voice: voice.id, speed: 0.9 });
+    const wav = fileURLToPath(new URL(`${cue.id}.wav`, output));
+    const mp3 = fileURLToPath(new URL(`${cue.id}.mp3`, output));
+    await audio.save(wav);
+    execFileSync('ffmpeg', [
+      '-v',
+      'error',
+      '-y',
+      '-i',
+      wav,
+      '-codec:a',
+      'libmp3lame',
+      '-b:a',
+      '96k',
+      `${mp3}.tmp.mp3`,
+    ]);
+    await rename(`${mp3}.tmp.mp3`, mp3);
+    await unlink(wav);
+    console.log(`Generated ${voice.id}/${cue.id}: ${cue.text}`);
+  }
+  await writeFile(
+    new URL('provenance.json', output),
+    JSON.stringify(
+      {
+        model,
+        revision,
+        generator: `kokoro-js@${packageInfo.version}`,
+        hashes: voiceHashes,
+        voice: voice.id,
+        speed: 0.9,
+        dtype: 'fp32',
+        encoding: 'MP3, 96 kbps, mono, 24 kHz (FFmpeg libmp3lame)',
+        cues: catalog.cues,
+      },
+      null,
+      2
+    ) + '\n'
+  );
 }
-await writeFile(
-  new URL('provenance.json', output),
-  JSON.stringify(
-    {
-      model,
-      revision,
-      generator: `kokoro-js@${packageInfo.version}`,
-      hashes,
-      voice: catalog.voice,
-      speed: 0.9,
-      dtype: 'fp32',
-      cues: catalog.cues,
-    },
-    null,
-    2
-  ) + '\n'
-);

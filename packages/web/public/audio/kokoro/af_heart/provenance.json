@@ -12,6 +12,7 @@
   "voice": "af_heart",
   "speed": 0.9,
   "dtype": "fp32",
+  "encoding": "MP3, 96 kbps, mono, 24 kHz (FFmpeg libmp3lame)",
   "cues": [
     {
       "id": "inhale",
@@ -32,6 +33,26 @@
     {
       "id": "rest",
       "text": "Rest quietly"
+    },
+    {
+      "id": "trial-1",
+      "text": "Trial 1 starting at 6.5 breaths per minute"
+    },
+    {
+      "id": "trial-2",
+      "text": "Trial 2 starting at 6 breaths per minute"
+    },
+    {
+      "id": "trial-3",
+      "text": "Trial 3 starting at 5.5 breaths per minute"
+    },
+    {
+      "id": "trial-4",
+      "text": "Trial 4 starting at 5 breaths per minute"
+    },
+    {
+      "id": "trial-5",
+      "text": "Trial 5 starting at 4.5 breaths per minute"
     }
   ]
 }

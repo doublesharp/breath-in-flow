@@ -787,9 +787,9 @@
 
               <div v-if="config.ttsEnabled" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label class="form-label">Voice</label>
+                  <label for="guidance-voice" class="form-label">Voice</label>
                   <div class="relative">
-                    <select v-model="config.ttsVoice" class="form-select" :disabled="!isTtsAvailable || loadingVoices">
+                    <select id="guidance-voice" v-model="config.ttsVoice" class="form-select" :disabled="!isTtsAvailable || loadingVoices">
                       <option v-if="loadingVoices" value="">Loading voices...</option>
                       <option v-else v-for="voice in sortedVoices" :key="voice.voiceURI" :value="voice.voiceURI">
                         {{ formatVoiceLabel(voice) }}
@@ -818,6 +818,14 @@
                       </svg>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    class="btn-secondary mt-2"
+                    :disabled="!isTtsAvailable || loadingVoices"
+                    @click="ttsService.speak('Full Breath In')"
+                  >
+                    Preview voice
+                  </button>
                   <p v-if="!isTtsAvailable && !loadingVoices" class="text-xs text-slate-400 mt-2">
                     Voice list unavailable on this platform.
                   </p>
@@ -1200,7 +1208,7 @@ const sortedVoices = computed(() => {
   };
 
   return voices.sort((a, b) => {
-    const kokoroFirst = Number(b.voiceURI === 'kokoro:af_heart') - Number(a.voiceURI === 'kokoro:af_heart');
+    const kokoroFirst = Number(b.voiceURI.startsWith('kokoro:')) - Number(a.voiceURI.startsWith('kokoro:'));
     if (kokoroFirst) return kokoroFirst;
     const sa = score(a);
     const sb = score(b);
@@ -1602,7 +1610,10 @@ function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScor
 // pre-session check-in; the session itself begins only once the check-in is
 // continued or skipped. Callers (start, repeat, Start Practice) stay the same.
 function requestSessionStart(candidate: BreathingConfig) {
-  pendingStartConfig.value = BreathingConfigSchema.parse(candidate);
+  pendingStartConfig.value = BreathingConfigSchema.parse({
+    ...candidate,
+    ttsVoice: candidate.ttsVoice ?? config.ttsVoice,
+  });
   beforeCheckInError.value = '';
   showBeforeCheckIn.value = true;
 }
@@ -1668,7 +1679,10 @@ function startExercise() {
 }
 
 function handleRecommendedAdjust(sessionConfig: BreathingConfig) {
-  Object.assign(config, sessionConfig);
+  Object.assign(config, {
+    ...sessionConfig,
+    ttsVoice: sessionConfig.ttsVoice ?? config.ttsVoice,
+  });
   configName.value = sessionConfig.name;
   showConfigModal.value = true;
 }
