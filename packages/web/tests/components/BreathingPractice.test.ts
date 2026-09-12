@@ -49,6 +49,7 @@ const getSessionMock = vi.fn(() => ({
 const setSoundThemeMock = vi.fn();
 
 let speakMock: ReturnType<typeof vi.fn>;
+let stopTtsMock: ReturnType<typeof vi.fn>;
 let loadVoicesMock: ReturnType<typeof vi.fn>;
 let setVoiceMock: ReturnType<typeof vi.fn>;
 let setTtsEnabledMock: ReturnType<typeof vi.fn>;
@@ -128,6 +129,10 @@ vi.mock('@/composables/useBreathingTimer', () => {
 
 vi.mock('@/services/ttsService', () => ({
   ttsService: {
+    get stop() {
+      stopTtsMock = stopTtsMock ?? vi.fn();
+      return stopTtsMock;
+    },
     get speak() {
       speakMock = speakMock ?? vi.fn();
       return speakMock;
@@ -158,6 +163,7 @@ describe('BreathingPractice.vue', () => {
     localStorage.clear();
     vi.clearAllMocks();
     speakMock = vi.fn();
+    stopTtsMock = vi.fn();
     loadVoicesMock = vi.fn().mockResolvedValue([]);
     setVoiceMock = vi.fn();
     setTtsEnabledMock = vi.fn();
@@ -185,6 +191,47 @@ describe('BreathingPractice.vue', () => {
   afterEach(() => {
     document.body.style.overflow = '';
     vi.resetAllMocks();
+  });
+
+  it('preserves a saved device voice while only Kokoro is available', async () => {
+    localStorage.setItem(
+      'herb_breathing_last_config',
+      JSON.stringify({ ttsVoice: 'saved-device', ttsEnabled: true })
+    );
+    loadVoicesMock.mockResolvedValue([
+      {
+        voiceURI: 'kokoro:af_heart',
+        name: 'Kokoro Heart',
+        lang: 'en-US',
+        default: true,
+        localService: true,
+      },
+    ]);
+    mount(BreathingPractice);
+    await flushPromises();
+    expect(setVoiceMock).toHaveBeenLastCalledWith('saved-device');
+  });
+
+  it('lists Kokoro first even when another English default voice sorts earlier', async () => {
+    loadVoicesMock.mockResolvedValue([
+      {
+        voiceURI: 'kokoro:af_heart',
+        name: 'Kokoro Heart',
+        lang: 'en-US',
+        default: true,
+        localService: true,
+      },
+      { voiceURI: 'device:alex', name: 'Alex', lang: 'en-US', default: true, localService: true },
+    ]);
+    localStorage.setItem('herb_breathing_last_config', JSON.stringify({ ttsEnabled: true }));
+    const wrapper = mount(BreathingPractice, { attachTo: document.body });
+    await flushPromises();
+    await wrapper.get('button[title="Configure practice"]').trigger('click');
+    await nextTick();
+    const voiceOptions = Array.from(document.body.querySelectorAll('option')).filter(
+      (option) => option.value.startsWith('kokoro:') || option.value.startsWith('device:')
+    );
+    expect(voiceOptions.map((option) => option.value)).toEqual(['kokoro:af_heart', 'device:alex']);
   });
 
   it('calls start when Start button clicked', async () => {
@@ -262,11 +309,11 @@ describe('BreathingPractice.vue', () => {
     const pauseBtn = buttons.find((btn) => btn.textContent?.includes('Pause')) as HTMLButtonElement;
 
     expect(pauseBtn).toBeTruthy();
-    if (pauseBtn) {
-      pauseBtn.click();
-      await nextTick();
-    }
-    expect(pauseMock).toHaveBeenCalled();
+    stopTtsMock.mockClear();
+    pauseBtn.click();
+    await nextTick();
+    expect(pauseMock).toHaveBeenCalledOnce();
+    expect(stopTtsMock).toHaveBeenCalledOnce();
 
     wrapper.unmount();
   });

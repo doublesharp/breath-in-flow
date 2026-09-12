@@ -1,5 +1,14 @@
 import { ref } from 'vue';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
+import kokoroCues from '../data/kokoroCues.json';
+
+const kokoroVoice: SpeechSynthesisVoice = {
+  voiceURI: 'kokoro:af_heart',
+  name: 'Kokoro Heart',
+  lang: 'en-US',
+  localService: true,
+  default: true,
+};
 
 type SpeakOptions = {
   targetDurationSeconds?: number;
@@ -7,6 +16,10 @@ type SpeakOptions = {
 
 class TtsService {
   private enabled = false;
+  private activeAudio: HTMLAudioElement | null = null;
+  private requestId = 0;
+  private nativePlaybackActive = false;
+  private nativeStopPromise: Promise<void> | null = null;
   private selectedVoiceUri: string | null = null;
   private voicesCache: SpeechSynthesisVoice[] = [];
   private nativeVoicesCache: SpeechSynthesisVoice[] = [];
@@ -63,6 +76,10 @@ class TtsService {
   }
 
   public async loadVoices(): Promise<SpeechSynthesisVoice[]> {
+    return [kokoroVoice, ...(await this.loadDeviceVoices())];
+  }
+
+  private async loadDeviceVoices(): Promise<SpeechSynthesisVoice[]> {
     this.detectCapabilities();
 
     // Prefer Web Speech voices when available
@@ -151,15 +168,16 @@ class TtsService {
   }
 
   public getVoices(): SpeechSynthesisVoice[] {
-    if (this.hasWebSpeech) return this.voicesCache.slice();
-    return this.nativeVoicesCache.slice();
+    return [kokoroVoice, ...(this.hasWebSpeech ? this.voicesCache : this.nativeVoicesCache)];
   }
 
   public setEnabled(enabled: boolean) {
     this.enabled = enabled;
+    if (!enabled) this.stop();
   }
 
   public setVoiceByUri(uri: string | null | undefined) {
+    if (this.selectedVoiceUri !== (uri ?? null)) this.stop();
     this.selectedVoiceUri = uri ?? null;
   }
 
@@ -171,7 +189,56 @@ class TtsService {
     return this.hasNativeTts;
   }
 
+  public stop(): void {
+    this.requestId++;
+    if (this.activeAudio) {
+      this.activeAudio.onerror = null;
+      this.activeAudio.pause();
+      this.activeAudio = null;
+    }
+    this.getSynth()?.cancel();
+    if (this.nativePlaybackActive) {
+      this.nativePlaybackActive = false;
+      this.nativeStopPromise = TextToSpeech.stop().catch(() => undefined);
+    }
+  }
+
   public async speak(text: string, options?: SpeakOptions) {
+    if (!this.enabled || !text) return;
+    this.stop();
+    const requestId = this.requestId;
+    const duration = options?.targetDurationSeconds;
+    const deadline = duration && duration > 0 ? Date.now() + duration * 1000 : Infinity;
+    const cue =
+      !this.selectedVoiceUri || this.selectedVoiceUri === kokoroVoice.voiceURI
+        ? kokoroCues.cues.find((cue) => cue.text === text)
+        : undefined;
+    if (cue && typeof Audio !== 'undefined') {
+      const audio = new Audio(
+        `${import.meta.env.BASE_URL}audio/kokoro/${kokoroCues.voice}/${cue.id}.wav`
+      );
+      this.activeAudio = audio;
+      const fallback = () => {
+        if (this.activeAudio !== audio || this.requestId !== requestId) return;
+        audio.onerror = null;
+        audio.pause();
+        this.activeAudio = null;
+        if (this.enabled && Date.now() < deadline) {
+          void this.speakDevice(text, options, requestId);
+        }
+      };
+      audio.onerror = fallback;
+      try {
+        await audio.play();
+      } catch {
+        fallback();
+      }
+      return;
+    }
+    await this.speakDevice(text, options, requestId);
+  }
+
+  private async speakDevice(text: string, options: SpeakOptions | undefined, requestId: number) {
     if (!this.enabled || !text) return;
 
     this.detectCapabilities();
@@ -202,7 +269,6 @@ class TtsService {
       utterance.pitch = 1;
       utterance.volume = 1;
 
-      synth.cancel(); // Stop any queued speech to avoid overlap
       synth.speak(utterance);
       return;
     }
@@ -217,6 +283,9 @@ class TtsService {
         ? voices.find((voice) => voice.voiceURI === this.selectedVoiceUri)
         : undefined;
 
+      if (this.nativeStopPromise) await this.nativeStopPromise;
+      if (!this.enabled || this.requestId !== requestId) return;
+      this.nativePlaybackActive = true;
       await TextToSpeech.speak({
         text,
         rate,
@@ -229,6 +298,8 @@ class TtsService {
       });
     } catch (err) {
       console.error('Native TTS failed', err);
+    } finally {
+      if (this.requestId === requestId) this.nativePlaybackActive = false;
     }
   }
 }

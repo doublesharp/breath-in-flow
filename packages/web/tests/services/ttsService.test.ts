@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ttsService } from '@/services/ttsService';
 
-const { nativeGetVoicesMock, nativeSpeakMock } = vi.hoisted(() => ({
+const { nativeGetVoicesMock, nativeSpeakMock, nativeStopMock } = vi.hoisted(() => ({
   nativeGetVoicesMock: vi.fn(),
   nativeSpeakMock: vi.fn(),
+  nativeStopMock: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@capacitor-community/text-to-speech', () => ({
   TextToSpeech: {
     getSupportedVoices: nativeGetVoicesMock,
     speak: nativeSpeakMock,
+    stop: nativeStopMock,
   },
 }));
 
@@ -30,6 +32,20 @@ const mockVoices: SpeechSynthesisVoice[] = [
   } as SpeechSynthesisVoice,
 ];
 
+const kokoroVoice = {
+  voiceURI: 'kokoro:af_heart',
+  name: 'Kokoro Heart',
+  lang: 'en-US',
+  localService: true,
+  default: true,
+};
+let audioInstances: Array<{
+  src: string;
+  play: ReturnType<typeof vi.fn>;
+  pause: ReturnType<typeof vi.fn>;
+  currentTime: number;
+  onerror: (() => void) | null;
+}>;
 const speakMock = vi.fn();
 const cancelMock = vi.fn();
 const getVoicesMock = vi.fn(() => mockVoices);
@@ -90,6 +106,21 @@ describe('ttsService', () => {
     installSpeechSynthesis();
     ttsService.setEnabled(false);
     ttsService.setVoiceByUri(null);
+    audioInstances = [];
+    vi.stubGlobal(
+      'Audio',
+      vi.fn(function (src: string) {
+        const audio = {
+          src,
+          play: vi.fn().mockResolvedValue(undefined),
+          pause: vi.fn(),
+          currentTime: 0,
+          onerror: null,
+        };
+        audioInstances.push(audio);
+        return audio;
+      })
+    );
   });
 
   afterEach(() => {
@@ -128,7 +159,11 @@ describe('ttsService', () => {
 
     const loaded = await ttsService.loadVoices();
 
-    expect(loaded.map((voice) => voice.voiceURI)).toEqual(['voice-en-us', 'voice-es']);
+    expect(loaded.map((voice) => voice.voiceURI)).toEqual([
+      'kokoro:af_heart',
+      'voice-en-us',
+      'voice-es',
+    ]);
     expect(ttsService.getVoices()).toEqual(loaded);
   });
 
@@ -142,7 +177,7 @@ describe('ttsService', () => {
     getVoicesMock.mockReturnValue(mockVoices);
     handler?.();
 
-    await expect(pendingVoices).resolves.toEqual(mockVoices);
+    await expect(pendingVoices).resolves.toEqual([kokoroVoice, ...mockVoices]);
     expect(removeEventListenerMock).toHaveBeenCalledWith('voiceschanged', handler);
     expect(ttsService.voicesReady.value).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
@@ -155,7 +190,7 @@ describe('ttsService', () => {
     const pendingVoices = ttsService.loadVoices();
     await vi.advanceTimersByTimeAsync(600);
 
-    await expect(pendingVoices).resolves.toEqual([]);
+    await expect(pendingVoices).resolves.toEqual([kokoroVoice]);
     expect(removeEventListenerMock).toHaveBeenCalledWith('voiceschanged', expect.any(Function));
   });
 
@@ -166,8 +201,8 @@ describe('ttsService', () => {
       voices: [mockVoices[0], mockVoices[0], mockVoices[1]],
     });
 
-    await expect(ttsService.loadVoices()).resolves.toEqual(mockVoices);
-    expect(ttsService.getVoices()).toEqual(mockVoices);
+    await expect(ttsService.loadVoices()).resolves.toEqual([kokoroVoice, ...mockVoices]);
+    expect(ttsService.getVoices()).toEqual([kokoroVoice, ...mockVoices]);
     expect(ttsService.hasNativeSupport()).toBe(true);
   });
 
@@ -177,7 +212,7 @@ describe('ttsService', () => {
     nativeGetVoicesMock.mockRejectedValue(new Error('native voices unavailable'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    await expect(ttsService.loadVoices()).resolves.toEqual([]);
+    await expect(ttsService.loadVoices()).resolves.toEqual([kokoroVoice]);
 
     expect(ttsService.hasNativeSupport()).toBe(false);
     expect(ttsService.voicesReady.value).toBe(true);
@@ -251,6 +286,7 @@ describe('ttsService', () => {
   it('speeds up guidance for short phases', async () => {
     ttsService.setEnabled(true);
     await ttsService.loadVoices();
+    ttsService.setVoiceByUri('voice-en-us');
     ttsService.speak('Full Breath In', { targetDurationSeconds: 1 });
 
     const utterance = speakMock.mock.calls[0][0] as SpeechSynthesisUtterance;
@@ -260,9 +296,72 @@ describe('ttsService', () => {
   it('slows guidance when there is ample time', async () => {
     ttsService.setEnabled(true);
     await ttsService.loadVoices();
+    ttsService.setVoiceByUri('voice-en-us');
     ttsService.speak('Full Breath Out', { targetDurationSeconds: 5 });
 
     const utterance = speakMock.mock.calls[0][0] as SpeechSynthesisUtterance;
     expect(utterance.rate).toBeCloseTo(0.85, 2);
+  });
+  it('plays bundled Kokoro guidance by default without device synthesis', async () => {
+    ttsService.setEnabled(true);
+    await ttsService.speak('Full Breath In');
+    expect(audioInstances).toHaveLength(1);
+    expect(audioInstances[0].src).toBe('/audio/kokoro/af_heart/inhale.wav');
+    expect(audioInstances[0].play).toHaveBeenCalledOnce();
+    expect(speakMock).not.toHaveBeenCalled();
+  });
+
+  it('honors an explicitly selected device voice for standard cues', async () => {
+    ttsService.setEnabled(true);
+    ttsService.setVoiceByUri('voice-en-us');
+    await ttsService.speak('Hold');
+    expect(audioInstances).toHaveLength(0);
+    expect(speakMock.mock.calls[0][0].voice.voiceURI).toBe('voice-en-us');
+  });
+
+  it('falls back once when a bundled clip cannot be played', async () => {
+    ttsService.setEnabled(true);
+    await ttsService.speak('Hold');
+    expect(audioInstances).toHaveLength(1);
+    const fail = audioInstances[0].onerror!;
+    expect(fail).toBeTypeOf('function');
+    fail();
+    fail();
+    await Promise.resolve();
+    expect(speakMock).toHaveBeenCalledOnce();
+    expect(speakMock.mock.calls[0][0].text).toBe('Hold');
+  });
+
+  it('cancels old clips and ignores their late failures', async () => {
+    ttsService.setEnabled(true);
+    await ttsService.speak('Full Breath In');
+    expect(audioInstances).toHaveLength(1);
+    const oldFailure = audioInstances[0].onerror!;
+    await ttsService.speak('Full Breath Out');
+    expect(audioInstances[0].pause).toHaveBeenCalledOnce();
+    oldFailure();
+    expect(speakMock).not.toHaveBeenCalled();
+    expect(audioInstances[1].play).toHaveBeenCalledOnce();
+  });
+
+  it('stops the active clip when guidance is disabled', async () => {
+    ttsService.setEnabled(true);
+    await ttsService.speak('Hold');
+    expect(audioInstances).toHaveLength(1);
+    const oldFailure = audioInstances[0].onerror!;
+    ttsService.setEnabled(false);
+    expect(audioInstances[0].pause).toHaveBeenCalledOnce();
+    oldFailure();
+    expect(speakMock).not.toHaveBeenCalled();
+  });
+
+  it('does not play delayed fallback after the phase deadline', async () => {
+    vi.useFakeTimers();
+    ttsService.setEnabled(true);
+    await ttsService.speak('Hold', { targetDurationSeconds: 1 });
+    expect(audioInstances).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1001);
+    audioInstances[0].onerror!();
+    expect(speakMock).not.toHaveBeenCalled();
   });
 });

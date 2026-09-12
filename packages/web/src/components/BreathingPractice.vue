@@ -1200,6 +1200,8 @@ const sortedVoices = computed(() => {
   };
 
   return voices.sort((a, b) => {
+    const kokoroFirst = Number(b.voiceURI === 'kokoro:af_heart') - Number(a.voiceURI === 'kokoro:af_heart');
+    if (kokoroFirst) return kokoroFirst;
     const sa = score(a);
     const sb = score(b);
     for (let i = 0; i < sa.length; i += 1) {
@@ -1281,7 +1283,7 @@ ttsWatchStopHandles.push(
     (enabled) => {
       ttsService.setEnabled(enabled);
     },
-    { immediate: true }
+    { immediate: true, flush: 'sync' }
   )
 );
 
@@ -1291,7 +1293,7 @@ ttsWatchStopHandles.push(
     (voiceUri) => {
       ttsService.setVoiceByUri(voiceUri);
     },
-    { immediate: true }
+    { immediate: true, flush: 'sync' }
   )
 );
 
@@ -1412,6 +1414,7 @@ watch(
     if (running && !paused) {
       void enableKeepAwake();
     } else {
+      ttsService.stop();
       void allowSleep();
     }
   },
@@ -1839,7 +1842,8 @@ async function refreshVoices() {
     const voices = await ttsService.loadVoices();
     ttsVoices.value = voices;
     const hasVoices = voices.length > 0;
-    if (config.ttsVoice && hasVoices && !voices.some((v) => v.voiceURI === config.ttsVoice)) {
+    const hasDeviceVoices = voices.some((voice) => !voice.voiceURI.startsWith('kokoro:'));
+    if (config.ttsVoice && hasDeviceVoices && !voices.some((v) => v.voiceURI === config.ttsVoice)) {
       config.ttsVoice = undefined;
     }
     if (!config.ttsVoice && hasVoices) {
@@ -1899,6 +1903,8 @@ function announcePhase(phase: BreathingPhase, state: TimerState) {
   const phrase = phrases[phase];
   if (phrase) {
     ttsService.speak(phrase, { targetDurationSeconds: durationSeconds });
+  } else {
+    ttsService.stop();
   }
 }
 </script>

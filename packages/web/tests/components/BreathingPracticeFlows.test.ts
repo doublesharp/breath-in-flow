@@ -121,6 +121,7 @@ vi.mock('@/composables/useBreathingTimer', () => {
 
 vi.mock('@/services/ttsService', () => ({
   ttsService: {
+    stop: vi.fn(),
     get speak() {
       speakMock = speakMock ?? vi.fn();
       return speakMock;

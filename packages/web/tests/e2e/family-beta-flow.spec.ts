@@ -119,3 +119,80 @@ test('onboarding and check-in actions remain reachable in landscape with enlarge
   await expect(submitButton).toBeInViewport();
   await reviewScreenshot(page, testInfo, '07-landscape-large-text-check-in');
 });
+
+test('Kokoro cues decode locally and real guidance stops when practice pauses', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const clips: HTMLAudioElement[] = [];
+    Object.assign(window, { guidanceClips: clips });
+    window.Audio = new Proxy(window.Audio, {
+      construct(target, args) {
+        const clip = Reflect.construct(target, args) as HTMLAudioElement;
+        clips.push(clip);
+        return clip;
+      },
+    });
+  });
+  // Exercise the shipped audio files without allowing any hosted speech service.
+  await page.route('**/*', (route) => {
+    if (new URL(route.request().url()).hostname === '127.0.0.1') return route.continue();
+    return route.abort();
+  });
+  await page.goto('/');
+  const decoded = await page.evaluate(async () => {
+    const context = new AudioContext();
+    try {
+      const results = [];
+      for (const id of ['inhale', 'exhale', 'hold', 'warmup', 'rest']) {
+        const response = await fetch(`/audio/kokoro/af_heart/${id}.wav`);
+        if (!response.ok) throw new Error(`${id}: ${response.status}`);
+        const clip = await context.decodeAudioData(await response.arrayBuffer());
+        const samples = clip.getChannelData(0);
+        let energy = 0;
+        for (const sample of samples) energy += sample * sample;
+        results.push({ id, duration: clip.duration, rms: Math.sqrt(energy / samples.length) });
+      }
+      return results;
+    } finally {
+      await context.close();
+    }
+  });
+  expect(decoded).toHaveLength(5);
+  for (const clip of decoded) {
+    expect(clip.duration, clip.id).toBeGreaterThan(0.3);
+    expect(clip.duration, clip.id).toBeLessThan(4);
+    expect(clip.rms, `${clip.id} must contain audible samples`).toBeGreaterThan(0.01);
+  }
+  const onboarding = page.getByRole('dialog', { name: 'What brings you here?' });
+  await onboarding.getByTestId('goal-consistency').check();
+  await onboarding.getByTestId('save-goal').click();
+  await page.getByTestId('start-recommended').click();
+  await page.getByTestId('checkin-skip').click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const clips = (window as unknown as { guidanceClips: HTMLAudioElement[] }).guidanceClips;
+        return clips.map((clip) => ({
+          file: clip.src.split('/').at(-1),
+          playing: !clip.paused && clip.currentTime > 0,
+          time: clip.currentTime,
+          error: clip.error?.message,
+        }));
+      })
+    )
+    .toEqual(
+      expect.arrayContaining([expect.objectContaining({ file: 'inhale.wav', playing: true })])
+    );
+  const session = page.getByTestId('session-dialog');
+  await session.getByRole('button', { name: /pause/i }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const clips = (window as unknown as { guidanceClips: HTMLAudioElement[] }).guidanceClips;
+        return clips.every((clip) => clip.paused);
+      })
+    )
+    .toBe(true);
+  await expect(session).toContainText('Paused');
+});
