@@ -12,6 +12,8 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/.turbo/**',
       '**/coverage/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
       '**/prisma/client/**',
       '**/release/**',
       '**/ios/**',
