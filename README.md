@@ -119,3 +119,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for additional setup guidance, [docs/HRV-
 ## License
 
 MIT
+
+## Voice guidance
+
+Kokoro Heart provides bundled, offline speech for standard breathing cues. Select it under Configure practice → Voice guidance → Voice. Existing device voices remain available; custom phrases use device speech. No account or API key is required.
+
+To regenerate the clips, run `pnpm generate:voices`. This downloads the pinned model for local generation and is not part of normal builds. See [the voice design and verification notes](docs/superpowers/specs/2026-09-11-kokoro-design.md).
