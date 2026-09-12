@@ -103,6 +103,8 @@ For pulse variability, open **Lab**, select camera, chest-motion, or combined se
 
 The project is a pnpm workspace using Vue 3, TypeScript, Vite, Capacitor, Electron, Vitest, and Tailwind CSS.
 
+Use Node.js 22.x (22.13 or newer), 24.x, or 26+ and pnpm 11.7.0. Dependency releases must be at least seven days old; `pnpm-workspace.yaml` enforces this with `minimumReleaseAge: 10080`.
+
 ```bash
 corepack pnpm install
 corepack pnpm test
