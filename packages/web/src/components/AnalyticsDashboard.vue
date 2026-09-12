@@ -294,10 +294,10 @@ watch(
 );
 
 function formatTime(seconds: number): string {
-  if (!seconds) return '0s';
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.round(seconds % 60);
+  const roundedSeconds = Math.round(seconds);
+  if (roundedSeconds < 60) return `${roundedSeconds}s`;
+  const mins = Math.floor(roundedSeconds / 60);
+  const secs = roundedSeconds % 60;
   return `${mins}m ${secs}s`;
 }
 

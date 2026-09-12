@@ -59,6 +59,36 @@ describe('HoldTimeChart.vue', () => {
     expect(wrapper.text()).toContain('No hold data available');
   });
 
+  it.each([
+    [0, '0s'],
+    [30.4, '30s'],
+    [59.5, '1m 0s'],
+    [60, '1m 0s'],
+    [119.5, '2m 0s'],
+    [125.4, '2m 5s'],
+  ])('normalizes rounded hold statistics at %s seconds', (duration, expected) => {
+    const session = makeSession('hold', new Date('2026-09-01T12:00:00Z'));
+    session.sets = [
+      {
+        setNumber: 1,
+        completedRepetitions: 1,
+        startedAt: session.startedAt,
+        extendedHolds: [
+          {
+            completedAt: session.completedAt!,
+            actualDuration: duration,
+            type: 'EXHALE',
+            mode: 'TOLERANCE',
+          },
+        ],
+      },
+    ];
+    const wrapper = shallowMount(HoldTimeChart, { props: { sessions: [session] } });
+    expect(statValue(wrapper, 'Average')).toBe(expected);
+    expect(statValue(wrapper, 'Best')).toBe(expected);
+    wrapper.unmount();
+  });
+
   it('renders stats when sessions contain holds', () => {
     // Build minimal session data expected by the component
     const sessions: Session[] = [

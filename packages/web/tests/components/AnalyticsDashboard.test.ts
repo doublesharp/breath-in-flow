@@ -273,38 +273,40 @@ describe('AnalyticsDashboard (consolidated)', () => {
     expect(vm.stressData).toBeDefined();
   });
 
-  it('formats time correctly for different durations', async () => {
+  it.each([
+    [0, '0s'],
+    [30.4, '30s'],
+    [59.5, '1m 0s'],
+    [60, '1m 0s'],
+    [119.5, '2m 0s'],
+    [125.4, '2m 5s'],
+  ])('renders hold statistics of %s seconds as %s', async (duration, expected) => {
     vi.resetModules();
     vi.doMock('../../src/composables', () => ({
       useStorage: () => ({
         getAllSessions: () => [],
-        stats: { value: { totalSessions: 0, totalSets: 0, avgHoldTime: 0, maxHoldTime: 0 } },
+        stats: {
+          value: {
+            totalSessions: 1,
+            totalSets: 1,
+            avgHoldTime: duration,
+            maxHoldTime: duration,
+          },
+        },
       }),
     }));
-
     vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => false,
-        connect: vi.fn(() => false),
-        disconnect: vi.fn(() => false),
-        getSessionBiometrics: async () => ({
-          preSession: { stress: [] },
-          duringSession: { stress: [] },
-          postSession: { stress: [] },
-        }),
-      },
+      garminService: { isConnected: () => false },
     }));
-
     const { default: AnalyticsDashboard } =
       await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = mount(AnalyticsDashboard, {
-      global: {
-        stubs: ['HoldTimeChart', 'SessionsPerWeekChart', 'StressChart', 'TimeChart', 'WeekChart'],
-      },
-    });
-
-    expect(wrapper.exists()).toBe(true);
-    expect(wrapper.text()).toContain('Analytics');
+    const wrapper = shallowMount(AnalyticsDashboard);
+    for (const label of ['Avg Hold Time', 'Best Hold Time']) {
+      const card = wrapper.findAll('.stat-card').find((card) => card.text().includes(label));
+      expect(card, `Missing ${label}`).toBeDefined();
+      expect(card!.find('.text-3xl').text()).toBe(expected);
+    }
+    wrapper.unmount();
   });
 
   it('handles chart stubs correctly when rendering', async () => {
