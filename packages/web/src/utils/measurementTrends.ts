@@ -82,22 +82,37 @@ export function buildWithinPersonInsights(measurements: HrvMeasurement[]): Welln
   const eligibleMeasurements = measurements
     .filter((measurement) => hasAvailableMetric(measurement, 'rmssd'))
     .sort((left, right) => right.completedAt.getTime() - left.completedAt.getTime());
-  const anchor = eligibleMeasurements.find(
-    (candidate) => getComparableMeasurements(measurements, candidate).length >= 3
-  );
+  let anchor: HrvMeasurement | undefined;
+  let prior: HrvMeasurement[] = [];
+  for (const candidate of eligibleMeasurements) {
+    // A baseline must precede the reading, even when falling back to an older
+    // protocol cohort. No chronological sort is needed to average this set.
+    const candidatePrior = eligibleMeasurements.filter(
+      (measurement) =>
+        measurement.id !== candidate.id &&
+        measurement.completedAt.getTime() < candidate.completedAt.getTime() &&
+        measurement.type === candidate.type &&
+        hasComparableDuration(measurement, candidate) &&
+        hasComparableContext(measurement, candidate)
+    );
+    if (candidatePrior.length >= 2) {
+      anchor = candidate;
+      prior = candidatePrior;
+      break;
+    }
+  }
 
   if (!anchor) return [];
-  const comparable = getComparableMeasurements(measurements, anchor);
-
-  const prior = comparable.filter((measurement) => measurement.id !== anchor.id);
-  if (prior.length < 2) return [];
   const priorAverage =
     prior.reduce((sum, measurement) => sum + measurement.analysis.timeDomain.rmssd, 0) /
     prior.length;
-  const changeRatio =
-    priorAverage === 0 ? 0 : (anchor.analysis.timeDomain.rmssd - priorAverage) / priorAverage;
+  const latestRmssd = anchor.analysis.timeDomain.rmssd;
   const direction: WellnessInsight['direction'] =
-    changeRatio > 0.1 ? 'higher' : changeRatio < -0.1 ? 'lower' : 'similar';
+    latestRmssd > priorAverage * 1.1
+      ? 'higher'
+      : latestRmssd < priorAverage * 0.9
+        ? 'lower'
+        : 'similar';
   const comparison = direction === 'similar' ? 'close to' : `${direction} than`;
 
   return [

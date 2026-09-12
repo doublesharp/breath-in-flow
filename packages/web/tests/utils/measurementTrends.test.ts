@@ -207,7 +207,10 @@ describe('measurement trends', () => {
     expect(buildWithinPersonInsights([invalid, anchor])).toEqual([]);
   });
 
-  it('uses a neutral comparison when the prior RMSSD baseline is zero', () => {
+  it.each([
+    [0, 'similar'],
+    [50, 'higher'],
+  ] as const)('compares RMSSD %s accurately against a zero baseline', (latestRmssd, direction) => {
     const zeroAnalysis = {
       ...makeMeasurement('base', '2026-07-01T08:00:00Z').analysis,
       timeDomain: {
@@ -221,11 +224,21 @@ describe('measurement trends', () => {
       makeMeasurement('latest', '2026-07-03T08:00:00Z', {
         analysis: {
           ...zeroAnalysis,
-          timeDomain: { ...zeroAnalysis.timeDomain, rmssd: 50 },
+          timeDomain: { ...zeroAnalysis.timeDomain, rmssd: latestRmssd },
         },
       }),
     ];
 
-    expect(buildWithinPersonInsights(measurements)[0]).toMatchObject({ direction: 'similar' });
+    expect(buildWithinPersonInsights(measurements)[0]).toMatchObject({ direction });
+  });
+  it('does not use later readings as an older reading’s baseline', () => {
+    const measurements = [
+      makeMeasurement('oldest', '2026-07-01T08:00:00Z', { durationSeconds: 148 }),
+      makeMeasurement('middle', '2026-07-02T08:00:00Z', { durationSeconds: 135 }),
+      makeMeasurement('latest', '2026-07-03T08:00:00Z', { durationSeconds: 120 }),
+    ];
+    // Only the middle reading matches both others. Neither earlier reading
+    // has two prior matches, so there is no valid comparison yet.
+    expect(buildWithinPersonInsights(measurements)).toEqual([]);
   });
 });
