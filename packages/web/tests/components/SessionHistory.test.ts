@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
+import SessionHistory from '../../src/components/SessionHistory.vue';
+
+const { useStorageMock } = vi.hoisted(() => ({ useStorageMock: vi.fn() }));
+vi.mock('../../src/composables', () => ({ useStorage: useStorageMock }));
+enableAutoUnmount(afterEach);
 
 const mockSession = {
   id: 'session-1',
@@ -63,24 +68,18 @@ const mockSessionWithCheckIn = {
 
 describe('SessionHistory.vue', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.resetModules();
+    useStorageMock.mockReset();
   });
 
   it('shows sessions and opens delete modal', async () => {
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSession],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 10, maxHoldTime: 20 } },
-        deleteSession: vi.fn(() => true),
-      }),
-    }));
+    const deleteSession = vi.fn(() => true);
+    useStorageMock.mockReturnValue({
+      getAllSessions: () => [mockSession],
+      stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 10, maxHoldTime: 20 } },
+      deleteSession,
+    });
 
-    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
-    const wrapper = mount(SessionHistoryComp);
+    const wrapper = mount(SessionHistory);
 
     expect(wrapper.text()).toContain('Session History');
     expect(wrapper.text()).toContain('Quick Practice');
@@ -99,25 +98,21 @@ describe('SessionHistory.vue', () => {
     const modalDelete = Array.from(document.body.querySelectorAll('button')).find(
       (b) => b.textContent?.trim() === 'Delete'
     );
-    if (modalDelete) {
-      (modalDelete as HTMLButtonElement).click();
-      await wrapper.vm.$nextTick();
-      // ensure modal closed
-      expect(document.body.innerHTML).not.toContain('Delete Session');
-    }
+    expect(modalDelete).toBeDefined();
+    modalDelete!.click();
+    await wrapper.vm.$nextTick();
+    expect(deleteSession).toHaveBeenCalledExactlyOnceWith('session-1');
+    expect(document.body.innerHTML).not.toContain('Delete Session');
   });
 
   it('displays extended holds when present', async () => {
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSessionWithHolds],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 27.5, maxHoldTime: 30 } },
-        deleteSession: vi.fn(() => true),
-      }),
-    }));
+    useStorageMock.mockReturnValue({
+      getAllSessions: () => [mockSessionWithHolds],
+      stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 27.5, maxHoldTime: 30 } },
+      deleteSession: vi.fn(() => true),
+    });
 
-    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
-    const wrapper = mount(SessionHistoryComp);
+    const wrapper = mount(SessionHistory);
 
     expect(wrapper.text()).toContain('Extended Hold Practice');
     expect(wrapper.text()).toContain('EXHALE');
@@ -126,47 +121,38 @@ describe('SessionHistory.vue', () => {
   });
 
   it('displays session notes when present', async () => {
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSessionWithHolds],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 27.5, maxHoldTime: 30 } },
-        deleteSession: vi.fn(() => true),
-      }),
-    }));
+    useStorageMock.mockReturnValue({
+      getAllSessions: () => [mockSessionWithHolds],
+      stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 27.5, maxHoldTime: 30 } },
+      deleteSession: vi.fn(() => true),
+    });
 
-    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
-    const wrapper = mount(SessionHistoryComp);
+    const wrapper = mount(SessionHistory);
 
     expect(wrapper.text()).toContain('Great session with improved tolerance');
     expect(wrapper.text()).toContain('Notes');
   });
 
   it('shows empty state when no sessions exist', async () => {
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [],
-        stats: { value: { totalSessions: 0, totalSets: 0, avgHoldTime: 0, maxHoldTime: 0 } },
-        deleteSession: vi.fn(() => true),
-      }),
-    }));
+    useStorageMock.mockReturnValue({
+      getAllSessions: () => [],
+      stats: { value: { totalSessions: 0, totalSets: 0, avgHoldTime: 0, maxHoldTime: 0 } },
+      deleteSession: vi.fn(() => true),
+    });
 
-    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
-    const wrapper = mount(SessionHistoryComp);
+    const wrapper = mount(SessionHistory);
 
     expect(wrapper.text()).toContain('No sessions recorded yet');
   });
 
   it('displays session details correctly', async () => {
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSessionWithoutHolds],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
-        deleteSession: vi.fn(() => true),
-      }),
-    }));
+    useStorageMock.mockReturnValue({
+      getAllSessions: () => [mockSessionWithoutHolds],
+      stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
+      deleteSession: vi.fn(() => true),
+    });
 
-    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
-    const wrapper = mount(SessionHistoryComp);
+    const wrapper = mount(SessionHistory);
 
     // Check session details are displayed
     expect(wrapper.text()).toContain('Simple Practice');
@@ -175,16 +161,13 @@ describe('SessionHistory.vue', () => {
   });
 
   it('renders submitted check-in values with comfort labels and comment', async () => {
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSessionWithCheckIn],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
-        deleteSession: vi.fn(() => true),
-      }),
-    }));
+    useStorageMock.mockReturnValue({
+      getAllSessions: () => [mockSessionWithCheckIn],
+      stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
+      deleteSession: vi.fn(() => true),
+    });
 
-    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
-    const wrapper = mount(SessionHistoryComp);
+    const wrapper = mount(SessionHistory);
 
     expect(wrapper.text()).toContain('Check-In');
     expect(wrapper.text()).toContain('Uncomfortable');
@@ -193,32 +176,27 @@ describe('SessionHistory.vue', () => {
   });
 
   it('renders no check-in section when a session has none', async () => {
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSessionWithoutHolds],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
-        deleteSession: vi.fn(() => true),
-      }),
-    }));
+    useStorageMock.mockReturnValue({
+      getAllSessions: () => [mockSessionWithoutHolds],
+      stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
+      deleteSession: vi.fn(() => true),
+    });
 
-    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
-    const wrapper = mount(SessionHistoryComp);
+    const wrapper = mount(SessionHistory);
 
     expect(wrapper.find('[data-testid="session-checkin"]').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('Check-In');
   });
 
   it('handles cancel delete action', async () => {
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSession],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 10, maxHoldTime: 20 } },
-        deleteSession: vi.fn(() => true),
-      }),
-    }));
+    const deleteSession = vi.fn(() => true);
+    useStorageMock.mockReturnValue({
+      getAllSessions: () => [mockSession],
+      stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 10, maxHoldTime: 20 } },
+      deleteSession,
+    });
 
-    const { default: SessionHistoryComp } = await import('../../src/components/SessionHistory.vue');
-    const wrapper = mount(SessionHistoryComp);
+    const wrapper = mount(SessionHistory);
 
     // Open delete modal
     const deleteBtn = wrapper.find('button[title="Delete session"]');
@@ -231,10 +209,11 @@ describe('SessionHistory.vue', () => {
     const modalCancel = Array.from(document.body.querySelectorAll('button')).find(
       (b) => b.textContent?.trim() === 'Cancel'
     );
-    if (modalCancel) {
-      (modalCancel as HTMLButtonElement).click();
-      await wrapper.vm.$nextTick();
-      expect(document.body.innerHTML).not.toContain('Delete Session');
-    }
+    expect(modalCancel).toBeDefined();
+    modalCancel!.click();
+    await wrapper.vm.$nextTick();
+    expect(document.body.innerHTML).not.toContain('Delete Session');
+    expect(deleteSession).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('Quick Practice');
   });
 });

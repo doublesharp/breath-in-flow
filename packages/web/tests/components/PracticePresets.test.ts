@@ -1,16 +1,20 @@
-import { mount } from '@vue/test-utils';
-import { describe, it, expect, vi } from 'vitest';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { nextTick } from 'vue';
+import PracticePresets from '../../src/components/PracticePresets.vue';
+
+const { useStorageMock } = vi.hoisted(() => ({ useStorageMock: vi.fn() }));
+vi.mock('../../src/composables', () => ({ useStorage: useStorageMock }));
+enableAutoUnmount(afterEach);
 
 describe('PracticePresets.vue', () => {
+  beforeEach(() => {
+    useStorageMock.mockReset();
+  });
   it('shows empty state when no configs', async () => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({ getAllConfigs: () => [] }),
-    }));
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [] });
 
-    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
-    const wrapper = mount(PracticePresets as unknown);
+    const wrapper = mount(PracticePresets);
     expect(wrapper.text()).toContain('No saved configurations yet.');
   });
 
@@ -35,13 +39,9 @@ describe('PracticePresets.vue', () => {
       secondExtendedHoldMode: 'TIMED',
     };
 
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({ getAllConfigs: () => [config] }),
-    }));
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [config] });
 
-    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
-    const wrapper = mount(PracticePresets as unknown);
+    const wrapper = mount(PracticePresets);
     const text = wrapper.text();
 
     expect(text).toContain('Test Config');
@@ -66,13 +66,9 @@ describe('PracticePresets.vue', () => {
       extendedHoldEnabled: false,
     };
 
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({ getAllConfigs: () => [config], deleteConfig: deleteMock }),
-    }));
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [config], deleteConfig: deleteMock });
 
-    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
-    const wrapper = mount(PracticePresets as unknown, {
+    const wrapper = mount(PracticePresets, {
       attachTo: document.body,
     });
 
@@ -109,32 +105,30 @@ describe('PracticePresets.vue', () => {
       extendedHoldEnabled: false,
     };
 
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({ getAllConfigs: () => [config], deleteConfig: deleteMock }),
-    }));
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [config], deleteConfig: deleteMock });
 
-    // Mock confirm to return false
-    (globalThis as unknown as Record<string, unknown>).confirm = () => false;
-
-    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
-    const wrapper = mount(PracticePresets as unknown);
+    const wrapper = mount(PracticePresets);
 
     // Click delete button
     const btn = wrapper.find('button[title="Delete configuration"]');
     await btn.trigger('click');
 
+    expect(document.body.textContent).toContain('Are you sure you want to delete');
+    const cancel = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Cancel'
+    );
+    expect(cancel).toBeDefined();
+    cancel!.click();
+    await nextTick();
+    expect(document.body.textContent).not.toContain('Are you sure you want to delete');
     expect(deleteMock).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('ToDelete');
   });
 
   it('handles preset configurations loading', async () => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({ getAllConfigs: () => [] }),
-    }));
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [] });
 
-    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
-    const wrapper = mount(PracticePresets as unknown);
+    const wrapper = mount(PracticePresets);
 
     // Should display preset section
     expect(wrapper.text()).toContain('Quick Presets');
@@ -144,7 +138,6 @@ describe('PracticePresets.vue', () => {
   });
 
   it('emits loadConfig when clicking load button on saved config', async () => {
-    vi.resetModules();
     const mockConfig = {
       id: '1',
       name: 'Custom Breathing',
@@ -159,49 +152,38 @@ describe('PracticePresets.vue', () => {
       updatedAt: new Date(),
     };
 
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({ getAllConfigs: () => [mockConfig], deleteConfig: vi.fn() }),
-    }));
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [mockConfig], deleteConfig: vi.fn() });
 
-    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
-    const wrapper = mount(PracticePresets as unknown);
+    const wrapper = mount(PracticePresets);
 
     const loadButtons = wrapper.findAll('button').filter((b) => b.text().includes('Load'));
-    if (loadButtons.length > 0) {
-      await loadButtons[0].trigger('click');
-      const emitted = wrapper.emitted('loadConfig');
-      expect(emitted).toBeDefined();
-    }
+    expect(loadButtons.length).toBeGreaterThan(0);
+    await loadButtons[0].trigger('click');
+    expect(wrapper.emitted('loadConfig')).toEqual([[mockConfig]]);
   });
 
   it('emits loadConfig when clicking preset button', async () => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({ getAllConfigs: () => [] }),
-    }));
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [] });
 
-    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
-    const wrapper = mount(PracticePresets as unknown);
+    const wrapper = mount(PracticePresets);
 
-    // Find preset buttons (they should be the ones in "Quick Presets" section)
-    const buttons = wrapper.findAll('button');
-    const presetButton = buttons.find((b) => b.text().includes('Hold'));
-
-    if (presetButton) {
-      await presetButton.trigger('click');
-      const emitted = wrapper.emitted('loadConfig');
-      expect(emitted).toBeDefined();
-    }
+    await wrapper.get('[data-testid="load-coherent-breathing"]').trigger('click');
+    expect(wrapper.emitted('loadConfig')).toEqual([
+      [
+        expect.objectContaining({
+          name: 'Coherent Breathing',
+          inhaleTime: 5,
+          exhaleTime: 5,
+          targetSets: 1,
+        }),
+      ],
+    ]);
   });
 
   it('shows diaphragm resistance guidance and emits only its validated breathing config', async () => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({ getAllConfigs: () => [] }),
-    }));
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [] });
 
-    const { default: PracticePresets } = await import('../../src/components/PracticePresets.vue');
-    const wrapper = mount(PracticePresets as unknown);
+    const wrapper = mount(PracticePresets);
 
     expect(wrapper.text()).toContain('Diaphragm Resistance Training — Starter');
     const guidanceButton = wrapper.get('[data-testid="guidance-diaphragm-resistance-starter"]');
