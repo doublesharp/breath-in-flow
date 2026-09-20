@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Breathing animation preview</title>
+    <style>
+      .demo-shell {
+        max-width: 680px;
+        margin: auto;
+        padding: 32px 24px;
+      }
+      .demo-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+      .demo-top h1 {
+        font-size: 18px;
+        font-weight: 500;
+      }
+      .demo-stage {
+        margin: 24px 0;
+        border: 1px solid var(--line-subtle);
+        border-radius: 20px;
+        padding: 16px;
+        background: var(--surface-card);
+      }
+      .demo-controls {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .demo-note {
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.7;
+        text-align: center;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="demo"></div>
+    <script type="module">
+      import { createApp, h, onMounted, onUnmounted } from 'vue';
+      import { DEFAULT_BREATHING_CONFIG } from '@breath-in-flow/shared';
+      import BreathingVisualizer from './src/components/BreathingVisualizer.vue';
+      import { useBreathingTimer } from './src/composables/useBreathingTimer.ts';
+      import './src/style.css';
+
+      createApp({
+        setup() {
+          const config = {
+            ...DEFAULT_BREATHING_CONFIG,
+            inhaleTime: 4,
+            inhaleHoldTime: 2,
+            exhaleTime: 6,
+            exhaleHoldTime: 2,
+            repetitions: 999,
+            soundEnabled: false,
+            ttsEnabled: false,
+          };
+          const timer = useBreathingTimer(config);
+          const onVisibility = () => {
+            if (document.hidden) timer.pause();
+          };
+          onMounted(() => {
+            timer.start();
+            document.addEventListener('visibilitychange', onVisibility);
+          });
+          onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility));
+          return () =>
+            h('main', { class: 'demo-shell' }, [
+              h('div', { class: 'demo-top' }, [
+                h('h1', 'Breathing animation'),
+                h('a', { href: '/', class: 'btn-secondary' }, 'Back to app'),
+              ]),
+              h('div', { class: 'demo-stage' }, [
+                h(BreathingVisualizer, {
+                  phase: timer.phase.value,
+                  currentTime: timer.currentTime.value,
+                  totalTime: timer.totalPhaseTime.value,
+                  scale: timer.breathingScale.value,
+                  isRunning: timer.isRunning.value,
+                  config,
+                }),
+              ]),
+              h('div', { class: 'demo-controls' }, [
+                h(
+                  'button',
+                  {
+                    class: 'btn-primary',
+                    onClick: () => (timer.isPaused.value ? timer.resume() : timer.pause()),
+                  },
+                  timer.isPaused.value ? 'Resume' : 'Pause'
+                ),
+                h(
+                  'button',
+                  {
+                    class: 'btn-secondary',
+                    onClick: () => {
+                      timer.stop();
+                      timer.start();
+                    },
+                  },
+                  'Restart'
+                ),
+              ]),
+              h('p', { class: 'demo-note' }, 'Inhale 4s · Hold 2s · Exhale 6s · Hold 2s'),
+              h('p', { class: 'demo-note' }, 'Animation preview. No session is recorded.'),
+            ]);
+        },
+      }).mount('#demo');
+    </script>
+  </body>
+</html>

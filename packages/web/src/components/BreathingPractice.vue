@@ -508,12 +508,10 @@
           <!-- Modal Header -->
           <div
             data-testid="configure-practice-header"
-            class="sticky top-0 bg-slate-800/95 backdrop-blur-sm -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 py-4 sm:py-5 mb-6 sm:mb-8 border-b border-slate-700/50 flex items-center justify-between z-10"
+            class="configuration-header sticky top-0 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 py-4 sm:py-5 mb-6 sm:mb-8 border-b border-slate-700/50 flex items-center justify-between z-10"
           >
             <div class="flex items-center gap-3">
-              <div
-                class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center"
-              >
+              <div class="settings-icon w-10 h-10 rounded-xl flex items-center justify-center">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   class="w-5 h-5 text-white"
@@ -789,7 +787,12 @@
                 <div>
                   <label for="guidance-voice" class="form-label">Voice</label>
                   <div class="relative">
-                    <select id="guidance-voice" v-model="config.ttsVoice" class="form-select" :disabled="!isTtsAvailable || loadingVoices">
+                    <select
+                      id="guidance-voice"
+                      v-model="config.ttsVoice"
+                      class="form-select"
+                      :disabled="!isTtsAvailable || loadingVoices"
+                    >
                       <option v-if="loadingVoices" value="">Loading voices...</option>
                       <option v-else v-for="voice in sortedVoices" :key="voice.voiceURI" :value="voice.voiceURI">
                         {{ formatVoiceLabel(voice) }}
@@ -834,6 +837,10 @@
             </div>
           </div>
 
+          <div v-if="canUseConfig" class="configuration-summary">
+            <PatternSummary :config="config" compact />
+          </div>
+
           <!-- Action Buttons -->
           <div class="mt-8 pt-6 border-t border-slate-700/50">
             <div
@@ -849,6 +856,7 @@
               <div class="flex-1">
                 <input
                   v-model="configName"
+                  aria-label="Preset name"
                   type="text"
                   placeholder="Enter a name to save this configuration..."
                   class="form-input"
@@ -913,99 +921,75 @@
         @open-lab="handleOpenLab"
       />
 
-      <!-- Quick Start / Practice View - Always at Top -->
-      <div class="card-solid !p-4 sm:!p-6">
-        <BreathingVisualizer
-          :phase="timer.phase.value"
-          :current-time="timer.currentTime.value"
-          :total-time="timer.totalPhaseTime.value"
-          :scale="timer.breathingScale.value"
-          :is-running="timer.isRunning.value"
-          :config="config"
-        />
-
-        <!-- Current Pattern Display (when not running) -->
-        <div v-if="!isRunning" class="mt-4 sm:mt-6 text-center">
-          <div class="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/50 rounded-xl text-slate-300">
-            <span class="text-emerald-400 font-semibold">{{ config.inhaleTime }}s</span>
-            <span class="text-slate-500">→</span>
-            <span v-if="config.inhaleHoldTime" class="text-amber-400 font-semibold">{{ config.inhaleHoldTime }}s</span>
-            <span v-if="config.inhaleHoldTime" class="text-slate-500">→</span>
-            <span class="text-blue-400 font-semibold">{{ config.exhaleTime }}s</span>
-            <span v-if="config.exhaleHoldTime" class="text-slate-500">→</span>
-            <span v-if="config.exhaleHoldTime" class="text-amber-400 font-semibold">{{ config.exhaleHoldTime }}s</span>
-            <span class="text-slate-500 ml-2">×</span>
-            <span class="text-white font-semibold">{{ config.repetitions }} reps</span>
-            <button
-              @click="showConfigModal = true"
-              class="p-1.5 rounded-lg hover:bg-slate-600/50 text-slate-400 hover:text-white transition-colors mr-1"
-              title="Configure practice"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="w-6 h-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-            </button>
+      <section v-if="!isRunning" data-testid="practice-panel" class="practice-panel" aria-labelledby="practice-title">
+        <div class="practice-heading">
+          <div>
+            <p class="eyebrow">Practice</p>
+            <h2 id="practice-title" class="page-title">{{ config.name }}</h2>
           </div>
-          <p
-            v-if="configValidationError"
-            data-testid="quick-config-validation-error"
-            class="mx-auto mt-3 max-w-xl rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200"
-          >
-            {{ configValidationError }}
-          </p>
+          <span class="practice-status"><span></span>Ready</span>
         </div>
 
-        <!-- Progress Stats (when running) -->
-        <div v-if="isRunning" class="mt-4 sm:mt-8">
-          <p class="text-center text-slate-400 text-lg">Session in progress...</p>
-        </div>
-
-        <!-- Main Controls - Prominently at Top -->
-        <div v-if="!isRunning" class="mt-4 sm:mt-8 flex flex-col sm:flex-row justify-center gap-4">
-          <button @click="startExercise" class="btn-success btn-action" :disabled="!canUseConfig">
-            <span class="flex items-center gap-2 justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="w-6 h-6"
-                fill="none"
-                viewBox="0 0 24 24"
+        <div class="practice-body">
+          <div class="practice-art" aria-hidden="true">
+            <svg viewBox="0 0 240 240" fill="none">
+              <circle cx="120" cy="120" r="112" stroke="currentColor" stroke-opacity=".08" />
+              <circle cx="120" cy="120" r="91" stroke="currentColor" stroke-opacity=".15" />
+              <circle cx="120" cy="120" r="69" stroke="currentColor" stroke-opacity=".28" />
+              <circle
+                cx="120"
+                cy="120"
+                r="46"
+                fill="currentColor"
+                fill-opacity=".07"
                 stroke="currentColor"
+                stroke-opacity=".45"
+              />
+              <path
+                d="M98 120c8-18 14-18 22 0s14 18 22 0"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </div>
+          <div class="practice-details">
+            <PatternSummary v-if="canUseConfig" :config="config" />
+            <p
+              v-if="configValidationError"
+              data-testid="quick-config-validation-error"
+              class="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+            >
+              {{ configValidationError }}
+            </p>
+            <div class="practice-controls">
+              <button @click="startExercise" class="btn-success practice-start" :disabled="!canUseConfig">
+                <svg
+                  aria-hidden="true"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
+                  <path d="m9 5 11 7-11 7V5Z" />
+                </svg>
+                Start Practice
+              </button>
+              <button
+                @click="showConfigModal = true"
+                class="btn-secondary"
+                title="Configure practice"
+                aria-label="Configure practice"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
-                />
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Start Practice
-            </span>
-          </button>
+                Configure
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
+      <p v-else class="muted-copy text-center py-6">Session in progress...</p>
 
       <!-- Lab CTA — compact, bottom placement -->
       <div
@@ -1016,8 +1000,7 @@
           @click="$emit('switch-tab', 'lab')"
           class="text-xs text-white/40 hover:text-emerald-400 transition-colors"
         >
-          Explore your estimated breathing response in the
-          <span class="font-medium text-white/60">Lab</span> →
+          Explore <span class="font-medium text-white/60">Pulse Variability</span> →
         </button>
         <button @click="dismissLabCta" class="text-white/20 hover:text-white/50 ml-3 shrink-0" aria-label="Dismiss">
           <svg
@@ -1088,6 +1071,7 @@ import { ref, reactive, watch, inject, onMounted, onUnmounted, computed, nextTic
 import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
+import PatternSummary from './PatternSummary.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
 import RecommendedActions from './RecommendedActions.vue';
 import FeelingCheckIn from './FeelingCheckIn.vue';
@@ -1131,11 +1115,19 @@ const cancelStopButtonRef = ref<HTMLButtonElement | null>(null);
 const showLabCta = ref(false);
 const labCtaDismissed = ref(localStorage.getItem('lab-cta-dismissed') === 'true');
 
-defineProps<{ goal?: UserGoal }>();
+const props = defineProps<{ goal?: UserGoal; openSettings?: boolean }>();
 
 const emit = defineEmits<{
   'switch-tab': [tab: string];
+  settingsOpened: [];
 }>();
+
+onMounted(() => {
+  if (props.openSettings) {
+    showConfigModal.value = true;
+    emit('settingsOpened');
+  }
+});
 
 // The newest completed session, used to offer a one-tap repeat. Storage keeps
 // sessions newest-first, so the first COMPLETED entry is the most recent one.
@@ -1155,6 +1147,21 @@ const config = reactive<BreathingConfig>({
   name: 'Quick Practice',
 });
 const configName = ref('');
+
+// Restore persisted defaults before applying an explicit preset selection.
+const savedConfig = localStorage.getItem(LAST_CONFIG_KEY);
+if (savedConfig) {
+  try {
+    const parsed = JSON.parse(savedConfig);
+    // Validate config with Zod schema before applying
+    const validatedConfig = BreathingConfigSchema.parse({ ...DEFAULT_BREATHING_CONFIG, ...parsed });
+    Object.assign(config, validatedConfig);
+    configName.value = validatedConfig.name || '';
+  } catch (error) {
+    // Invalid saved config, use defaults and log error
+    console.warn('Invalid saved config in localStorage, using defaults:', error);
+  }
+}
 const configFieldLabels: Record<string, string> = {
   inhaleTime: 'Inhale time',
   inhaleHoldTime: 'Inhale hold time',
@@ -1235,22 +1242,9 @@ const showAfterCheckIn = ref(false);
 const completedSessionId = ref<string | null>(null);
 const afterCheckInError = ref('');
 
-// Load last used config on mount
+// Register browser lifecycle and refresh voice availability on mount
 onMounted(async () => {
   window.addEventListener('keydown', handleEscape);
-  const savedConfig = localStorage.getItem(LAST_CONFIG_KEY);
-  if (savedConfig) {
-    try {
-      const parsed = JSON.parse(savedConfig);
-      // Validate config with Zod schema before applying
-      const validatedConfig = BreathingConfigSchema.parse({ ...DEFAULT_BREATHING_CONFIG, ...parsed });
-      Object.assign(config, validatedConfig);
-      configName.value = validatedConfig.name || '';
-    } catch (error) {
-      // Invalid saved config, use defaults and log error
-      console.warn('Invalid saved config in localStorage, using defaults:', error);
-    }
-  }
 
   refreshVoices();
 
@@ -1458,7 +1452,11 @@ watch(
   () => selectedConfig?.value,
   (newConfig: BreathingConfig | null | undefined) => {
     if (newConfig) {
-      Object.assign(config, { ...DEFAULT_BREATHING_CONFIG, ...newConfig });
+      Object.assign(config, {
+        ...DEFAULT_BREATHING_CONFIG,
+        ...newConfig,
+        ttsVoice: newConfig.ttsVoice ?? config.ttsVoice,
+      });
       configName.value = newConfig.name;
       // Update sound theme in storage so the selector updates
       if (newConfig.soundTheme) {

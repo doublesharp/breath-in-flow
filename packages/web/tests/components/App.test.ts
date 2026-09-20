@@ -137,12 +137,14 @@ describe('App.vue', () => {
       expect.arrayContaining(['max-w-7xl', 'py-4', 'sm:py-5'])
     );
     expect(wrapper.get('[data-testid="desktop-navigation"]').classes()).toEqual(
-      expect.arrayContaining(['hidden', 'lg:flex', 'gap-1.5', 'p-2'])
+      expect.arrayContaining(['hidden', 'lg:flex', 'gap-1', 'p-1'])
     );
     expect(wrapper.get('[data-testid="mobile-navigation"]').classes()).toEqual(
       expect.arrayContaining(['lg:hidden'])
     );
-    expect(wrapper.get('header h1').classes()).toEqual(expect.arrayContaining(['shrink-0', 'whitespace-nowrap']));
+    expect(wrapper.get('header h1').classes()).toEqual(
+      expect.arrayContaining(['shrink-0', 'whitespace-nowrap'])
+    );
   });
 
   it('names both desktop and mobile pulse navigation consistently', () => {

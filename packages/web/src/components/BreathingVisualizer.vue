@@ -15,7 +15,7 @@
       <!-- Outer glow ring -->
       <div
         class="absolute inset-4 rounded-full transition-all duration-700 opacity-30 blur-xl"
-        :style="{ transform: `scale(${scale * 1.1})`, ...phaseGlowStyle }"
+        :style="{ transform: `scale(${visualScale * 1.1})`, ...phaseGlowStyle }"
       ></div>
 
       <!-- Background circle with pulse -->
@@ -25,18 +25,14 @@
       <div
         class="breathing-circle w-full h-full flex items-center justify-center relative"
         :style="{
-          transform: `translateZ(0) scale(${scale})`,
+          transform: `translateZ(0) scale(${visualScale})`,
           padding: '1rem',
           ...phaseGlowStyle,
           willChange: 'transform, box-shadow',
           backfaceVisibility: 'hidden',
         }"
       >
-        <!-- Gradient circle -->
-        <div
-          :class="['absolute inset-0 rounded-full', phaseColorBgClass]"
-          :style="{ ...phaseBackgroundStyle, backfaceVisibility: 'hidden', willChange: 'background' }"
-        ></div>
+        <BreathingPressureField :scale="visualScale" :phase="phase" />
 
         <!-- Inner content -->
         <div class="relative z-10 text-center">
@@ -67,6 +63,7 @@
       <!-- Progress ring -->
       <svg
         v-if="isRunning && totalTime > 0"
+        data-testid="phase-progress-ring"
         class="absolute inset-0 -rotate-90 w-full h-full"
         viewBox="0 0 100 100"
         style="overflow: visible"
@@ -74,24 +71,24 @@
         <defs>
           <!-- Solid gradient for inhale -->
           <linearGradient id="inhaleGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="white" stop-opacity="1" />
-            <stop offset="100%" stop-color="white" stop-opacity="1" />
+            <stop offset="0%" stop-color="#d6eee4" stop-opacity="0.92" />
+            <stop offset="100%" stop-color="#9bcdbd" stop-opacity="0.92" />
           </linearGradient>
           <!-- Solid gradient for exhale -->
           <linearGradient id="exhaleGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="white" stop-opacity="1" />
-            <stop offset="100%" stop-color="white" stop-opacity="1" />
+            <stop offset="0%" stop-color="#b9ddd3" stop-opacity="0.88" />
+            <stop offset="100%" stop-color="#7eaea4" stop-opacity="0.88" />
           </linearGradient>
           <!-- Hold gradients with accented tips -->
           <linearGradient id="inhaleHoldGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="white" stop-opacity="0.9" />
-            <stop offset="85%" stop-color="white" stop-opacity="0.9" />
-            <stop offset="100%" stop-color="white" stop-opacity="1" />
+            <stop offset="0%" stop-color="#d8dfca" stop-opacity="0.78" />
+            <stop offset="85%" stop-color="#d8dfca" stop-opacity="0.78" />
+            <stop offset="100%" stop-color="#ead8b7" stop-opacity="0.9" />
           </linearGradient>
           <linearGradient id="exhaleHoldGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="white" stop-opacity="0.9" />
-            <stop offset="85%" stop-color="white" stop-opacity="0.9" />
-            <stop offset="100%" stop-color="#f59e0b" stop-opacity="1" />
+            <stop offset="0%" stop-color="#d8dfca" stop-opacity="0.78" />
+            <stop offset="85%" stop-color="#e2cfab" stop-opacity="0.82" />
+            <stop offset="100%" stop-color="#c99468" stop-opacity="0.92" />
           </linearGradient>
           <filter id="progressGlow">
             <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
@@ -112,7 +109,7 @@
         </defs>
 
         <!-- Background circle -->
-        <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1.5" />
+        <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(214,238,228,0.14)" stroke-width="1" />
 
         <!-- Persistent ring elements - always in DOM, controlled by opacity -->
         <!-- Inhale ring -->
@@ -122,7 +119,7 @@
           r="47"
           fill="none"
           stroke="url(#inhaleGradient)"
-          stroke-width="4"
+          stroke-width="2.25"
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="inhaleRing.dashoffset"
@@ -136,7 +133,7 @@
           r="47"
           fill="none"
           stroke="url(#inhaleHoldGradient)"
-          stroke-width="4"
+          stroke-width="2.25"
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="inhaleHoldRing.dashoffset"
@@ -150,7 +147,7 @@
           r="47"
           fill="none"
           stroke="url(#exhaleGradient)"
-          stroke-width="4"
+          stroke-width="2.25"
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="exhaleRing.dashoffset"
@@ -164,7 +161,7 @@
           r="47"
           fill="none"
           stroke="url(#exhaleHoldGradient)"
-          stroke-width="4"
+          stroke-width="2.25"
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="exhaleHoldRing.dashoffset"
@@ -178,7 +175,7 @@
           r="47"
           fill="none"
           stroke="url(#inhaleHoldGradient)"
-          stroke-width="4"
+          stroke-width="2.25"
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="extendedInhaleHoldRing.dashoffset"
@@ -192,7 +189,7 @@
           r="47"
           fill="none"
           stroke="url(#exhaleHoldGradient)"
-          stroke-width="4"
+          stroke-width="2.25"
           stroke-linecap="round"
           :stroke-dasharray="circumference"
           :stroke-dashoffset="extendedExhaleHoldRing.dashoffset"
@@ -204,8 +201,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, type Ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
 import { getPhaseInfo, formatTime, type BreathingPhase, type BreathingConfig } from '@breath-in-flow/shared';
+import BreathingPressureField from './BreathingPressureField.vue';
 
 const props = defineProps<{
   phase: BreathingPhase;
@@ -222,6 +220,20 @@ const phaseInfo = computed(() => {
 const displayTime = computed(() => formatTime(props.currentTime));
 const ringRadius = 47;
 const circumference = 2 * Math.PI * ringRadius;
+const motionQuery = typeof window === 'undefined' ? null : window.matchMedia?.('(prefers-reduced-motion: reduce)');
+const reduceMotion = ref(motionQuery?.matches ?? false);
+const visualScale = ref(props.scale);
+
+const updateVisualScale = () => {
+  if (!reduceMotion.value && props.phase !== 'PAUSED') visualScale.value = props.scale;
+};
+const handleMotionPreference = (event: MediaQueryListEvent) => {
+  reduceMotion.value = event.matches;
+  if (!event.matches) updateVisualScale();
+};
+onMounted(() => motionQuery?.addEventListener('change', handleMotionPreference));
+onBeforeUnmount(() => motionQuery?.removeEventListener('change', handleMotionPreference));
+watch([() => props.scale, () => props.phase], updateVisualScale);
 
 // Ring states for each phase type
 interface RingState {
@@ -246,27 +258,6 @@ const phaseGlowStyle = computed(() => {
   return {
     boxShadow: '0 0 32px 10px rgba(15, 23, 42, 0.22)',
     transition: 'box-shadow 0s linear',
-  };
-});
-
-const phaseBackgroundStyle = computed(() => {
-  const gradients: Record<BreathingPhase, string> = {
-    INHALE: 'linear-gradient(135deg, #34d399, #10b981 45%, #0f766e)',
-    INHALE_HOLD: 'linear-gradient(135deg, #fbbf24, #f59e0b 45%, #c2410c)',
-    EXHALE: 'linear-gradient(135deg, #60a5fa, #3b82f6 45%, #1d4ed8)',
-    EXHALE_HOLD: 'linear-gradient(135deg, #fbbf24, #f59e0b 45%, #c2410c)',
-    EXTENDED_INHALE_HOLD: 'linear-gradient(135deg, #f87171, #ef4444 45%, #b91c1c)',
-    EXTENDED_EXHALE_HOLD: 'linear-gradient(135deg, #f87171, #ef4444 45%, #b91c1c)',
-    SET_REST: 'linear-gradient(135deg, #2dd4bf, #0d9488 45%, #115e59)',
-    SET_COMPLETE: 'linear-gradient(135deg, #34d399, #10b981 45%, #0f766e)',
-    SESSION_COMPLETE: 'linear-gradient(135deg, #34d399, #10b981 45%, #0f766e)',
-    PAUSED: 'linear-gradient(135deg, #cbd5e1, #94a3b8 45%, #475569)',
-    IDLE: 'linear-gradient(135deg, #cbd5e1, #94a3b8 45%, #475569)',
-  };
-
-  return {
-    background: gradients[props.phase] ?? gradients.IDLE,
-    transition: 'none',
   };
 });
 
@@ -401,16 +392,16 @@ watch([() => props.phase, () => props.currentTime, () => props.totalTime], ([pha
 const phaseColorClass = computed(() => {
   switch (props.phase) {
     case 'INHALE':
-      return 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-green-500/40';
+      return 'bg-gradient-to-r from-emerald-700 to-teal-700 text-white shadow-emerald-950/25';
     case 'INHALE_HOLD':
-      return 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-amber-500/40';
+      return 'bg-gradient-to-r from-amber-700 to-orange-800 text-white shadow-amber-950/25';
     case 'EXHALE':
-      return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-blue-500/40';
+      return 'bg-gradient-to-r from-teal-700 to-cyan-800 text-white shadow-teal-950/25';
     case 'EXHALE_HOLD':
-      return 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-amber-500/40';
+      return 'bg-gradient-to-r from-amber-700 to-orange-800 text-white shadow-amber-950/25';
     case 'EXTENDED_INHALE_HOLD':
     case 'EXTENDED_EXHALE_HOLD':
-      return 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-red-500/40';
+      return 'bg-gradient-to-r from-orange-700 to-amber-800 text-white shadow-orange-950/25';
     case 'SET_COMPLETE':
     case 'SESSION_COMPLETE':
       return 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-500/40';
@@ -420,31 +411,6 @@ const phaseColorClass = computed(() => {
       return 'bg-gradient-to-r from-slate-500 to-slate-600 text-white shadow-slate-500/40';
     default:
       return 'bg-gradient-to-r from-slate-600 to-slate-700 text-white';
-  }
-});
-
-const phaseColorBgClass = computed(() => {
-  switch (props.phase) {
-    case 'INHALE':
-      return 'bg-gradient-to-br from-green-400 via-emerald-500 to-emerald-700';
-    case 'INHALE_HOLD':
-      return 'bg-gradient-to-br from-amber-400 via-orange-500 to-orange-700';
-    case 'EXHALE':
-      return 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-700';
-    case 'EXHALE_HOLD':
-      return 'bg-gradient-to-br from-amber-400 via-orange-500 to-orange-700';
-    case 'EXTENDED_INHALE_HOLD':
-    case 'EXTENDED_EXHALE_HOLD':
-      return 'bg-gradient-to-br from-red-400 via-red-500 to-red-700';
-    case 'SET_COMPLETE':
-    case 'SESSION_COMPLETE':
-      return 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700';
-    case 'SET_REST':
-      return 'bg-gradient-to-br from-teal-400 via-teal-500 to-cyan-700';
-    case 'PAUSED':
-      return 'bg-gradient-to-br from-slate-400 via-slate-500 to-slate-700';
-    default:
-      return 'bg-gradient-to-br from-slate-500 via-slate-600 to-slate-800';
   }
 });
 </script>

@@ -32,11 +32,18 @@ async function assertMobileCompliance(page: Page, surface: string) {
   // geometry instead of the deliberately smaller first animation frame.
   await page.waitForTimeout(450);
   const result = await page.evaluate(() => {
-    const visibleDialogs = [...document.querySelectorAll<HTMLElement>('[role="dialog"]')].filter((dialog) => {
-      const rect = dialog.getBoundingClientRect();
-      const style = getComputedStyle(dialog);
-      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
-    });
+    const visibleDialogs = [...document.querySelectorAll<HTMLElement>('[role="dialog"]')].filter(
+      (dialog) => {
+        const rect = dialog.getBoundingClientRect();
+        const style = getComputedStyle(dialog);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden'
+        );
+      }
+    );
     const root = visibleDialogs.at(-1) ?? document.body;
     const candidates = root.querySelectorAll<HTMLElement>(
       'button, a[href], select, input, textarea, [role="button"], [role="radio"], [role="checkbox"]'
@@ -46,7 +53,9 @@ async function assertMobileCompliance(page: Page, surface: string) {
       let current: HTMLElement | null = element.parentElement;
       while (current) {
         const currentStyle = getComputedStyle(current);
-        const scrolls = /(auto|scroll)/.test(currentStyle.overflowY) && current.scrollHeight > current.clientHeight;
+        const scrolls =
+          /(auto|scroll)/.test(currentStyle.overflowY) &&
+          current.scrollHeight > current.clientHeight;
         if (scrolls) return true;
         current = current.parentElement;
       }
@@ -56,13 +65,21 @@ async function assertMobileCompliance(page: Page, surface: string) {
     for (const element of candidates) {
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
-      if (style.display === 'none' || style.visibility === 'hidden' || rect.width === 0 || rect.height === 0) continue;
+      if (
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        rect.width === 0 ||
+        rect.height === 0
+      )
+        continue;
       if (element.closest('[inert]')) continue;
 
       let effectiveRect = rect;
       const inputType = element.getAttribute('type');
       if (element.tagName === 'INPUT' && (inputType === 'checkbox' || inputType === 'radio')) {
-        const label = element.closest('label') ?? (element.id ? root.querySelector(`label[for="${element.id}"]`) : null);
+        const label =
+          element.closest('label') ??
+          (element.id ? root.querySelector(`label[for="${element.id}"]`) : null);
         if (label) effectiveRect = label.getBoundingClientRect();
       }
 
@@ -70,7 +87,12 @@ async function assertMobileCompliance(page: Page, surface: string) {
         violations.push({
           element: element.tagName.toLowerCase(),
           height: Math.round(effectiveRect.height),
-          label: (element.getAttribute('aria-label') || element.textContent || element.getAttribute('name') || '')
+          label: (
+            element.getAttribute('aria-label') ||
+            element.textContent ||
+            element.getAttribute('name') ||
+            ''
+          )
             .trim()
             .replace(/\s+/g, ' ')
             .slice(0, 80),
@@ -79,7 +101,12 @@ async function assertMobileCompliance(page: Page, surface: string) {
         });
       }
 
-      const label = (element.getAttribute('aria-label') || element.textContent || element.getAttribute('name') || '')
+      const label = (
+        element.getAttribute('aria-label') ||
+        element.textContent ||
+        element.getAttribute('name') ||
+        ''
+      )
         .trim()
         .replace(/\s+/g, ' ')
         .slice(0, 80);
@@ -92,7 +119,8 @@ async function assertMobileCompliance(page: Page, surface: string) {
           width: Math.round(effectiveRect.width),
         });
       }
-      const verticallyOutside = effectiveRect.bottom <= 0 || effectiveRect.top >= window.innerHeight;
+      const verticallyOutside =
+        effectiveRect.bottom <= 0 || effectiveRect.top >= window.innerHeight;
       if (verticallyOutside && !hasVerticalScrollContainer(element)) {
         violations.push({
           element: element.tagName.toLowerCase(),
@@ -118,6 +146,87 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.clear());
 });
 
+test('practice starts above the fold and the routine library opens settings directly', async ({
+  page,
+}, testInfo) => {
+  if (testInfo.project.name === 'desktop-chromium')
+    await page.setViewportSize({ width: 1280, height: 720 });
+  await completeOnboarding(page);
+  const start = page.getByRole('button', { name: 'Start Practice', exact: true });
+  await expect(start).toBeInViewport({ ratio: 1 });
+  const startIsUncovered = await start.evaluate((button) => {
+    const rect = button.getBoundingClientRect();
+    return button.contains(
+      document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+    );
+  });
+  expect(startIsUncovered).toBe(true);
+  await page.getByRole('button', { name: 'Manage breathing presets' }).click();
+  await page.getByRole('searchbox', { name: 'Search presets' }).fill('five-second');
+  await expect(page.getByTestId('search-results')).toHaveText('1 routine');
+  await page.getByTestId('load-coherent-breathing').click();
+  await expect(page.getByTestId('practice-panel').getByRole('heading')).toHaveText(
+    'Coherent Breathing'
+  );
+  await expect(page.getByTestId('practice-panel')).toContainText('1m');
+  await page.getByRole('button', { name: 'Manage breathing presets' }).click();
+  await page.getByTestId('create-preset').click();
+  const configuration = page.getByRole('dialog', { name: 'Configure Practice' });
+  await expect(configuration).toBeVisible();
+  await configuration.getByRole('button', { name: 'Close practice settings' }).click();
+  await expect(configuration).not.toBeVisible();
+  await page.getByRole('button', { name: 'Manage breathing presets' }).click();
+  await page.getByRole('button', { name: 'Practice breathing exercises' }).click();
+  await expect(page.getByTestId('practice-panel')).toBeVisible();
+  await expect(configuration).not.toBeVisible();
+});
+
+test('gradient follows breathing pressure and freezes on pause or reduced motion', async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date('2026-09-12T12:00:00Z') });
+  await page.clock.pauseAt(new Date('2026-09-12T12:00:01Z'));
+  await page.goto('/animation-demo.html');
+  const field = page.getByTestId('breathing-pressure-field');
+  const energy = page.getByTestId('pressure-energy');
+  const circle = page.locator('.breathing-circle');
+  const appearance = async () => ({
+    opacity: await energy.getAttribute('opacity'),
+    radius: await energy.getAttribute('r'),
+    transform: await circle.evaluate((element) => getComputedStyle(element).transform),
+  });
+  const advance = async (seconds: number) => {
+    for (let second = 0; second < seconds; second += 1) await page.clock.runFor(1_000);
+  };
+  await advance(1);
+  const earlyInhale = Number(await energy.getAttribute('opacity'));
+  await advance(1);
+  expect(Number(await energy.getAttribute('opacity'))).toBeGreaterThan(earlyInhale);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await advance(1); // Allow the existing CSS interpolation to settle.
+  const paused = await appearance();
+  await advance(2);
+  expect(await appearance()).toEqual(paused);
+  await page.getByRole('button', { name: 'Resume', exact: true }).click();
+  await advance(2);
+  await expect(field).toHaveAttribute('data-pressure-state', 'neutral');
+  const neutralHold = await energy.getAttribute('opacity');
+  await advance(2);
+  const earlyExhale = Number(await energy.getAttribute('opacity'));
+  await advance(3);
+  expect(Number(await energy.getAttribute('opacity'))).toBeLessThan(earlyExhale);
+  await advance(3);
+  await expect(field).toHaveAttribute('data-pressure-state', 'neutral');
+  await expect(energy).toHaveAttribute('opacity', neutralHold!);
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  const reduced = await appearance();
+  await advance(8);
+  expect(await appearance()).toEqual(reduced);
+  await expect(page.getByText('Exhale', { exact: true })).toBeVisible();
+});
+
 test('primary phone surfaces meet the mobile interaction contract', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'android-phone', 'Phone-only compliance path');
   await completeOnboarding(page);
@@ -131,7 +240,7 @@ test('primary phone surfaces meet the mobile interaction contract', async ({ pag
   await reviewScreenshot(page, testInfo, 'mobile-configure-practice');
   await configuration.getByRole('button', { name: 'Close practice settings' }).click();
 
-  await page.getByRole('button', { name: 'Pulse Variability' }).click();
+  await page.getByRole('button', { name: 'Pulse Variability', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pulse Variability' })).toBeVisible();
   await assertMobileCompliance(page, 'Pulse Variability home');
   await reviewScreenshot(page, testInfo, 'mobile-pulse-variability');
@@ -180,6 +289,8 @@ test('Configure Practice remains usable in landscape with enlarged text', async 
 
   const configuration = page.getByRole('dialog', { name: 'Configure Practice' });
   await expect(configuration).toBeVisible();
-  await expect(configuration.getByRole('button', { name: 'Close practice settings' })).toBeInViewport();
+  await expect(
+    configuration.getByRole('button', { name: 'Close practice settings' })
+  ).toBeInViewport();
   await assertMobileCompliance(page, 'Landscape Configure Practice');
 });

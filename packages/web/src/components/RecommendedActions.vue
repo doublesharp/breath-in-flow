@@ -1,34 +1,44 @@
 <template>
-  <div data-testid="recommended-actions" class="card-solid !p-4 sm:!p-5">
-    <p class="text-sm font-medium text-amber-200/90">Recommended for you</p>
-    <h2 class="mt-1 text-lg font-bold text-white">{{ recommendation.title }}</h2>
-
-    <div class="mt-4 flex flex-col sm:flex-row flex-wrap gap-3">
+  <aside data-testid="recommended-actions" class="recommendation">
+    <div class="recommendation-copy">
+      <p class="eyebrow">Recommended for you</p>
+      <h2>{{ recommendation.title }}</h2>
+      <p v-if="summary" class="recommendation-duration">{{ summary.duration }}</p>
+    </div>
+    <div class="recommendation-actions">
       <template v-if="hasRecommendedConfig">
-        <button data-testid="start-recommended" class="btn-primary" @click="emitStart">
-          Start recommended session
+        <button
+          data-testid="start-recommended"
+          class="btn-secondary"
+          aria-label="Start recommended session"
+          @click="emitStart"
+        >
+          Start session <span aria-hidden="true">→</span>
         </button>
-        <button data-testid="adjust-recommended" class="btn-secondary" @click="emitAdjust">Adjust first</button>
+        <button data-testid="adjust-recommended" class="btn-ghost" @click="emitAdjust">Adjust first</button>
       </template>
-
-      <button v-else-if="recommendation.kind === 'lab'" data-testid="open-lab" class="btn-primary" @click="emitOpenLab">
+      <button
+        v-else-if="recommendation.kind === 'lab'"
+        data-testid="open-lab"
+        class="btn-secondary"
+        @click="emitOpenLab"
+      >
         Open the Lab
       </button>
-
-      <p v-else data-testid="recommended-fallback" class="text-sm text-slate-400">
-        Choose a breathing preset below to get started.
+      <p v-else data-testid="recommended-fallback" class="muted-copy text-sm">
+        Choose a routine in Presets to get started.
       </p>
-
-      <button v-if="lastSession" data-testid="repeat-last" class="btn-secondary" @click="emitRepeat">
+      <button v-if="lastSession" data-testid="repeat-last" class="btn-ghost" @click="emitRepeat">
         Repeat last session
       </button>
     </div>
-  </div>
+  </aside>
 </template>
 
 <script setup lang="ts">
 import { computed, toRaw } from 'vue';
 import { BreathingConfigSchema, type BreathingConfig, type Session, type UserGoal } from '@breath-in-flow/shared';
+import { getPracticeSummary } from '@/utils/practiceSummary';
 import { resolveRecommendation } from '@/services/recommendationService';
 import { guidedPresets, presetConfig } from '@/data/guidedPresets';
 
@@ -46,6 +56,8 @@ const recommendedPreset = computed(() => {
   const rec = recommendation.value;
   return rec.kind === 'practice' ? (guidedPresets.find((preset) => preset.id === rec.presetId) ?? null) : null;
 });
+
+const summary = computed(() => (recommendedPreset.value ? getPracticeSummary(recommendedPreset.value.config) : null));
 
 // Detached, validated clone so a caller can never mutate the built-in preset.
 function buildRecommendedConfig(): BreathingConfig | null {

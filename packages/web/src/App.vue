@@ -10,75 +10,32 @@
 
     <header
       :class="[
-        'sticky top-0 z-50 safe-area-top transition-transform duration-300 border-b border-white/[0.08]',
+        'app-header sticky top-0 z-50 safe-area-top transition-transform duration-300 border-b border-white/[0.08]',
         headerHidden ? '-translate-y-full' : 'translate-y-0',
       ]"
-      style="background: linear-gradient(135deg, rgb(38, 32, 27) 0%, rgb(32, 27, 22) 100%)"
+      style="background: var(--surface-page)"
     >
       <div
         data-testid="app-header-content"
         class="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between"
       >
-        <h1 class="shrink-0 whitespace-nowrap text-lg sm:text-xl font-bold text-white flex items-center gap-2 sm:gap-3">
-          <div
-            class="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
-            style="
-              background: linear-gradient(145deg, #e3b25c 0%, #7fc3aa 45%, #c26a4f 100%);
-              box-shadow:
-                0 8px 24px -4px rgba(194, 106, 79, 0.35),
-                0 4px 12px -2px rgba(107, 181, 156, 0.28);
-            "
-          >
-            <div class="absolute inset-0 bg-gradient-to-t from-white/10 to-transparent"></div>
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 sm:w-6 sm:h-6 relative z-10" viewBox="0 0 100 100">
-              <!-- Breathing wave pattern -->
-              <path
-                d="M 20 50 Q 30 35, 40 50 T 60 50 T 80 50"
-                fill="none"
-                stroke="white"
-                stroke-width="4"
-                opacity="0.7"
-                stroke-linecap="round"
-              />
-              <path
-                d="M 22 58 Q 32 48, 42 58 T 62 58 T 82 58"
-                fill="none"
-                stroke="white"
-                stroke-width="3"
-                opacity="0.4"
-                stroke-linecap="round"
-              />
-              <!-- Center breathing indicator -->
-              <circle cx="50" cy="50" r="12" fill="white" opacity="0.9" />
-              <circle cx="50" cy="50" r="6" fill="white" opacity="0.6" />
-            </svg>
-          </div>
-          <span class="bg-gradient-to-r from-white via-slate-200 to-slate-300 bg-clip-text text-transparent">{{
-            AppConfig.appName
-          }}</span>
+        <h1 class="app-brand shrink-0 whitespace-nowrap flex items-center gap-3">
+          <svg class="brand-mark" aria-hidden="true" width="36" height="36" viewBox="0 0 40 40" fill="none">
+            <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-opacity=".45" />
+            <path d="M9 20c4-10 7-10 11 0s7 10 11 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <span>{{ AppConfig.appName }}</span>
         </h1>
 
         <div class="flex items-center gap-2">
           <!-- Desktop Navigation -->
-          <nav
-            data-testid="desktop-navigation"
-            class="hidden lg:flex gap-1.5 p-2 rounded-2xl"
-            style="
-              background: linear-gradient(135deg, rgba(70, 60, 52, 0.6) 0%, rgba(47, 40, 34, 0.8) 100%);
-              border: 1px solid rgba(255, 255, 255, 0.06);
-            "
-          >
+          <nav data-testid="desktop-navigation" class="desktop-nav hidden lg:flex gap-1 p-1 rounded-xl">
             <button
               @click="activeTab = 'practice'"
               :class="[
-                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
-                activeTab === 'practice' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
+                'nav-link min-h-11 px-4 py-2.5 rounded-lg font-medium',
+                activeTab === 'practice' ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
-              :style="
-                activeTab === 'practice'
-                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
-                  : ''
-              "
               :aria-current="activeTab === 'practice' ? 'page' : undefined"
               aria-label="Practice breathing exercises"
             >
@@ -90,12 +47,7 @@
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12c3-8 6-8 9 0s6 8 9 0" />
                 </svg>
                 <span>Practice</span>
               </span>
@@ -103,14 +55,9 @@
             <button
               @click="activeTab = 'lab'"
               :class="[
-                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
-                activeTab === 'lab' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
+                'nav-link min-h-11 px-4 py-2.5 rounded-lg font-medium',
+                activeTab === 'lab' ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
-              :style="
-                activeTab === 'lab'
-                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
-                  : ''
-              "
               :aria-current="activeTab === 'lab' ? 'page' : undefined"
               aria-label="Pulse Variability"
             >
@@ -135,14 +82,9 @@
             <button
               @click="activeTab = 'history'"
               :class="[
-                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
-                activeTab === 'history' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
+                'nav-link min-h-11 px-4 py-2.5 rounded-lg font-medium',
+                activeTab === 'history' ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
-              :style="
-                activeTab === 'history'
-                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
-                  : ''
-              "
               :aria-current="activeTab === 'history' ? 'page' : undefined"
               aria-label="View session history"
             >
@@ -167,14 +109,9 @@
             <button
               @click="activeTab = 'configs'"
               :class="[
-                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
-                activeTab === 'configs' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
+                'nav-link min-h-11 px-4 py-2.5 rounded-lg font-medium',
+                activeTab === 'configs' ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
-              :style="
-                activeTab === 'configs'
-                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
-                  : ''
-              "
               :aria-current="activeTab === 'configs' ? 'page' : undefined"
               aria-label="Manage breathing presets"
             >
@@ -199,14 +136,9 @@
             <button
               @click="activeTab = 'analytics'"
               :class="[
-                'min-h-11 px-5 py-2.5 rounded-xl font-medium transition-all duration-400',
-                activeTab === 'analytics' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5',
+                'nav-link min-h-11 px-4 py-2.5 rounded-lg font-medium',
+                activeTab === 'analytics' ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5',
               ]"
-              :style="
-                activeTab === 'analytics'
-                  ? 'background: linear-gradient(135deg, #c26a4f 0%, #d58a69 100%); box-shadow: 0 8px 24px -4px rgba(194, 106, 79, 0.35);'
-                  : ''
-              "
               :aria-current="activeTab === 'analytics' ? 'page' : undefined"
               aria-label="View analytics and insights"
             >
@@ -243,11 +175,18 @@
           ref="breathingPracticeRef"
           key="practice"
           :goal="selectedGoal ?? undefined"
+          :open-settings="openPracticeSettings"
+          @settings-opened="openPracticeSettings = false"
           @switch-tab="(tab: string) => (activeTab = tab as 'practice' | 'lab' | 'history' | 'configs' | 'analytics')"
         />
         <LabTab v-else-if="activeTab === 'lab'" key="lab" />
         <SessionHistory v-else-if="activeTab === 'history'" key="history" />
-        <PracticePresets v-else-if="activeTab === 'configs'" key="configs" @load-config="loadConfig" />
+        <PracticePresets
+          v-else-if="activeTab === 'configs'"
+          key="configs"
+          @load-config="loadConfig"
+          @create-config="createPreset"
+        />
         <AnalyticsDashboard v-else-if="activeTab === 'analytics'" key="analytics" />
       </transition>
     </main>
@@ -255,11 +194,8 @@
     <!-- Mobile Bottom Navigation -->
     <nav
       data-testid="mobile-navigation"
-      class="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.06]"
-      style="
-        background: linear-gradient(180deg, rgba(38, 32, 27, 0.95) 0%, rgba(32, 27, 22, 0.98) 100%);
-        backdrop-filter: blur(24px);
-      "
+      class="mobile-nav lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.06]"
+      style="background: var(--surface-page); backdrop-filter: blur(24px)"
     >
       <div class="flex justify-around items-center py-2 px-2 safe-area-bottom">
         <button
@@ -268,21 +204,11 @@
             'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
             activeTab === 'practice' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
           ]"
-          :style="
-            activeTab === 'practice'
-              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
-              : ''
-          "
           :aria-current="activeTab === 'practice' ? 'page' : undefined"
           aria-label="Practice breathing exercises"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12c3-8 6-8 9 0s6 8 9 0" />
           </svg>
           <span class="text-xs mt-1 font-medium">Practice</span>
         </button>
@@ -292,11 +218,6 @@
             'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
             activeTab === 'lab' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
           ]"
-          :style="
-            activeTab === 'lab'
-              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
-              : ''
-          "
           :aria-current="activeTab === 'lab' ? 'page' : undefined"
           aria-label="Pulse Variability"
         >
@@ -316,11 +237,6 @@
             'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
             activeTab === 'history' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
           ]"
-          :style="
-            activeTab === 'history'
-              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
-              : ''
-          "
           :aria-current="activeTab === 'history' ? 'page' : undefined"
           aria-label="View session history"
         >
@@ -340,11 +256,6 @@
             'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
             activeTab === 'configs' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
           ]"
-          :style="
-            activeTab === 'configs'
-              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
-              : ''
-          "
           :aria-current="activeTab === 'configs' ? 'page' : undefined"
           aria-label="Manage breathing presets"
         >
@@ -364,11 +275,6 @@
             'flex flex-col items-center justify-center px-3 py-2 rounded-2xl min-w-[60px] transition-all duration-300',
             activeTab === 'analytics' ? 'text-amber-200' : 'text-slate-400 hover:text-white',
           ]"
-          :style="
-            activeTab === 'analytics'
-              ? 'background: linear-gradient(135deg, rgba(194, 106, 79, 0.18) 0%, rgba(227, 178, 92, 0.12) 100%);'
-              : ''
-          "
           :aria-current="activeTab === 'analytics' ? 'page' : undefined"
           aria-label="View analytics and insights"
         >
@@ -415,6 +321,7 @@ const SessionHistory = defineAsyncComponent(() => import('./components/SessionHi
 
 const activeTab = ref<'practice' | 'lab' | 'history' | 'configs' | 'analytics'>('practice');
 const selectedConfig = ref<BreathingConfig | null>(null);
+const openPracticeSettings = ref(false);
 const breathingPracticeRef = ref<{ handleSystemBack?: () => boolean } | null>(null);
 let backButtonListener: PluginListenerHandle | null = null;
 
@@ -465,6 +372,11 @@ function loadConfig(config: BreathingConfig) {
   activeTab.value = 'practice';
 }
 
+function createPreset() {
+  openPracticeSettings.value = true;
+  activeTab.value = 'practice';
+}
+
 function clearSelectedConfig() {
   selectedConfig.value = null;
 }
@@ -477,17 +389,17 @@ provide('clearSelectedConfig', clearSelectedConfig);
 .fade-enter-active,
 .fade-leave-active {
   transition:
-    opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 0.16s ease,
+    transform 0.16s ease;
 }
 
 .fade-enter-from {
   opacity: 0;
-  transform: translateY(16px);
+  transform: translateY(4px);
 }
 
 .fade-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(-4px);
 }
 </style>

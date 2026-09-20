@@ -11,6 +11,41 @@ describe('PracticePresets.vue', () => {
   beforeEach(() => {
     useStorageMock.mockReset();
   });
+  it('filters saved names and built-in descriptions without case or whitespace sensitivity', async () => {
+    const config = { id: 'saved', name: 'Evening calm', inhaleTime: 4, exhaleTime: 6 };
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [config] });
+    const wrapper = mount(PracticePresets);
+    const search = wrapper.get('input[type="search"]');
+    await search.setValue('  EVENING  ');
+    expect(wrapper.get('[data-testid="search-results"]').text()).toBe('1 routine');
+    expect(wrapper.findAll('[data-testid="saved-routine"]')).toHaveLength(1);
+    expect(wrapper.find('[data-testid="load-coherent-breathing"]').exists()).toBe(false);
+    await wrapper.get('[data-testid="saved-routine"] button').trigger('click');
+    expect(wrapper.emitted('loadConfig')).toEqual([[config]]);
+    await search.setValue('five-second');
+    expect(wrapper.findAll('[data-testid="saved-routine"]')).toHaveLength(0);
+    expect(wrapper.find('[data-testid="load-coherent-breathing"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="search-results"]').text()).toBe('1 routine');
+  });
+
+  it('clears a search with no matches and restores the library', async () => {
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [] });
+    const wrapper = mount(PracticePresets);
+    await wrapper.get('input[type="search"]').setValue('no such routine');
+    expect(wrapper.get('[data-testid="search-results"]').text()).toBe('0 routines');
+    expect(wrapper.text()).toContain('No routines match');
+    expect(wrapper.find('[data-testid="load-coherent-breathing"]').exists()).toBe(false);
+    await wrapper.get('button[aria-label="Clear search"]').trigger('click');
+    expect(wrapper.find('[data-testid="load-coherent-breathing"]').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain('No routines match');
+  });
+
+  it('offers a create action from the empty saved library', async () => {
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [] });
+    const wrapper = mount(PracticePresets);
+    await wrapper.get('[data-testid="create-preset"]').trigger('click');
+    expect(wrapper.emitted('createConfig')).toEqual([[]]);
+  });
   it('shows empty state when no configs', async () => {
     useStorageMock.mockReturnValue({ getAllConfigs: () => [] });
 
@@ -45,10 +80,15 @@ describe('PracticePresets.vue', () => {
     const text = wrapper.text();
 
     expect(text).toContain('Test Config');
-    expect(text).toContain('+ 3s hold');
-    expect(text).toContain('+ 2s hold');
-    expect(text).toContain('Extended EXHALE Hold');
-    expect(text).toContain('Second INHALE Hold');
+    const phases = wrapper.get('[data-testid="saved-routine"]').findAll('dl > div');
+    expect(phases.map((phase) => phase.text())).toEqual([
+      'Inhale4s',
+      'Hold3s',
+      'Exhale5s',
+      'Hold2s',
+    ]);
+    expect(text).toContain('Exhale hold · 10s');
+    expect(text).toContain('Inhale hold');
   });
 
   it('calls deleteConfig when confirmed', async () => {

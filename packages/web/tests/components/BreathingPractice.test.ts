@@ -193,6 +193,37 @@ describe('BreathingPractice.vue', () => {
     vi.resetAllMocks();
   });
 
+  it('shows a named breathing pattern and per-set timing before starting', async () => {
+    const wrapper = mount(BreathingPractice);
+    await flushPromises();
+    const summary = wrapper.get('[data-testid="practice-panel"]');
+    expect(summary.get('h2').text()).toBe('Quick Practice');
+    expect(summary.findAll('dl > div').map((phase) => phase.text())).toEqual([
+      'Inhale4s',
+      'Exhale4s',
+    ]);
+    expect(summary.text()).toContain('32s / set');
+    expect(summary.text()).toContain('Open-ended');
+    expect(summary.find('[data-testid="phase-time"]').exists()).toBe(false);
+  });
+
+  it('consumes a preset creation request by opening settings on mount', async () => {
+    const wrapper = mount(BreathingPractice, {
+      props: { openSettings: true },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(
+      document.body.querySelector('[aria-labelledby="configure-practice-title"]')
+    ).not.toBeNull();
+    expect(wrapper.emitted('settingsOpened')).toEqual([[]]);
+    document.body
+      .querySelector<HTMLButtonElement>('[data-testid="close-practice-settings"]')!
+      .click();
+    await nextTick();
+    expect(document.body.querySelector('[aria-labelledby="configure-practice-title"]')).toBeNull();
+  });
+
   it('preserves a saved device voice while only Kokoro is available', async () => {
     localStorage.setItem(
       'herb_breathing_last_config',
@@ -1012,6 +1043,10 @@ describe('BreathingPractice.vue', () => {
     });
 
     it('applies selectedConfig from provide and calls clearSelectedConfig', async () => {
+      localStorage.setItem(
+        'herb_breathing_last_config',
+        JSON.stringify({ name: 'Previous routine', inhaleTime: 9, ttsVoice: 'kokoro:bf_emma' })
+      );
       const preset = { name: 'Preset A', inhaleTime: 3 };
       const clearMock = vi.fn();
       const wrapper = mount(BreathingPractice, {
@@ -1021,9 +1056,11 @@ describe('BreathingPractice.vue', () => {
         },
       });
 
-      // Verify component mounts with injection provided
-      expect(wrapper.exists()).toBe(true);
-      // clearSelectedConfig should be called from the watcher
+      await flushPromises();
+      const panel = wrapper.get('[data-testid="practice-panel"]');
+      expect(panel.get('h2').text()).toBe('Preset A');
+      expect(panel.findAll('dl > div')[0].text()).toBe('Inhale3s');
+      expect(setVoiceMock).toHaveBeenLastCalledWith('kokoro:bf_emma');
       expect(clearMock).toHaveBeenCalled();
     });
 
@@ -1119,7 +1156,7 @@ describe('BreathingPractice.vue', () => {
     await new Promise((r) => setTimeout(r, 10));
     await nextTick();
 
-    expect(wrapper.text()).toContain('Explore your estimated breathing response');
+    expect(wrapper.text()).toContain('Explore Pulse Variability');
     wrapper.unmount();
   });
 
