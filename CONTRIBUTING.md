@@ -60,7 +60,7 @@ breath-in-flow/
 2. **Clone and Install**
 
    ```bash
-   git clone https://github.com/breathinflow/breath-in-flow.git
+   git clone https://github.com/doublesharp/breath-in-flow.git
    cd breath-in-flow
    pnpm install
    pnpm db:generate

@@ -6,7 +6,7 @@
     "name": "Breath in Flow",
     "email": "hello@breathinflow.app"
   },
-  "homepage": "https://github.com/breathinflow/breath-in-flow",
+  "homepage": "https://github.com/doublesharp/breath-in-flow",
   "private": true,
   "main": "dist-electron/main/main.js",
   "scripts": {

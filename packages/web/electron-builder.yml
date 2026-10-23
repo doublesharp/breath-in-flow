@@ -88,9 +88,8 @@ appImage:
   artifactName: breath-in-flow-${version}-${arch}.${ext}
 
 # Auto-updater configuration
-# Update owner/repo to match your GitHub repository
 publish:
   provider: github
-  owner: breathinflow
+  owner: doublesharp
   repo: breath-in-flow
   releaseType: release
