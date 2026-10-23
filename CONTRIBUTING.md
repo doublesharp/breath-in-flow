@@ -1,259 +1,135 @@
 # Contributing to Breath in Flow
 
-Thank you for your interest in contributing to Breath in Flow!
+Start from `main` and keep each pull request focused on one change. Include what changed, why, and how you checked it. For UI changes, include a screenshot; for a bug fix, add a regression test to the relevant existing suite.
 
-## Tech Stack
+## Local setup
 
-- **Frontend**: Vue 3 + TypeScript + Vite
-- **Styling**: TailwindCSS
-- **Validation**: Zod
-- **Storage**: localStorage (client-side persistence)
-- **Package Manager**: pnpm with workspaces
-- **Testing**: Vitest + Vue Test Utils
-- **Desktop**: Electron (macOS, Windows, Linux)
-- **Mobile**: Capacitor (iOS, Android)
-- **Charts**: Chart.js + vue-chartjs
-
-## Project Structure
-
-```
-breath-in-flow/
-├── packages/
-│   ├── shared/          # Shared types, schemas, utilities
-│   │   ├── src/
-│   │   │   ├── schemas.ts   # Zod schemas and types
-│   │   │   ├── timer.ts     # Breathing timer logic
-│   │   │   └── index.ts
-│   │   └── tests/
-│   │
-│   ├── database/        # Prisma schema and database client
-│   │   ├── prisma/
-│   │   │   └── schema.prisma
-│   │   └── src/
-│   │
-│   └── web/             # Vue frontend application
-│       ├── src/
-│       │   ├── components/  # Vue components
-│       │   ├── composables/ # Vue composables (hooks)
-│       │   ├── services/    # External services (wearables)
-│       │   └── App.vue
-│       ├── electron/        # Electron main process
-│       ├── android/         # Capacitor Android project
-│       ├── ios/             # Capacitor iOS project
-│       └── tests/
-│
-├── scripts/             # Build scripts
-├── .github/workflows/   # CI/CD workflows
-├── pnpm-workspace.yaml
-└── package.json
-```
-
-## Development Setup
-
-1. **Prerequisites**
-   - Node.js 22+
-   - pnpm 9+
-   - For Android builds: Java 21, Android SDK
-   - For iOS builds: macOS with Xcode
-   - For desktop builds: Platform-specific requirements handled by electron-builder
-
-2. **Clone and Install**
-
-   ```bash
-   git clone https://github.com/doublesharp/breath-in-flow.git
-   cd breath-in-flow
-   pnpm install
-   pnpm db:generate
-   ```
-
-3. **Start Development Server**
-
-   ```bash
-   pnpm dev
-   ```
-
-   The app will be available at `http://localhost:3003`.
-
-## Building
-
-All build commands can be run from the workspace root. Built files are collected in the `dist/` directory.
+Use a Node.js version allowed by `engines` in [`package.json`](package.json). Corepack selects the pinned pnpm version.
 
 ```bash
-# Build all platforms
-pnpm build:all
-
-# Build specific platforms
-pnpm build:web       # Web assets only
-pnpm build:mac       # macOS app (DMG, ZIP)
-pnpm build:win       # Windows app (NSIS, Portable)
-pnpm build:linux     # Linux app (AppImage, DEB)
-pnpm build:android   # Android APK
-pnpm build:ios       # iOS (syncs project, requires Xcode to archive)
-
-# Build groups
-pnpm build:desktop   # All desktop platforms (mac, win, linux)
-pnpm build:mobile    # All mobile platforms (android, ios)
+git clone https://github.com/doublesharp/breath-in-flow.git
+cd breath-in-flow
+corepack enable
+pnpm install
+pnpm dev
 ```
 
-Build outputs are organized in `dist/`:
+Open **http://localhost:7080**. Installation generates the Prisma client automatically. The dev command builds `packages/shared` before starting Vite. After editing shared code, rebuild it with `pnpm --filter @breath-in-flow/shared build`.
 
-```
-dist/
-├── mac/        # macOS DMG and ZIP files
-├── win/        # Windows EXE installers
-├── linux/      # Linux AppImage and DEB
-├── android/    # Android APK
-├── ios/        # (use Xcode to archive)
-└── web/        # Static web assets
-```
+If Corepack is not available, install it using the [pnpm installation guide](https://pnpm.io/installation). Run the remaining commands from the repository root.
 
-### Running on Emulators
+## Run on your phone
+
+### Android
+
+Install Android Studio, its Android SDK and Platform Tools, and Java 21. Set `ANDROID_HOME` to the SDK directory and `JAVA_HOME` to your JDK. The build script also detects the usual macOS and Linux SDK locations.
+
+1. Enable **Developer options → USB debugging** on your phone.
+2. Connect it by USB and accept the debugging prompt. Run `adb devices` from the Android SDK's `platform-tools` directory to confirm the connection.
+3. Build and sync the app, then install it on the connected phone:
 
 ```bash
-cd packages/web
-
-# Run in Android emulator
-pnpm android:emulator
-
-# Run in iOS simulator (macOS only)
-pnpm ios:simulator
-
-# Build APK for sharing
-pnpm android:apk
+pnpm build:android
+pnpm --filter @breath-in-flow/web exec cap run android --no-sync
 ```
 
-## Testing
+Select your phone when Capacitor lists available targets. Run these commands again after making changes. The build also produces an installable APK in `dist/android/`.
+
+To work in Android Studio:
 
 ```bash
-# Run all tests
-pnpm test
+pnpm --filter @breath-in-flow/web exec cap open android
+```
 
-# Run tests with coverage
+See Android's [hardware-device setup](https://developer.android.com/studio/run/device) for USB drivers and connection help.
+
+### iPhone
+
+Use a Mac with Xcode and the iOS tooling required by the project's Capacitor version. Follow [Capacitor's environment setup](https://capacitorjs.com/docs/getting-started/environment-setup), including CocoaPods for this project's native dependencies.
+
+```bash
+pnpm build:ios
+pnpm --filter @breath-in-flow/web exec cap open ios
+```
+
+1. Add your Apple account in **Xcode → Settings → Accounts**.
+2. Connect and unlock your iPhone, then trust the Mac when prompted.
+3. In Xcode, select the **App** target and open **Signing & Capabilities**. Enable **Automatically manage signing** and select your team. For a personal build, use a unique bundle identifier if Xcode asks for one.
+4. Enable **Settings → Privacy & Security → Developer Mode** on the iPhone and follow the restart prompt.
+5. Choose the phone as Xcode's run destination and click **Run**. If prompted to trust the developer, do so under **Settings → General → VPN & Device Management**.
+
+After changing web code, run `pnpm build:ios` again, then click **Run** in Xcode. Personal Team installations expire; reconnect and run from Xcode to renew them. Keep personal signing changes out of your pull request.
+
+Apple's [device setup guide](https://developer.apple.com/documentation/xcode/running-your-app-on-simulated-or-physical-devices) covers pairing and signing.
+
+### Preview web changes over Wi-Fi
+
+Connect the computer and phone to the same network:
+
+```bash
+pnpm --filter @breath-in-flow/shared build
+pnpm --filter @breath-in-flow/web dev --host 0.0.0.0
+```
+
+Open the **Network** URL printed by Vite on your phone. Use an installed native build for camera and motion testing; browser sensor APIs require a secure context.
+
+## Check your changes
+
+```bash
+pnpm test             # Shared, database, web, and build-script tests
+pnpm typecheck
+pnpm lint
+pnpm build
 pnpm test:coverage
-
-# Run tests in watch mode
-pnpm --filter @breath-in-flow/web test:watch
 ```
 
-## Branching Strategy
-
-- `main` - Production releases only
-- `develop` - Integration branch for features
-- `feature/*` - Feature branches
-- `fix/*` - Bug fix branches
-
-## Pull Request Process
-
-1. Create a feature or fix branch from `develop`
-2. Make your changes with clear commit messages
-3. Ensure all tests pass: `pnpm test`
-4. Ensure linting passes: `pnpm lint`
-5. Open a PR against `develop`
-6. Request review from maintainers
-
-## Testing
+For browser flows and responsive layouts:
 
 ```bash
-# Run all tests
-pnpm test
-
-# Run tests with coverage
-pnpm test:coverage
-
-# Run tests in watch mode
-pnpm --filter @breath-in-flow/web test:watch
+pnpm --filter @breath-in-flow/web exec playwright install chromium
+pnpm test:e2e
 ```
 
-## Release Process
+Review screenshot differences before updating baselines. Keep existing coverage thresholds and test real behavior, including retries, cancellation, and storage failures. Native sensor changes also need a physical-device check; use the [device validation guide](docs/PULSE-VARIABILITY-DEVICE-VALIDATION.md).
 
-Releases are automated via GitHub Actions when a version tag is pushed.
+Use TypeScript, Vue's Composition API, and the existing styles. Format changed files with `pnpm exec prettier --write <files>` and use commit messages such as `fix: preserve a paused session` or `feat: add a breathing preset`.
 
-### Creating a Release
+## Project layout
 
-1. **Update Version Numbers**
+| Path                                       | What lives here                                                 |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| `packages/web/src/components`              | Practice, presets, history, analytics, and Lab UI               |
+| `packages/web/src/composables`             | Timer integration, preferences, and local persistence           |
+| `packages/web/src/services`                | Sensors, audio, backup, and platform services                   |
+| `packages/shared/src`                      | Schemas, breathing state machine, DSP, and variability analysis |
+| `packages/database`                        | Prisma schema and database operations                           |
+| `packages/web/android`, `packages/web/ios` | Native Capacitor projects                                       |
+| `packages/web/electron`                    | Desktop shell                                                   |
+| `scripts`, `.github/workflows`             | Build tooling and CI                                            |
 
-   Update version in these files:
-   - `package.json` (root)
-   - `packages/shared/package.json`
-   - `packages/database/package.json`
-   - `packages/web/package.json`
+The app stores routines and sessions in localStorage, and measurements in IndexedDB. A backend or database server is not needed to run it.
 
-   Keep the application version aligned in `packages/shared/src/config.ts`,
-   `packages/web/android/app/build.gradle`, and both configurations in
-   `packages/web/ios/App/App.xcodeproj/project.pbxproj`. Native build numbers use
-   `major * 10000 + minor * 100 + patch`. Shared and database package versions
-   have their own version numbers.
+## Build and release
 
-   Verify the release metadata with `bash scripts/tests/build-script.test.sh version`.
+| Command              | Output                                         |
+| -------------------- | ---------------------------------------------- |
+| `pnpm build:web`     | Static site in `dist/web/`                     |
+| `pnpm build:android` | Debug-signed APK in `dist/android/`            |
+| `pnpm build:ios`     | Built web assets synced into the Xcode project |
+| `pnpm build:mac`     | DMG and ZIP in `dist/mac/`                     |
+| `pnpm build:win`     | Installer and portable EXE in `dist/win/`      |
+| `pnpm build:linux`   | AppImage and DEB in `dist/linux/`              |
 
-2. **Commit Version Bump**
+Desktop packaging uses the native tooling for the target platform. GitHub's [Build & Release workflow](.github/workflows/release.yml) builds desktop packages and Android APKs. Run it manually for development artifacts; pushing a `v*` tag also creates a draft release for review.
 
-   ```bash
-   git add -A
-   git commit -m "chore: bump version to 0.1.0"
-   ```
+For a release, align the app version in the root and web `package.json`, `packages/shared/src/config.ts`, Android's `app/build.gradle`, and both configurations in the iOS Xcode project. Native build numbers use `major * 10000 + minor * 100 + patch`, with minor and patch at most 99. Shared and database package versions are independent. Check metadata with `bash scripts/tests/build-script.test.sh version` before tagging.
 
-3. **Create and Push Tag**
+## Brand and voice assets
 
-   ```bash
-   git tag -a v0.1.0 -m "Breath in Flow 0.1.0"
-   git push --atomic origin main refs/tags/v0.1.0
-   ```
+The logo source is [`packages/web/assets/logo.svg`](packages/web/assets/logo.svg). With [librsvg](https://gnome.pages.gitlab.gnome.org/librsvg/) installed, regenerate the favicon, launcher icons, and splash screens:
 
-4. **Review Draft Release**
-
-   The GitHub Action will:
-   - Run tests
-   - Build for all platforms (macOS ARM64/Intel, Windows, Linux, Android)
-   - Create a draft release with all artifacts
-
-5. **Publish Release**
-
-   Go to GitHub Releases, review the draft, edit release notes if needed, and publish.
-
-### Version Numbering
-
-We follow [Semantic Versioning](https://semver.org/):
-
-- **Major** (1.0.0): Breaking changes
-- **Minor** (0.1.0): New features, backward compatible
-- **Patch** (0.0.1): Bug fixes, backward compatible
-
-The native build script currently requires numeric `major.minor.patch` versions,
-with minor and patch components no greater than 99. Prerelease suffixes are not
-supported by that packaging path.
-
-### Hotfixes
-
-For urgent production fixes:
-
-1. Create branch from `main`: `git checkout -b fix/critical-bug main`
-2. Make fix and test
-3. PR directly to `main`
-4. After merge, tag and release
-5. Merge `main` back to `develop`
-
-## Code Style
-
-- Use TypeScript for all code
-- Follow Vue 3 Composition API patterns
-- Use Tailwind CSS for styling
-- Format with Prettier (runs automatically)
-- Lint with ESLint
-
-## Commit Messages
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-feat: add breathing pattern presets
-fix: correct timer phase transition bug
-docs: update README with build instructions
-chore: update dependencies
-test: add unit tests for timer logic
-refactor: simplify breathing visualizer component
+```bash
+pnpm generate:icons
 ```
 
-## Questions?
-
-Open an issue or start a discussion on GitHub.
+Bundled voice cues work offline. To regenerate them, install FFmpeg and run `pnpm generate:voices`. This downloads the pinned speech model for local generation and is separate from normal app builds.

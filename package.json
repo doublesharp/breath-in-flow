@@ -32,7 +32,8 @@
     "build:mobile": "./scripts/build.sh mobile",
     "build:web": "./scripts/build.sh web",
     "postinstall": "pnpm db:generate",
-    "generate:voices": "node scripts/generate-kokoro-cues.mjs"
+    "generate:voices": "node scripts/generate-kokoro-cues.mjs",
+    "generate:icons": "node scripts/generate-icons.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

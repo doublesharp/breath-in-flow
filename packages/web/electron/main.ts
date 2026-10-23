@@ -45,7 +45,7 @@ async function createWindow() {
     },
     // Standard titlebar for dragging
     titleBarStyle: 'default',
-    backgroundColor: '#0f172a', // slate-900
+    backgroundColor: '#201e1a',
     show: false, // Show when ready to prevent flash
   });
 

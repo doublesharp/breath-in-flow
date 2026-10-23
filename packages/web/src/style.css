@@ -402,9 +402,6 @@ textarea:focus-visible {
   font-weight: 550;
   letter-spacing: -0.035em;
 }
-.brand-mark {
-  color: var(--accent-sage);
-}
 .desktop-nav {
   background: rgba(229, 220, 197, 0.025);
   border: 1px solid var(--line-subtle);

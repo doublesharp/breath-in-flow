@@ -20,10 +20,7 @@
         class="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between"
       >
         <h1 class="app-brand shrink-0 whitespace-nowrap flex items-center gap-3">
-          <svg class="brand-mark" aria-hidden="true" width="36" height="36" viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-opacity=".45" />
-            <path d="M9 20c4-10 7-10 11 0s7 10 11 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
+          <img :src="brandMark" alt="" aria-hidden="true" width="36" height="36" />
           <span>{{ AppConfig.appName }}</span>
         </h1>
 
@@ -307,6 +304,7 @@ import GoalOnboarding from './components/GoalOnboarding.vue';
 import HelpSystem from './components/HelpSystem.vue';
 import { usePreferences } from './composables';
 import { AppConfig, type BreathingConfig, type UserGoal } from '@breath-in-flow/shared';
+import brandMark from '../assets/logo.svg';
 
 const { selectedGoal, needsOnboarding, saveError, setGoal } = usePreferences();
 

@@ -5,19 +5,16 @@ const config: CapacitorConfig = {
   appName: 'Breath in Flow',
   webDir: 'dist',
   server: {
-    // For development with live reload
-    // url: 'http://localhost:3003',
-    // cleartext: true,
     androidScheme: 'https',
   },
   ios: {
     // iOS specific settings
     contentInset: 'automatic',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#201e1a',
   },
   android: {
     // Android specific settings
-    backgroundColor: '#0f172a',
+    backgroundColor: '#201e1a',
     allowMixedContent: false,
   },
 };
