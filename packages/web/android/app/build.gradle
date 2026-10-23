@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
-def appVersionCode = (project.findProperty("appVersionCode") ?: "4") as Integer
-def appVersionName = project.findProperty("appVersionName") ?: "0.0.4"
+def appVersionCode = (project.findProperty("appVersionCode") ?: "5") as Integer
+def appVersionName = project.findProperty("appVersionName") ?: "0.0.5"
 
 android {
     namespace = "com.breathinflow.app"

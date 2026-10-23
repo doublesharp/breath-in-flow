@@ -57,7 +57,7 @@ Run logs, red/green regressions, coverage reports, source hashes, and the final 
 
 Real wearable account integration remains disabled pending server-side OAuth. PDF export and patient management remain roadmap items. This audit does not implement those features.
 
-Browser checks cover desktop Chromium and an emulated Android viewport, including actual local audio decoding and session persistence. They do not establish physical camera/motion accuracy, permission behavior on phones, thermal performance, native installer readiness, or clinical validity. No physical-device validation or native release packaging was performed in this audit. The existing [physical-device checklist](PULSE-VARIABILITY-DEVICE-VALIDATION.md) remains a separate gate.
+Browser checks cover desktop Chromium and an emulated Android viewport, including actual local audio decoding and session persistence. They do not establish physical camera/motion accuracy, permission behavior on phones, thermal performance, native installer readiness, or clinical validity. No physical-device validation was performed. Subsequent native CI packaging is recorded below; the existing [physical-device checklist](PULSE-VARIABILITY-DEVICE-VALIDATION.md) remains a separate gate.
 
 ## Release closeout
 
@@ -66,3 +66,9 @@ The fixes were committed by implementation area. Application metadata is aligned
 Release preparation found additional build-path defects. Electron commands now select Vite's `electron` mode without Unix-only environment assignments, with a regression checking relative asset paths and native build plugins. Each desktop CI job builds shared before consuming it, and the Android job uses the existing versioned build and asset-verification command. The Intel runner now uses `macos-15-intel`, a [supported GitHub runner](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Build jobs leave publication to the final draft-release job.
 
 Fresh checks passed after these changes: all **1,408 tests**, build-script regressions, typechecks, ESLint, `actionlint`, the production web build, and the Electron renderer/main/preload builds. The Electron build establishes bundle generation, not installer or hardware acceptance. Closeout logs are retained under the audit's Scratch report directory in `closeout/`.
+
+## CI follow-up
+
+The first GitHub release run passed tests and all desktop builds, but Android SDK setup failed because the action's default package list requested the removed `tools` package. The workflow now explicitly requests `platform-tools`. The [rerun on main](https://github.com/doublesharp/breath-in-flow/actions/runs/39985805915) passed tests and all five platform builds; release creation is intentionally skipped for a branch run.
+
+The downloaded Android APK passed `apksigner verify`. Its manifest reports `com.breathinflow.app`, version `0.0.4`, minimum Android API 24, and ARM and x86 architectures. It is a debug build for direct installation. The CI fix is included in the `0.0.5` patch release, with native build number `5`. Logs and artifact checks are retained in the audit's `ci-fixes/` Scratch report directory.
