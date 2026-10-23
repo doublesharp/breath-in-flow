@@ -50,6 +50,20 @@
         ></textarea>
       </div>
 
+      <label class="mt-5 flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          data-testid="checkin-skip-always"
+          class="mt-1 h-4 w-4 accent-amber-400"
+          :checked="skipEveryTime"
+          @change="emit('update:skipEveryTime', ($event.target as HTMLInputElement).checked)"
+        />
+        <span>
+          <span class="font-medium text-white">Skip every time</span>
+          <span class="block text-sm text-slate-400">Skip check-ins before and after practice. Turn them back on in settings.</span>
+        </span>
+      </label>
+
       <p
         v-if="errorMessage"
         role="alert"
@@ -81,11 +95,13 @@ const props = defineProps<{
   stage: 'before' | 'after';
   initialScore?: FeelingScore;
   errorMessage?: string;
+  skipEveryTime?: boolean;
 }>();
 
 const emit = defineEmits<{
   submit: [{ score: FeelingScore; comment?: string }];
   skip: [];
+  'update:skipEveryTime': [value: boolean];
 }>();
 
 const options: Array<{ score: FeelingScore; label: string }> = [

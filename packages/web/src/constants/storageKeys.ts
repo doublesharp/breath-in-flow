@@ -6,3 +6,4 @@ export const CONFIGS_STORAGE_KEY = 'breath-in-flow-configs';
 export const SESSIONS_STORAGE_KEY = 'breath-in-flow-sessions';
 export const SOUND_THEME_STORAGE_KEY = 'breath-in-flow-sound-theme';
 export const LAST_CONFIG_STORAGE_KEY = 'herb_breathing_last_config';
+export const SKIP_CHECK_INS_STORAGE_KEY = 'breath-in-flow-skip-check-ins';

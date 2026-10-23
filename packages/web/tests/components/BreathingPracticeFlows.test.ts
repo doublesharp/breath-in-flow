@@ -2,6 +2,10 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ref, nextTick } from 'vue';
 import BreathingPractice from '@/components/BreathingPractice.vue';
+import { LAST_CONFIG_STORAGE_KEY, SESSIONS_STORAGE_KEY, SKIP_CHECK_INS_STORAGE_KEY } from '@/constants/storageKeys';
+import { resetStorageForTesting, useStorage } from '@/composables/useStorage';
+import type { useBreathingTimer } from '@/composables/useBreathingTimer';
+import { soundService } from '@/services/soundService';
 import RecommendedActions from '@/components/RecommendedActions.vue';
 import { presetConfig, guidedPresets } from '@/data/guidedPresets';
 import type { BreathingConfig, Session } from '@breath-in-flow/shared';
@@ -24,10 +28,13 @@ let setTtsEnabledMock: ReturnType<typeof vi.fn>;
 let hasNativeSupportMock: ReturnType<typeof vi.fn>;
 
 const cancelSessionMock = vi.fn();
+let useRealPracticeServices = false;
 
-vi.mock('@/composables/useStorage', () => {
+vi.mock('@/composables/useStorage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/composables/useStorage')>();
   return {
-    useStorage: () => ({
+    ...actual,
+    useStorage: () => useRealPracticeServices ? actual.useStorage() : ({
       createSession: createSessionMock,
       addSetToSession: addSetMock,
       addExtendedHoldToSet: addExtendedHoldMock,
@@ -46,10 +53,12 @@ vi.mock('@/composables/useStorage', () => {
   };
 });
 
-vi.mock('@/composables/useBreathingTimer', () => {
+vi.mock('@/composables/useBreathingTimer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/composables/useBreathingTimer')>();
   // Provide a fake timer object that allows tests to trigger callbacks
   return {
-    useBreathingTimer: (_config: unknown, opts: Record<string, unknown>) => {
+    useBreathingTimer: (config: BreathingConfig, opts: Record<string, unknown>) => {
+      if (useRealPracticeServices) return actual.useBreathingTimer(config, opts);
       const phase = ref('IDLE');
       const isRunning = ref(false);
       const isPaused = ref(false);
@@ -74,6 +83,11 @@ vi.mock('@/composables/useBreathingTimer', () => {
         isFirstExtendedHold,
         start: () => {
           isRunning.value = true;
+        },
+        pause: () => {
+          if (!isRunning.value || isPaused.value) return;
+          isPaused.value = true;
+          phase.value = 'PAUSED';
         },
         stop: () => {
           isRunning.value = false;
@@ -189,6 +203,7 @@ async function startPracticeAndSkip(wrapper: Wrapper) {
 
 describe('BreathingPractice flows', () => {
   beforeEach(() => {
+    localStorage.removeItem(SKIP_CHECK_INS_STORAGE_KEY);
     createSessionMock.mockReset();
     addSetMock.mockReset();
     addExtendedHoldMock.mockReset();
@@ -578,6 +593,50 @@ describe('BreathingPractice flows', () => {
     expect((vm as { currentSetData?: unknown }).currentSetData).toBeNull();
   });
 
+  it('remembers skip every time, bypasses both prompts, and allows re-enabling in settings', async () => {
+    createSessionMock.mockReturnValue({ id: 'skip-always', sets: [] });
+    const options = {
+      global: {
+        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
+        stubs: ['BreathingVisualizer'],
+      },
+    };
+    let wrapper = mount(BreathingPractice, options);
+    await findByText(wrapper, 'start practice')!.trigger('click');
+    await clickCheckInControl('checkin-skip-always');
+    await skipBeforeCheckIn(wrapper);
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    (
+      wrapper.vm as unknown as { timer: { triggerSessionComplete: () => void } }
+    ).timer.triggerSessionComplete();
+    await nextTick();
+    expect(document.body.querySelector('[data-testid="feeling-checkin"]')).toBeNull();
+    wrapper.unmount();
+
+    wrapper = mount(BreathingPractice, options);
+    await findByText(wrapper, 'start practice')!.trigger('click');
+    expect(createSessionMock).toHaveBeenCalledTimes(2);
+    expect(document.body.querySelector('[data-testid="feeling-checkin"]')).toBeNull();
+    wrapper.unmount();
+
+    wrapper = mount(BreathingPractice, { ...options, props: { openSettings: true } });
+    await nextTick();
+    const setting = document.body.querySelector<HTMLInputElement>(
+      '[data-testid="show-session-checkins"]'
+    )!;
+    expect(setting).not.toBeNull();
+    expect(setting.checked).toBe(false);
+    setting.click();
+    await nextTick();
+    wrapper.unmount();
+
+    wrapper = mount(BreathingPractice, options);
+    await findByText(wrapper, 'start practice')!.trigger('click');
+    expect(document.body.querySelector('[data-testid="feeling-checkin"]')).not.toBeNull();
+    expect(createSessionMock).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
   it('skipping the pre-session prompt starts immediately with no check-in attached', async () => {
     createSessionMock.mockReturnValue({ id: 'skip-before', sets: [] });
 
@@ -600,6 +659,94 @@ describe('BreathingPractice flows', () => {
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     expect(setSessionCheckInMock).not.toHaveBeenCalled();
     wrapper.unmount();
+  });
+
+  it('shows a retryable start error even when check-ins are disabled', async () => {
+    localStorage.setItem(SKIP_CHECK_INS_STORAGE_KEY, 'true');
+    createSessionMock.mockImplementationOnce(() => {
+      throw new Error('Breathing session could not be saved.');
+    });
+    const wrapper = mount(BreathingPractice, {
+      global: { stubs: ['BreathingVisualizer'] },
+    });
+    await findByText(wrapper, 'start practice')!.trigger('click');
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toContain(
+      'could not be saved'
+    );
+    expect(document.body.querySelector('[data-testid="session-dialog"]')).toBeNull();
+
+    createSessionMock.mockReturnValueOnce({ id: 'retry-skipped', sets: [] });
+    await clickCheckInControl('checkin-skip');
+    expect(createSessionMock).toHaveBeenCalledTimes(2);
+    expect(document.body.querySelector('[data-testid="session-dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="feeling-checkin"]')).toBeNull();
+  });
+
+  it.each(['manual', 'automatic'] as const)(
+    'retains a %s completion after a failed save and retries before leaving',
+    async (completion) => {
+      localStorage.setItem(SKIP_CHECK_INS_STORAGE_KEY, 'true');
+      createSessionMock.mockReturnValue({ id: 'retry-completion', sets: [] });
+      completeSessionMock.mockImplementationOnce(() => {
+        throw new Error('Completed session could not be saved.');
+      });
+      const wrapper = mount(BreathingPractice, {
+        global: { stubs: ['BreathingVisualizer'] },
+      });
+      await findByText(wrapper, 'start practice')!.trigger('click');
+      const vm = wrapper.vm as unknown as {
+        currentSession: { id: string } | null;
+        finishSession: () => void;
+        resetExercise: () => void;
+        timer: { triggerSessionComplete: () => void; triggerSetComplete: () => void };
+      };
+      if (completion === 'automatic') vm.timer.triggerSessionComplete();
+      else {
+        vm.timer.triggerSetComplete();
+        vm.finishSession();
+      }
+      await nextTick();
+      expect(vm.currentSession?.id).toBe('retry-completion');
+      expect(document.body.textContent).toContain('Completed session could not be saved.');
+      expect(completeSessionMock).toHaveBeenCalledTimes(1);
+
+      if (completion === 'automatic') vm.resetExercise();
+      else vm.finishSession();
+      await nextTick();
+      expect(completeSessionMock).toHaveBeenCalledTimes(2);
+      expect(vm.currentSession).toBeNull();
+    }
+  );
+
+  it('retains an unsaved completed set and retries it before recording session completion', async () => {
+    localStorage.setItem(SKIP_CHECK_INS_STORAGE_KEY, 'true');
+    createSessionMock.mockReturnValue({ id: 'retry-set', sets: [] });
+    addSetMock.mockImplementation(() => {
+      throw new Error('Set could not be saved.');
+    });
+    const wrapper = mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+    await findByText(wrapper, 'start practice')!.trigger('click');
+    const vm = wrapper.vm as unknown as {
+      currentSession: { id: string } | null;
+      resetExercise: () => void;
+      timer: { triggerSetComplete: () => void; triggerSessionComplete: () => void };
+    };
+    expect(() => vm.timer.triggerSetComplete()).not.toThrow();
+    vm.timer.triggerSessionComplete();
+    await nextTick();
+    expect(completeSessionMock).not.toHaveBeenCalled();
+    expect(vm.currentSession?.id).toBe('retry-set');
+    expect(document.body.textContent).toContain('Set could not be saved.');
+
+    addSetMock.mockReturnValue({ id: 'retry-set', sets: [{ setNumber: 1 }] });
+    vm.resetExercise();
+    await nextTick();
+    expect(addSetMock).toHaveBeenLastCalledWith(
+      'retry-set',
+      expect.objectContaining({ setNumber: 1 })
+    );
+    expect(completeSessionMock).toHaveBeenCalledOnce();
+    expect(vm.currentSession).toBeNull();
   });
 
   it('attaches a submitted pre-score to the session created by that start', async () => {
@@ -908,6 +1055,277 @@ describe('BreathingPractice flows', () => {
   });
 });
 
+describe('BreathingPractice with real timer and storage', () => {
+  let wrapper: Wrapper | undefined;
+
+  beforeEach(() => {
+    useRealPracticeServices = true;
+    vi.useFakeTimers();
+    localStorage.clear();
+    resetStorageForTesting();
+    speakMock = vi.fn();
+    loadVoicesMock = vi.fn().mockResolvedValue([]);
+    vi.spyOn(soundService, 'playClick').mockImplementation(() => {});
+    localStorage.setItem(SKIP_CHECK_INS_STORAGE_KEY, 'true');
+  });
+
+  afterEach(() => {
+    wrapper?.unmount();
+    wrapper = undefined;
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    resetStorageForTesting();
+    localStorage.clear();
+    useRealPracticeServices = false;
+  });
+
+  async function startRealPractice(overrides: Partial<BreathingConfig> = {}) {
+    localStorage.setItem(LAST_CONFIG_STORAGE_KEY, JSON.stringify({
+      inhaleTime: 1,
+      inhaleHoldTime: 0,
+      exhaleTime: 1,
+      exhaleHoldTime: 0,
+      repetitions: 1,
+      extendedHoldEnabled: false,
+      targetSets: 0,
+      restBetweenSetsSeconds: 1,
+      soundEnabled: true,
+      ttsEnabled: true,
+      ...overrides,
+    }));
+    wrapper = mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+    await flushPromises();
+    await findByText(wrapper, 'start practice')!.trigger('click');
+    return wrapper.vm as unknown as {
+      timer: ReturnType<typeof useBreathingTimer>;
+      currentSession: Session | null;
+    };
+  }
+
+  async function clickBodyButton(label: string) {
+    const button = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (item) => item.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() === label.toLowerCase()
+    );
+    expect(button, `Button ${label}`).toBeDefined();
+    button!.click();
+    await nextTick();
+  }
+
+  function rejectSessionWrites(predicate: (session: Session) => boolean) {
+    const write = localStorage.setItem.bind(localStorage);
+    return vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === SESSIONS_STORAGE_KEY && JSON.parse(value).some(predicate)) {
+        throw new Error('Storage full');
+      }
+      write(key, value);
+    });
+  }
+
+  function persistedSession(): Session {
+    return JSON.parse(localStorage.getItem(SESSIONS_STORAGE_KEY)!)[0];
+  }
+
+  function displayedCompletedSets() {
+    const card = [...document.body.querySelectorAll('[data-testid="session-dialog"] .stat-card')]
+      .find((item) => item.textContent?.includes('Completed'));
+    return card?.querySelector('div')?.textContent?.trim();
+  }
+
+  it.each([0, 1])('freezes a manual finish with %ss rest when completion cannot be saved, then retries', async (rest) => {
+    const vm = await startRealPractice({ restBetweenSetsSeconds: rest });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(vm.timer.phase.value).toBe(rest ? 'SET_REST' : 'SET_COMPLETE');
+    expect(persistedSession().sets).toHaveLength(1);
+    const write = rejectSessionWrites((session) => session.status === 'COMPLETED');
+
+    await clickBodyButton('Finish session');
+    expect(document.body.textContent).toContain('could not be saved');
+    expect(vm.currentSession).not.toBeNull();
+    expect(persistedSession().status).toBe('IN_PROGRESS');
+    const clicks = vi.mocked(soundService.playClick).mock.calls.length;
+    const cues = speakMock.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(vm.timer.currentSet.value).toBe(1);
+    expect(vm.timer.phase.value).not.toBe('INHALE');
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(soundService.playClick).toHaveBeenCalledTimes(clicks);
+    expect(speakMock).toHaveBeenCalledTimes(cues);
+    expect(persistedSession().sets).toHaveLength(1);
+
+    await clickBodyButton('OK');
+    expect(document.body.querySelector('[data-testid="session-dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="session-dialog"]')?.textContent).not.toContain('Resume');
+    expect(document.body.querySelector('[data-testid="session-dialog"]')?.textContent?.toLowerCase())
+      .not.toContain('start next set');
+    await clickCheckInControl('session-header-exit');
+    expect(document.body.querySelector<HTMLElement>('[data-testid="stop-confirmation"]')?.style.display).toBe('none');
+    expect(vm.currentSession).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(vm.timer.currentSet.value).toBe(1);
+    expect(soundService.playClick).toHaveBeenCalledTimes(clicks);
+    expect(speakMock).toHaveBeenCalledTimes(cues);
+    await clickBodyButton('OK');
+    write.mockRestore();
+    await clickBodyButton('Retry saving session');
+    expect(vm.currentSession).toBeNull();
+    expect(document.body.querySelector('[data-testid="session-dialog"]')).toBeNull();
+    expect(useStorage().getAllSessions()[0]).toMatchObject({ status: 'COMPLETED', completedSets: 1 });
+    expect(persistedSession()).toMatchObject({ status: 'COMPLETED', completedSets: 1 });
+    expect(persistedSession().sets).toHaveLength(1);
+    expect(typeof persistedSession().sets[0].completedAt).toBe('string');
+  });
+
+  it('replaces a saved partial set after cancellation fails and the same set completes', async () => {
+    const vm = await startRealPractice({ repetitions: 2, targetSets: 1 });
+    await vi.advanceTimersByTimeAsync(2000);
+    const write = rejectSessionWrites((session) => session.status === 'CANCELLED');
+    await clickCheckInControl('session-header-exit');
+    await clickBodyButton('Save Session');
+    expect(document.body.textContent).toContain('could not be saved');
+    expect(persistedSession()).toMatchObject({
+      status: 'IN_PROGRESS', completedSets: 0,
+      sets: [{ setNumber: 1, completedRepetitions: 1 }],
+    });
+    expect(persistedSession().sets[0].completedAt).toBeUndefined();
+    write.mockRestore();
+    await clickBodyButton('OK');
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(vm.timer.phase.value).toBe('SESSION_COMPLETE');
+    const saved = persistedSession();
+    expect(saved.sets).toHaveLength(1);
+    expect(saved).toMatchObject({
+      status: 'COMPLETED', completedSets: 1,
+      sets: [{ setNumber: 1, completedRepetitions: 2, completedAt: expect.any(String) }],
+    });
+    expect(useStorage().getAllSessions()[0].sets).toHaveLength(1);
+    expect(useStorage().getAllSessions()[0].sets[0].completedAt).toBeInstanceOf(Date);
+    expect(vm.currentSession).toEqual(useStorage().getAllSessions()[0]);
+    expect(displayedCompletedSets()).toBe('1');
+  });
+
+  it('saves the latest partial progress when cancellation is retried after continuing', async () => {
+    const vm = await startRealPractice({ repetitions: 3, targetSets: 1 });
+    await vi.advanceTimersByTimeAsync(2000);
+    const write = rejectSessionWrites((session) => session.status === 'CANCELLED');
+    await clickCheckInControl('session-header-exit');
+    await clickBodyButton('Save Session');
+    expect(persistedSession().sets[0].completedRepetitions).toBe(1);
+    await clickBodyButton('OK');
+
+    await vi.advanceTimersByTimeAsync(2000);
+    write.mockRestore();
+    await clickCheckInControl('session-header-exit');
+    await clickBodyButton('Save Session');
+    expect(vm.currentSession).toBeNull();
+    expect(vm.timer.isRunning.value).toBe(false);
+    expect(persistedSession().sets).toHaveLength(1);
+    expect(persistedSession()).toMatchObject({
+      status: 'CANCELLED', completedSets: 0,
+      sets: [{ setNumber: 1, completedRepetitions: 2 }],
+    });
+    expect(useStorage().getAllSessions()[0].sets[0].completedRepetitions).toBe(2);
+    expect(document.body.textContent).toContain('Session saved with 0 sets completed');
+  });
+
+  it('retains a completed replacement when saving over partial progress also fails', async () => {
+    const vm = await startRealPractice({ repetitions: 2, targetSets: 1 });
+    await vi.advanceTimersByTimeAsync(2000);
+    const cancelWrite = rejectSessionWrites((session) => session.status === 'CANCELLED');
+    await clickCheckInControl('session-header-exit');
+    await clickBodyButton('Save Session');
+    await clickBodyButton('OK');
+    cancelWrite.mockRestore();
+    const completedWrite = rejectSessionWrites((session) => session.sets.some((set) => !!set.completedAt));
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(vm.timer.phase.value).toBe('SESSION_COMPLETE');
+    expect(vm.currentSession).not.toBeNull();
+    expect(persistedSession()).toMatchObject({
+      status: 'IN_PROGRESS', completedSets: 0,
+      sets: [{ setNumber: 1, completedRepetitions: 1 }],
+    });
+    expect(persistedSession().sets[0].completedAt).toBeUndefined();
+    expect(vm.currentSession).toEqual(useStorage().getAllSessions()[0]);
+    expect(displayedCompletedSets()).toBe('0');
+    await clickBodyButton('OK');
+    await clickBodyButton('Retry saving session');
+    expect(persistedSession().sets).toHaveLength(1);
+    expect(vm.currentSession).not.toBeNull();
+
+    completedWrite.mockRestore();
+    await clickBodyButton('OK');
+    await clickBodyButton('Retry saving session');
+    expect(vm.currentSession).toBeNull();
+    expect(persistedSession().sets).toHaveLength(1);
+    expect(persistedSession()).toMatchObject({
+      status: 'COMPLETED', completedSets: 1,
+      sets: [{ setNumber: 1, completedRepetitions: 2, completedAt: expect.any(String) }],
+    });
+    expect(useStorage().getAllSessions()[0].sets[0].completedAt).toBeInstanceOf(Date);
+  });
+
+  it('retries queued completed sets without duplicating a set whose write succeeded first', async () => {
+    const vm = await startRealPractice({ targetSets: 2 });
+    const allSetsWrite = rejectSessionWrites((session) => session.sets.length > 0);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(vm.timer.phase.value).toBe('SESSION_COMPLETE');
+    expect(persistedSession().sets).toEqual([]);
+    expect(vm.currentSession).toEqual(useStorage().getAllSessions()[0]);
+    expect(displayedCompletedSets()).toBe('0');
+    allSetsWrite.mockRestore();
+
+    const secondSetWrite = rejectSessionWrites((session) => session.sets.length === 2);
+    await clickBodyButton('OK');
+    await clickBodyButton('Retry saving session');
+    expect(persistedSession()).toMatchObject({
+      status: 'IN_PROGRESS', completedSets: 1, sets: [{ setNumber: 1 }],
+    });
+    expect(vm.currentSession).not.toBeNull();
+    expect(vm.currentSession).toEqual(useStorage().getAllSessions()[0]);
+    expect(displayedCompletedSets()).toBe('1');
+    secondSetWrite.mockRestore();
+
+    await clickBodyButton('OK');
+    await clickBodyButton('Retry saving session');
+    expect(vm.currentSession).toBeNull();
+    expect(persistedSession()).toMatchObject({ status: 'COMPLETED', completedSets: 2 });
+    expect(persistedSession().sets.map((set) => set.setNumber)).toEqual([1, 2]);
+    expect(useStorage().getAllSessions()[0].sets.map((set) => set.setNumber)).toEqual([1, 2]);
+  });
+
+  it('shows the completed holds after replacing partial progress from a failed cancellation', async () => {
+    const vm = await startRealPractice({
+      targetSets: 1,
+      extendedHoldEnabled: true,
+      extendedHoldType: 'EXHALE',
+      extendedHoldMode: 'TIMED',
+      extendedHoldDuration: 1,
+      secondExtendedHoldEnabled: true,
+      secondExtendedHoldType: 'INHALE',
+      secondExtendedHoldMode: 'TIMED',
+      secondExtendedHoldDuration: 1,
+    });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(vm.timer.phase.value).toBe('INHALE');
+    const write = rejectSessionWrites((session) => session.status === 'CANCELLED');
+    await clickCheckInControl('session-header-exit');
+    await clickBodyButton('Save Session');
+    expect(persistedSession().sets).toHaveLength(1);
+    expect(persistedSession().sets[0].extendedHolds).toHaveLength(1);
+    write.mockRestore();
+    await clickBodyButton('OK');
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(vm.timer.phase.value).toBe('SESSION_COMPLETE');
+    expect(persistedSession().sets[0].extendedHolds).toHaveLength(2);
+    expect(vm.currentSession?.sets[0].extendedHolds).toHaveLength(2);
+    expect(vm.currentSession).toEqual(useStorage().getAllSessions()[0]);
+    expect(displayedCompletedSets()).toBe('1');
+  });
+});
+
 function fullConfig(name: string): BreathingConfig {
   return {
     ...presetConfig(guidedPresets[0]),
@@ -931,6 +1349,7 @@ function completed(id: string, name: string, startedAt: Date): Session {
 
 describe('BreathingPractice goal recommendations', () => {
   beforeEach(() => {
+    localStorage.removeItem(SKIP_CHECK_INS_STORAGE_KEY);
     createSessionMock.mockReset();
     setSessionCheckInMock.mockReset();
     sessionsRef.value = [];

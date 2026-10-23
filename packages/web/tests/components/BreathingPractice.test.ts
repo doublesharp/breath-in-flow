@@ -243,6 +243,103 @@ describe('BreathingPractice.vue', () => {
     expect(setVoiceMock).toHaveBeenLastCalledWith('saved-device');
   });
 
+  it('restores the last preset when its metadata dates have been serialized', async () => {
+    localStorage.setItem(
+      'herb_breathing_last_config',
+      JSON.stringify({
+        name: 'Restored preset',
+        inhaleTime: 7,
+        createdAt: '2026-10-01T10:00:00.000Z',
+        updatedAt: '2026-10-02T10:00:00.000Z',
+      })
+    );
+    const wrapper = mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+    const vm = wrapper.vm as unknown as {
+      config: { name: string; inhaleTime: number; createdAt: Date; updatedAt: Date };
+    };
+    expect(vm.config.name).toBe('Restored preset');
+    expect(vm.config.inhaleTime).toBe(7);
+    expect(vm.config.createdAt).toEqual(new Date('2026-10-01T10:00:00.000Z'));
+    expect(vm.config.updatedAt).toEqual(new Date('2026-10-02T10:00:00.000Z'));
+  });
+
+  it('mounts with defaults when persisted practice settings cannot be read', () => {
+    const read = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      throw new Error('Storage unavailable');
+    });
+    try {
+      const wrapper = mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+      expect(wrapper.get('[data-testid="practice-panel"]').text()).toContain('Quick Practice');
+      expect(read).toHaveBeenCalledWith('herb_breathing_last_config');
+    } finally {
+      read.mockRestore();
+    }
+  });
+
+  it('flushes valid settings when leaving before the debounce fires', async () => {
+    const wrapper = mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+    const vm = wrapper.vm as unknown as { config: { inhaleTime: number } };
+    vm.config.inhaleTime = 9;
+    await nextTick();
+    wrapper.unmount();
+    expect(JSON.parse(localStorage.getItem('herb_breathing_last_config') ?? 'null')).toMatchObject({
+      inhaleTime: 9,
+    });
+  });
+
+  it('retains the last valid settings while a number field is invalid', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem(
+      'herb_breathing_last_config',
+      JSON.stringify({ name: 'Saved', inhaleTime: 7 })
+    );
+    const wrapper = mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+    try {
+      const vm = wrapper.vm as unknown as { config: { inhaleTime: number } };
+      vm.config.inhaleTime = 0;
+      await nextTick();
+      vi.advanceTimersByTime(300);
+      expect(JSON.parse(localStorage.getItem('herb_breathing_last_config')!)).toMatchObject({
+        name: 'Saved',
+        inhaleTime: 7,
+      });
+    } finally {
+      wrapper.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a settings write failure and lets the user retry', async () => {
+    vi.useFakeTimers();
+    const wrapper = mount(BreathingPractice, {
+      props: { openSettings: true },
+      global: { stubs: { BreathingVisualizer: true, teleport: true } },
+    });
+    const write = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('Storage full');
+    });
+    try {
+      const vm = wrapper.vm as unknown as { config: { inhaleTime: number } };
+      vm.config.inhaleTime = 9;
+      await nextTick();
+      vi.advanceTimersByTime(300);
+      await nextTick();
+      expect(wrapper.get('[data-testid="config-save-error"]').text()).toContain(
+        'could not be saved'
+      );
+      write.mockRestore();
+      await wrapper.get('[data-testid="retry-config-save"]').trigger('click');
+      expect(wrapper.find('[data-testid="config-save-error"]').exists()).toBe(false);
+      expect(JSON.parse(localStorage.getItem('herb_breathing_last_config')!)).toMatchObject({
+        inhaleTime: 9,
+      });
+    } finally {
+      write.mockRestore();
+      wrapper.unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it('lists Kokoro first even when another English default voice sorts earlier', async () => {
     loadVoicesMock.mockResolvedValue([
       {
@@ -319,7 +416,7 @@ describe('BreathingPractice.vue', () => {
     const buttons = wrapper.findAll('button');
     const startBtn = buttons.find((b) => b.text().toLowerCase().includes('start'));
     expect(startBtn).toBeTruthy();
-    if (startBtn) await startBtn.trigger('click');
+    await startBtn!.trigger('click');
     // Resolve the optional pre-session check-in before the timer starts.
     await nextTick();
     const skipCheckIn = document.body.querySelector<HTMLElement>('[data-testid="checkin-skip"]');
@@ -837,9 +934,7 @@ describe('BreathingPractice.vue', () => {
 
     // Set up a session
     const vm = wrapper.vm as unknown as Record<string, unknown>;
-    if (vm.currentSession) {
-      vm.currentSession = { id: 1 } as Record<string, unknown>;
-    }
+    vm.currentSession = { id: 'active-session', sets: [] };
 
     const stopSpy = vi.spyOn((vm as { timer: unknown }).timer as { stop: () => void }, 'stop');
 
@@ -854,27 +949,20 @@ describe('BreathingPractice.vue', () => {
   });
 
   it('Start Next Set button calls timer.nextSet when in SET_COMPLETE', async () => {
-    const wrapper = shallowMount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
-
-    const vm = wrapper.vm as unknown as Record<string, unknown>;
-    if (
-      (vm as { timer?: { state?: { value: { phase?: string } }; nextSet?: () => void } }).timer
-        ?.state
-    ) {
-      (
-        vm as { timer: { state: { value: { phase: string } }; nextSet?: () => void } }
-      ).timer.state.value.phase = 'SET_COMPLETE';
-      // spy on nextSet
-      (vm as { timer: { nextSet?: () => void } }).timer.nextSet = vi.fn();
-
-      await nextTick();
-
-      const btn = wrapper.find('button.btn-success');
-      expect(btn.exists()).toBeTruthy();
-      await btn.trigger('click');
-
-      expect((vm as { timer: { nextSet?: () => void } }).timer.nextSet).toHaveBeenCalled();
-    }
+    const wrapper = mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+    timerPhase.value = 'SET_COMPLETE';
+    isRunning.value = true;
+    await nextTick();
+    const button = Array.from(document.body.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('Start Next Set')
+    );
+    expect(button).toBeDefined();
+    button!.click();
+    await nextTick();
+    expect(nextSetMock).toHaveBeenCalledOnce();
+    expect(
+      (wrapper.vm as unknown as { currentSetData: { setNumber: number } }).currentSetData
+    ).toMatchObject({ setNumber: 2, completedRepetitions: 0, extendedHolds: [] });
   });
 
   it('shows configured rest countdown with an early next-set action', async () => {
@@ -982,13 +1070,10 @@ describe('BreathingPractice.vue', () => {
 
     // Call saveConfig which should show modal since default configName is empty
     const vm = wrapper.vm as unknown as Record<string, unknown>;
-    if (typeof vm.saveConfig === 'function') {
-      await (vm.saveConfig as () => Promise<void>)();
-      await nextTick();
-
-      // Check that error modal is visible in document.body (Teleport)
-      expect(document.body.textContent).toContain('Please enter a configuration name');
-    }
+    (vm as { saveConfig: () => void }).saveConfig();
+    await nextTick();
+    expect(document.body.textContent).toContain('Please enter a configuration name');
+    expect(createConfigMock).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
@@ -1012,34 +1097,81 @@ describe('BreathingPractice.vue', () => {
       createConfigMock.mockReset();
     });
 
-    it('records targetDuration when extendedHoldMode is TIMED', async () => {
+    it('records both timed hold targets and actual durations in the saved set', async () => {
       createSessionMock.mockReturnValue({ id: 'sess-100', sets: [] });
-
-      const wrapper = mount(BreathingPractice, {
-        global: {
-          provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
-          stubs: ['BreathingVisualizer'],
-        },
+      const wrapper = mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+      const vm = wrapper.vm as unknown as {
+        config: {
+          extendedHoldEnabled: boolean;
+          extendedHoldMode: string;
+          extendedHoldDuration: number;
+          secondExtendedHoldEnabled: boolean;
+          secondExtendedHoldMode: string;
+          secondExtendedHoldDuration: number;
+        };
+        timer: { isFirstExtendedHold: { value: boolean } };
+        startExercise: () => void;
+        continueSessionStart: () => void;
+      };
+      Object.assign(vm.config, {
+        extendedHoldEnabled: true,
+        extendedHoldMode: 'TIMED',
+        extendedHoldDuration: 20,
+        secondExtendedHoldEnabled: true,
+        secondExtendedHoldMode: 'TIMED',
+        secondExtendedHoldDuration: 7,
       });
-
-      // Component mounts and renders; mocked composables are in place
-      expect(wrapper.exists()).toBe(true);
-      expect(createSessionMock).not.toHaveBeenCalled();
+      vm.startExercise();
+      vm.continueSessionStart();
+      const onHoldEnd = lastTimerOptions!.onExtendedHoldEnd as (
+        duration: number,
+        type: string
+      ) => void;
+      onHoldEnd(12.5, 'EXHALE');
+      vm.timer.isFirstExtendedHold.value = false;
+      onHoldEnd(7, 'INHALE');
+      (lastTimerOptions!.onSetComplete as () => void)();
+      expect(addSetMock).toHaveBeenCalledWith(
+        'sess-100',
+        expect.objectContaining({
+          extendedHolds: [
+            expect.objectContaining({
+              mode: 'TIMED',
+              type: 'EXHALE',
+              targetDuration: 20,
+              actualDuration: 12.5,
+            }),
+            expect.objectContaining({
+              mode: 'TIMED',
+              type: 'INHALE',
+              targetDuration: 7,
+              actualDuration: 7,
+            }),
+          ],
+        })
+      );
     });
 
-    it('stopExercise behavior with mocked composables', async () => {
+    it('stopExercise stops the timer and clears active session data', async () => {
       createSessionMock.mockReturnValue({ id: 'sess-101', sets: [] });
-
-      const wrapper = mount(BreathingPractice, {
-        global: {
-          provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
-          stubs: ['BreathingVisualizer'],
-        },
-      });
-
-      // Verify component mounts without errors
-      expect(wrapper.exists()).toBe(true);
-      expect(wrapper.vm).toBeDefined();
+      const wrapper = mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+      const vm = wrapper.vm as unknown as {
+        startExercise: () => void;
+        continueSessionStart: () => void;
+        stopExercise: () => void;
+        currentSession: { id: string } | null;
+        currentSetData: unknown;
+        sessionNotes: string;
+      };
+      vm.startExercise();
+      vm.continueSessionStart();
+      expect(vm.currentSession?.id).toBe('sess-101');
+      vm.sessionNotes = 'Partial practice';
+      vm.stopExercise();
+      expect(stopMock).toHaveBeenCalledOnce();
+      expect(vm.currentSession).toBeNull();
+      expect(vm.currentSetData).toBeNull();
+      expect(vm.sessionNotes).toBe('');
     });
 
     it('applies selectedConfig from provide and calls clearSelectedConfig', async () => {

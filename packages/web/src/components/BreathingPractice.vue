@@ -235,7 +235,7 @@
                   </div>
                   <div class="stat-card">
                     <div class="text-3xl font-bold text-emerald-400">
-                      {{ currentSession?.sets.length || 0 }}
+                      {{ currentSession?.completedSets || 0 }}
                     </div>
                     <div class="text-sm text-slate-400 mt-1">Completed</div>
                   </div>
@@ -350,9 +350,17 @@
                 </div>
               </div>
 
+              <div
+                v-if="completionSaveFailed"
+                class="mt-8 text-center p-8 glass rounded-2xl"
+              >
+                <p class="text-slate-300 mb-6">Your session has ended. Save it before leaving.</p>
+                <button @click="finishSession" class="btn-primary btn-action">Retry saving session</button>
+              </div>
+
               <!-- Session Complete -->
               <div
-                v-if="timer.phase.value === 'SESSION_COMPLETE'"
+                v-if="timer.phase.value === 'SESSION_COMPLETE' && !completionSaveFailed"
                 class="mt-8 text-center p-8 glass rounded-2xl animate-scale-in"
               >
                 <div
@@ -407,6 +415,7 @@
               <!-- Main Controls -->
               <div
                 v-if="
+                  !completionSaveFailed &&
                   timer.phase.value !== 'SESSION_COMPLETE' &&
                   timer.phase.value !== 'SET_COMPLETE' &&
                   timer.phase.value !== 'SET_REST'
@@ -733,6 +742,21 @@
             </div>
           </div>
 
+          <div class="mt-8 pt-6 border-t border-slate-700/50">
+            <label class="flex min-h-11 items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                data-testid="show-session-checkins"
+                class="h-4 w-4 accent-amber-400"
+                :checked="!skipEveryTime"
+                @change="setSkipEveryTime(!($event.target as HTMLInputElement).checked)"
+              />
+              <span class="font-semibold text-slate-200">Show session check-ins</span>
+            </label>
+            <p class="mt-2 text-sm text-slate-400">Ask how you feel before and after each practice.</p>
+            <p v-if="checkInPreferenceError" role="alert" class="mt-2 text-sm text-rose-100">{{ checkInPreferenceError }}</p>
+          </div>
+
           <!-- Audio Settings -->
           <div class="mt-8 pt-6 border-t border-slate-700/50 w-full">
             <h3 class="font-semibold text-slate-200 flex items-center gap-2 mb-4">
@@ -843,6 +867,10 @@
 
           <!-- Action Buttons -->
           <div class="mt-8 pt-6 border-t border-slate-700/50">
+            <div v-if="configSaveError" data-testid="config-save-error" role="alert" class="mb-4 text-sm text-amber-200">
+              {{ configSaveError }}
+              <button data-testid="retry-config-save" class="btn-secondary mt-2" @click="persistCurrentConfig" :disabled="!canUseConfig">Retry saving settings</button>
+            </div>
             <div
               v-if="configValidationError"
               data-testid="config-validation-error"
@@ -1049,7 +1077,9 @@
       <FeelingCheckIn
         :open="showBeforeCheckIn"
         stage="before"
-        :error-message="beforeCheckInError"
+        :error-message="beforeCheckInError || checkInPreferenceError"
+        :skip-every-time="skipEveryTime"
+        @update:skip-every-time="setSkipEveryTime"
         @submit="submitBeforeCheckIn"
         @skip="continueSessionStart()"
       />
@@ -1058,7 +1088,9 @@
       <FeelingCheckIn
         :open="showAfterCheckIn"
         stage="after"
-        :error-message="afterCheckInError"
+        :error-message="afterCheckInError || checkInPreferenceError"
+        :skip-every-time="skipEveryTime"
+        @update:skip-every-time="setSkipEveryTime"
         @submit="saveAfterCheckIn"
         @skip="skipAfterCheckIn"
       />
@@ -1075,6 +1107,7 @@ import PatternSummary from './PatternSummary.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
 import RecommendedActions from './RecommendedActions.vue';
 import FeelingCheckIn from './FeelingCheckIn.vue';
+import { SKIP_CHECK_INS_STORAGE_KEY } from '@/constants/storageKeys';
 import { useBreathingTimer, useStorage } from '../composables';
 import { useAppLifecycle } from '../composables/useAppLifecycle';
 import { useHrvStorage } from '../composables/useHrvStorage';
@@ -1096,6 +1129,15 @@ import { ttsService } from '../services/ttsService';
 
 const LAST_CONFIG_KEY = 'herb_breathing_last_config';
 
+function readPreference(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch (error) {
+    console.warn('Unable to read practice preferences:', error);
+    return null;
+  }
+}
+
 const storage = useStorage();
 // Provide safe defaults for injected values to avoid test warnings when not provided
 const selectedConfig = inject<{ value: BreathingConfig | null } | null>('selectedConfig', null);
@@ -1113,7 +1155,7 @@ const sessionDialogRef = ref<HTMLElement | null>(null);
 const cancelStopButtonRef = ref<HTMLButtonElement | null>(null);
 // Lab CTA state
 const showLabCta = ref(false);
-const labCtaDismissed = ref(localStorage.getItem('lab-cta-dismissed') === 'true');
+const labCtaDismissed = ref(readPreference('lab-cta-dismissed') === 'true');
 
 const props = defineProps<{ goal?: UserGoal; openSettings?: boolean }>();
 
@@ -1138,7 +1180,11 @@ const lastSession = computed<Session | null>(
 function dismissLabCta() {
   showLabCta.value = false;
   labCtaDismissed.value = true;
-  localStorage.setItem('lab-cta-dismissed', 'true');
+  try {
+    localStorage.setItem('lab-cta-dismissed', 'true');
+  } catch (error) {
+    console.warn('Unable to save the dismissed Lab suggestion:', error);
+  }
 }
 
 // Configuration - start with defaults, will be overwritten by saved config
@@ -1149,10 +1195,14 @@ const config = reactive<BreathingConfig>({
 const configName = ref('');
 
 // Restore persisted defaults before applying an explicit preset selection.
-const savedConfig = localStorage.getItem(LAST_CONFIG_KEY);
+const savedConfig = readPreference(LAST_CONFIG_KEY);
 if (savedConfig) {
   try {
-    const parsed = JSON.parse(savedConfig);
+    const parsed = JSON.parse(savedConfig, (key, value) =>
+      (key === 'createdAt' || key === 'updatedAt') && typeof value === 'string'
+        ? new Date(value)
+        : value
+    );
     // Validate config with Zod schema before applying
     const validatedConfig = BreathingConfigSchema.parse({ ...DEFAULT_BREATHING_CONFIG, ...parsed });
     Object.assign(config, validatedConfig);
@@ -1230,7 +1280,26 @@ const sortedVoices = computed(() => {
 // Session state
 const currentSession = ref<Session | null>(null);
 const currentSetData = ref<SessionSet | null>(null);
+const pendingCompletedSets = new Map<number, SessionSet>();
 const sessionNotes = ref('');
+
+const skipEveryTime = ref(false);
+const checkInPreferenceError = ref('');
+try {
+  skipEveryTime.value = localStorage.getItem(SKIP_CHECK_INS_STORAGE_KEY) === 'true';
+} catch {
+  // Keep optional prompts available when preferences cannot be read.
+}
+
+function setSkipEveryTime(value: boolean) {
+  try {
+    localStorage.setItem(SKIP_CHECK_INS_STORAGE_KEY, String(value));
+    skipEveryTime.value = value;
+    checkInPreferenceError.value = '';
+  } catch {
+    checkInPreferenceError.value = 'Your preference could not be saved. Please try again.';
+  }
+}
 
 // Optional check-in state. The pre-session prompt holds the pending config until
 // the user continues or skips; the post-session prompt keeps the completed
@@ -1240,6 +1309,7 @@ const pendingStartConfig = ref<BreathingConfig | null>(null);
 const beforeCheckInError = ref('');
 const showAfterCheckIn = ref(false);
 const completedSessionId = ref<string | null>(null);
+const completionSaveFailed = ref(false);
 const afterCheckInError = ref('');
 
 // Register browser lifecycle and refresh voice availability on mount
@@ -1262,16 +1332,28 @@ onMounted(async () => {
 
 // Save config to localStorage whenever it changes (debounced to avoid excessive writes)
 let saveConfigTimeout: ReturnType<typeof setTimeout> | null = null;
+const configSaveError = ref('');
+
+function persistCurrentConfig() {
+  if (saveConfigTimeout !== null) clearTimeout(saveConfigTimeout);
+  saveConfigTimeout = null;
+  const validConfig = getValidatedConfig();
+  if (!validConfig) return;
+  try {
+    localStorage.setItem(LAST_CONFIG_KEY, JSON.stringify(validConfig));
+    configSaveError.value = '';
+  } catch {
+    configSaveError.value = 'Your settings could not be saved. Free some device storage and try again.';
+  }
+}
+
 watch(
   config,
-  (newConfig) => {
-    if (saveConfigTimeout) {
+  () => {
+    if (saveConfigTimeout !== null) {
       clearTimeout(saveConfigTimeout);
     }
-    saveConfigTimeout = setTimeout(() => {
-      localStorage.setItem(LAST_CONFIG_KEY, JSON.stringify(newConfig));
-      saveConfigTimeout = null;
-    }, 300);
+    saveConfigTimeout = setTimeout(persistCurrentConfig, 300);
   },
   { deep: true }
 );
@@ -1325,7 +1407,16 @@ const timer = useBreathingTimer(config, {
   onSetComplete: (_set, _state) => {
     if (currentSession.value && currentSetData.value) {
       currentSetData.value.completedAt = new Date();
-      storage.addSetToSession(currentSession.value.id!, currentSetData.value);
+      pendingCompletedSets.set(currentSetData.value.setNumber, {
+        ...currentSetData.value,
+        extendedHolds: [...currentSetData.value.extendedHolds],
+      });
+      try {
+        persistCompletedSets(currentSession.value.id!);
+      } catch (error) {
+        successMessage.value = error instanceof Error ? error.message : 'This set could not be saved. Finish the session to retry.';
+        showSuccessNotification.value = true;
+      }
     }
   },
   onExtendedHoldStart: (_type, _state) => {
@@ -1441,10 +1532,8 @@ onUnmounted(() => {
   ttsWatchStopHandles.forEach((stop) => stop());
   // Reset TTS service
   ttsService.setEnabled(false);
-  // Clear any pending localStorage save timeout
-  if (saveConfigTimeout) {
-    clearTimeout(saveConfigTimeout);
-  }
+  // Persist the final valid edit even when navigation beats the debounce.
+  if (saveConfigTimeout !== null) persistCurrentConfig();
 });
 
 // Watch for config changes from parent (when loading presets)
@@ -1589,6 +1678,8 @@ function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScor
     return false;
   }
   currentSession.value = session;
+  completionSaveFailed.value = false;
+  pendingCompletedSets.clear();
 
   sessionNotes.value = '';
 
@@ -1613,13 +1704,21 @@ function requestSessionStart(candidate: BreathingConfig) {
     ttsVoice: candidate.ttsVoice ?? config.ttsVoice,
   });
   beforeCheckInError.value = '';
+  if (skipEveryTime.value) {
+    continueSessionStart();
+    return;
+  }
   showBeforeCheckIn.value = true;
 }
 
 function continueSessionStart(before?: FeelingScore) {
   const candidate = pendingStartConfig.value;
   if (!candidate) return;
-  if (!startValidatedExercise(candidate, before)) return;
+  if (!startValidatedExercise(candidate, before)) {
+    // A skipped check-in must not hide a failed start or its retry controls.
+    showBeforeCheckIn.value = true;
+    return;
+  }
   showBeforeCheckIn.value = false;
   pendingStartConfig.value = null;
   beforeCheckInError.value = '';
@@ -1629,21 +1728,60 @@ function submitBeforeCheckIn(payload: { score: FeelingScore }) {
   continueSessionStart(payload.score);
 }
 
+function refreshCurrentSession(id: string) {
+  const saved = storage.getSession(id);
+  if (saved && saved.id === currentSession.value?.id) currentSession.value = saved;
+}
+
+function persistSetProgress(id: string, set: SessionSet) {
+  const session = storage.getSession(id);
+  const snapshot = { ...set, extendedHolds: [...set.extendedHolds] };
+  try {
+    if (session?.sets.some((saved) => saved.setNumber === set.setNumber)) {
+      // A failed cancellation may already have saved this set's partial progress.
+      const sets = session.sets.map((saved) => saved.setNumber === set.setNumber ? snapshot : saved);
+      storage.updateSession(id, {
+        sets,
+        completedSets: sets.filter((saved) => saved.completedAt).length,
+      });
+    } else {
+      storage.addSetToSession(id, snapshot);
+    }
+  } finally {
+    // Writes and rollbacks can both replace the repository's session object.
+    refreshCurrentSession(id);
+  }
+}
+
+function persistCompletedSets(id: string) {
+  for (const [setNumber, set] of pendingCompletedSets) {
+    persistSetProgress(id, set);
+    pendingCompletedSets.delete(setNumber);
+  }
+}
+
 // Completion is persisted before the post-session prompt appears, and the
 // completed session id is retained so a submitted response can be saved without
 // completing the session a second time.
-function finalizeCompletedSession(id: string) {
+function finalizeCompletedSession(id: string): boolean {
   try {
+    persistCompletedSets(id);
     storage.completeSession(id);
   } catch (error) {
+    completionSaveFailed.value = true;
     successMessage.value =
       error instanceof Error ? error.message : 'The completed session could not be saved. Please try again.';
     showSuccessNotification.value = true;
-    return;
+    return false;
+  } finally {
+    refreshCurrentSession(id);
   }
+  completionSaveFailed.value = false;
+  if (skipEveryTime.value) return true;
   completedSessionId.value = id;
   afterCheckInError.value = '';
   showAfterCheckIn.value = true;
+  return true;
 }
 
 function saveAfterCheckIn(payload: { score: FeelingScore; comment?: string }) {
@@ -1694,21 +1832,20 @@ function stopExercise() {
   currentSession.value = null;
   currentSetData.value = null;
   sessionNotes.value = '';
+  pendingCompletedSets.clear();
 }
 
 function confirmExit() {
+  if (completionSaveFailed.value) {
+    finishSession();
+    return;
+  }
   showStopConfirmation.value = true;
 }
 
 function persistPartialSetProgress() {
   if (!currentSession.value || !currentSetData.value) return;
-
-  const session = storage.getSession(currentSession.value.id!);
-  const hasSetAlready = session?.sets.some((set) => set.setNumber === currentSetData.value?.setNumber);
-
-  if (!hasSetAlready) {
-    storage.addSetToSession(currentSession.value.id!, { ...currentSetData.value });
-  }
+  persistSetProgress(currentSession.value.id!, currentSetData.value);
 }
 
 function exitWithoutSavingSession() {
@@ -1725,10 +1862,20 @@ function saveIncompleteSession() {
   showStopConfirmation.value = false;
 
   if (currentSession.value?.id) {
-    persistPartialSetProgress();
-    storage.cancelSession(currentSession.value.id);
+    const id = currentSession.value.id;
+    try {
+      persistCompletedSets(id);
+      persistPartialSetProgress();
+      storage.cancelSession(id);
+    } catch (error) {
+      successMessage.value = error instanceof Error ? error.message : 'This session could not be saved. Please try again.';
+      showSuccessNotification.value = true;
+      return;
+    } finally {
+      refreshCurrentSession(id);
+    }
 
-    const setsCompleted = currentSession.value.sets.length;
+    const setsCompleted = currentSession.value.completedSets || 0;
     successMessage.value = `Session saved with ${setsCompleted} set${setsCompleted !== 1 ? 's' : ''} completed`;
     showSuccessNotification.value = true;
     setTimeout(() => {
@@ -1759,8 +1906,11 @@ function finishSession() {
   // Automatic target-set completion is persisted by onSessionComplete. Manual
   // finishes from SET_COMPLETE/SET_REST still need to finalize the session and
   // then offer the optional post-session check-in.
-  if (currentSession.value && timer.phase.value !== 'SESSION_COMPLETE') {
-    finalizeCompletedSession(currentSession.value.id!);
+  if (currentSession.value && (timer.phase.value !== 'SESSION_COMPLETE' || completionSaveFailed.value)) {
+    // End active timing before attempting persistence, retaining the set and
+    // session until a failed write can be retried.
+    timer.pause();
+    if (!finalizeCompletedSession(currentSession.value.id!)) return;
   }
   timer.stop();
   currentSession.value = null;
@@ -1768,6 +1918,9 @@ function finishSession() {
 }
 
 function resetExercise() {
+  if (completionSaveFailed.value && currentSession.value?.id) {
+    if (!finalizeCompletedSession(currentSession.value.id)) return;
+  }
   timer.stop();
   currentSession.value = null;
   currentSetData.value = null;
