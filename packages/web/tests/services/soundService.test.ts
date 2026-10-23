@@ -12,6 +12,9 @@ class FakeOscillator {
   public connects: unknown[] = [];
   public started = false;
   public stopped = false;
+  public stoppedAt: number | undefined;
+  public onended: (() => void) | null = null;
+  public disconnect = vi.fn();
   constructor(public ctx: FakeAudioContext) {}
   connect(node: unknown) {
     this.connects.push(node);
@@ -21,13 +24,15 @@ class FakeOscillator {
     this.started = true;
     this.ctx._started.push(this);
   }
-  stop(_t?: number) {
+  stop(t?: number) {
+    this.stoppedAt = t;
     this.stopped = true;
     this.ctx._stopped.push(this);
   }
 }
 
 class FakeGain {
+  public disconnect = vi.fn();
   public gain = {
     setValueAtTime: vi.fn(),
     linearRampToValueAtTime: vi.fn(),
@@ -42,6 +47,8 @@ class FakeGain {
 }
 
 class FakeBufferSource {
+  public onended: (() => void) | null = null;
+  public disconnect = vi.fn();
   public buffer: AudioBuffer | null = null;
   public connects: unknown[] = [];
   public started = false;
@@ -59,6 +66,7 @@ class FakeBufferSource {
 }
 
 class FakeFilter {
+  public disconnect = vi.fn();
   public type: string = 'lowpass';
   public frequency = {
     setValueAtTime: vi.fn(),
@@ -84,6 +92,11 @@ class FakeAudioContext {
   public _gains: FakeGain[] = [];
   public _bufferSources: FakeBufferSource[] = [];
   public _filters: FakeFilter[] = [];
+  public _shapers: Array<{
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+    curve: Float32Array | null;
+  }> = [];
   public _started: FakeOscillator[] = [];
   public _stopped: FakeOscillator[] = [];
   public resumed = false;
@@ -129,11 +142,14 @@ class FakeAudioContext {
   }
 
   createWaveShaper() {
-    return {
+    const shaper = {
       connect: vi.fn(),
+      disconnect: vi.fn(),
       curve: null,
       oversample: 'none',
-    } as unknown as WaveShaperNode;
+    };
+    this._shapers.push(shaper);
+    return shaper as unknown as WaveShaperNode;
   }
 
   createDelay(time?: number) {
@@ -183,10 +199,56 @@ describe('soundService', () => {
     // Reset singleton internal state
     (soundService as unknown as { audioContext: null }).audioContext = null;
     soundService.setEnabled(false);
+    soundService.setTheme('wood');
   });
+
+  it.each(['water', 'wind', 'chimes'] as const)(
+    'routes %s through its soft saturation stage',
+    (theme) => {
+      soundService.setEnabled(true);
+      soundService.setTheme(theme);
+      soundService.playClick();
+      const ctx = FakeAudioContext.instances[0];
+      const shaper = ctx._shapers[0];
+      const envelope = ctx._gains[0];
+      expect(shaper.curve).toBeInstanceOf(Float32Array);
+      expect(envelope.connects).toHaveLength(1);
+      expect(envelope.connects[0]).toBe(shaper);
+      expect(shaper.connect).toHaveBeenCalledOnce();
+      expect(ctx._gains).toContain(shaper.connect.mock.calls[0][0]);
+    }
+  );
+
+  it.each(['water', 'wind', 'chimes'] as const)(
+    '%s produces no DC at silent input and releases its nodes',
+    (theme) => {
+      soundService.setEnabled(true);
+      soundService.setTheme(theme);
+      soundService.playClick();
+      const ctx = FakeAudioContext.instances[0];
+      const shaper = ctx._shapers[0];
+      const curve = shaper.curve!;
+      // Web Audio interpolates zero input at (length - 1) / 2, not length / 2.
+      const middle = (curve.length - 1) / 2;
+      const atZero = (curve[Math.floor(middle)] + curve[Math.ceil(middle)]) / 2;
+      expect(Math.abs(atZero)).toBeLessThan(1e-12);
+      const source = theme === 'wind' ? ctx._bufferSources[0] : ctx._oscillators[0];
+      expect(source.onended).toBeTypeOf('function');
+      source.onended!();
+      expect(source.disconnect).toHaveBeenCalledOnce();
+      expect(ctx._gains[0].disconnect).toHaveBeenCalledOnce();
+      expect(shaper.disconnect).toHaveBeenCalledOnce();
+      if (theme === 'wind') {
+        expect(ctx._oscillators[0].disconnect).toHaveBeenCalledOnce();
+        expect(ctx._filters[0].disconnect).toHaveBeenCalledOnce();
+        expect(ctx._gains[1].disconnect).toHaveBeenCalledOnce();
+      }
+    }
+  );
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('does nothing when disabled', async () => {
@@ -217,6 +279,66 @@ describe('soundService', () => {
     expect(ctx._filters.length).toBeGreaterThanOrEqual(1); // for reverb lowpass
   });
 
+  it('gives the default beat a rounded onset and a low pure tone', () => {
+    soundService.setTheme('wood');
+    soundService.setEnabled(true);
+    soundService.playClick();
+
+    const ctx = FakeAudioContext.instances[0];
+    const tone = ctx._oscillators[0];
+    expect(tone.type).toBe('sine');
+    expect(tone.frequency.value).toBe(240);
+
+    const envelope = ctx._gains[0].gain;
+    expect(envelope.setValueAtTime).toHaveBeenCalledWith(0, ctx.currentTime);
+    const [peak, attackEnd] = envelope.linearRampToValueAtTime.mock.calls[0];
+    expect(peak).toBeGreaterThanOrEqual(0.3);
+    expect(peak).toBeLessThanOrEqual(0.45);
+    expect(attackEnd - ctx.currentTime).toBeGreaterThanOrEqual(0.015);
+    expect(attackEnd - ctx.currentTime).toBeLessThanOrEqual(0.03);
+    expect(envelope.exponentialRampToValueAtTime).toHaveBeenCalledWith(
+      0.0001,
+      ctx.currentTime + 0.1
+    );
+    expect(tone.stoppedAt).toBeGreaterThanOrEqual(
+      envelope.exponentialRampToValueAtTime.mock.calls[0][1]
+    );
+  });
+
+  it('cancels a pending click when sound is disabled and re-enabled', async () => {
+    soundService.setEnabled(true);
+    const context = FakeAudioContext.instances[0];
+    context.state = 'suspended';
+    let resume!: () => void;
+    vi.spyOn(context, 'resume').mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resume = resolve;
+        })
+    );
+    soundService.playClick();
+    soundService.setEnabled(false);
+    context.state = 'running';
+    soundService.setEnabled(true);
+    resume();
+    await Promise.resolve();
+    expect(context._started).toHaveLength(0);
+  });
+
+  it('does not create another persistent reverb graph for each beat', () => {
+    soundService.setTheme('wood');
+    soundService.setEnabled(true);
+    const context = FakeAudioContext.instances[0];
+    const createDelay = vi.spyOn(context, 'createDelay');
+    for (let second = 0; second < 60; second++) {
+      context.currentTime += 1;
+      soundService.playClick();
+    }
+    expect(context._started).toHaveLength(60);
+    expect(createDelay).toHaveBeenCalledTimes(1);
+    expect(context._filters).toHaveLength(1);
+  });
+
   it('plays the full three-note completion chime even when click sounds are disabled', async () => {
     soundService.setEnabled(false);
 
@@ -243,6 +365,16 @@ describe('soundService', () => {
 
     expect(context.resumed).toBe(true);
     expect(context._started).toHaveLength(3);
+  });
+
+  it('handles a rejected completion-chime resume without an unhandled rejection', async () => {
+    const context = new FakeAudioContext();
+    context.state = 'suspended';
+    vi.spyOn(context, 'resume').mockRejectedValue(new Error('Audio is unavailable'));
+    (soundService as unknown as { audioContext: FakeAudioContext }).audioContext = context;
+    soundService.playCompletionChime();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(context._started).toHaveLength(0);
   });
 
   describe('SoundService Branches - Context & Audio Control', () => {
@@ -275,24 +407,20 @@ describe('soundService', () => {
     });
 
     it('does not play sound if disabled', () => {
-      soundService.setEnabled(false);
-      // playClick should return early without doing anything
-      // We verify it doesn't throw and the service is disabled
-      expect(() => soundService.playClick()).not.toThrow();
-
-      // Verify enabled flag is off
       soundService.setEnabled(true);
+      const context = FakeAudioContext.instances[0];
       soundService.setEnabled(false);
-      // After disabling again, method should still not throw
-      expect(() => soundService.playClick()).not.toThrow();
+      soundService.playClick();
+      expect(context._started).toHaveLength(0);
     });
 
-    it('does not play sound if audio context is missing', () => {
+    it('handles a browser without Web Audio support', () => {
+      vi.stubGlobal('AudioContext', undefined);
+      vi.stubGlobal('webkitAudioContext', undefined);
       soundService.setEnabled(true);
-      (soundService as unknown as { audioContext: null }).audioContext = null;
-
-      // Method should handle null audioContext gracefully
       expect(() => soundService.playClick()).not.toThrow();
+      expect(() => soundService.playCompletionChime()).not.toThrow();
+      expect(FakeAudioContext.instances).toHaveLength(0);
     });
   });
 
