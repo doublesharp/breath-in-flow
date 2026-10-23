@@ -16,6 +16,38 @@ test.beforeEach(async ({ page }) => {
   await page.clock.install();
 });
 
+test('repeated shaped audio ticks decay to silence in the browser audio engine', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const results = await page.evaluate(async () => {
+    const servicePath = '/src/services/soundService.ts';
+    const { soundService } = await import(servicePath);
+    const results: Array<{ theme: string; signalPeak: number; tailPeak: number }> = [];
+    for (const theme of ['water', 'wind', 'chimes']) {
+      const context = new OfflineAudioContext(1, 44_100 * 3, 44_100);
+      soundService.setTheme(theme);
+      // Use the production graph with the real Web Audio renderer. The public
+      // resume path is tested separately because offline contexts cannot resume.
+      for (let beat = 0; beat < 500; beat++) soundService.playTick(context, 1);
+      const buffer = await context.startRendering();
+      const data = buffer.getChannelData(0);
+      let signalPeak = 0;
+      let tailPeak = 0;
+      for (let i = 0; i < data.length; i++) {
+        if (i < 44_100) signalPeak = Math.max(signalPeak, Math.abs(data[i]));
+        if (i >= 88_200) tailPeak = Math.max(tailPeak, Math.abs(data[i]));
+      }
+      results.push({ theme, signalPeak, tailPeak });
+    }
+    return results;
+  });
+  for (const result of results) {
+    expect(result.signalPeak, `${result.theme} must produce audio`).toBeGreaterThan(0.001);
+    expect(result.tailPeak, `${result.theme} must return to silence`).toBeLessThan(0.000001);
+  }
+});
+
 test('first recommended session completes, saves its check-in, and returns to Practice', async ({
   page,
 }, testInfo) => {
@@ -35,6 +67,9 @@ test('first recommended session completes, saves its check-in, and returns to Pr
   await expect(beforeCheckIn).toBeVisible();
   await beforeCheckIn.getByTestId('feeling-score-3').check();
   await reviewScreenshot(page, testInfo, '02-before-check-in');
+  // Freeze between explicit advances: otherwise wall-clock time spent clicking
+  // Pause changes the gradient scale and text rasterization in its snapshot.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
   await beforeCheckIn.getByTestId('checkin-submit').click();
 
   const session = page.getByTestId('session-dialog');
