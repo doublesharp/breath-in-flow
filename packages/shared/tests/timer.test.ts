@@ -41,10 +41,85 @@ describe('BreathingTimer', () => {
 
   afterEach(() => {
     timer.destroy();
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
+  describe('clock accuracy', () => {
+    it('changes phases at their scheduled deadlines without extra buffer time', () => {
+      timer.start();
+      for (const [milliseconds, phase, remaining] of [
+        [2000, 'INHALE_HOLD', 1],
+        [1000, 'EXHALE', 2],
+        [2000, 'EXHALE_HOLD', 1],
+        [1000, 'INHALE', 2],
+      ] as const) {
+        vi.advanceTimersByTime(milliseconds);
+        expect(timer.getState()).toMatchObject({ phase, currentTime: remaining });
+      }
+      expect(timer.getState().currentRepetition).toBe(2);
+    });
+
+    it('does not accumulate sampling delay over fractional phases', () => {
+      timer = new BreathingTimer({
+        ...DEFAULT_BREATHING_CONFIG,
+        inhaleTime: 1.25,
+        exhaleTime: 1.25,
+        repetitions: 10,
+        targetSets: 1,
+      });
+      timer.start();
+      vi.advanceTimersByTime(25_000);
+      expect(timer.getState()).toMatchObject({ phase: 'SESSION_COMPLETE', isRunning: false });
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('uses elapsed time when a callback is delayed across several phases', () => {
+      const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+      timer = new BreathingTimer({
+        ...DEFAULT_BREATHING_CONFIG,
+        inhaleTime: 1,
+        exhaleTime: 1,
+        repetitions: 3,
+      });
+      timer.start();
+      now.mockReturnValue(5000);
+      vi.advanceTimersByTime(100);
+      expect(timer.getState()).toMatchObject({
+        phase: 'EXHALE',
+        currentRepetition: 3,
+        currentTime: 1,
+      });
+    });
+
+    it('preserves elapsed time between the last sampled tick and a pause', () => {
+      timer.start();
+      vi.advanceTimersByTime(250);
+      timer.pause();
+      expect(timer.getState().currentTime).toBe(1.75);
+      vi.advanceTimersByTime(5000);
+      timer.resume();
+      vi.advanceTimersByTime(100);
+      expect(timer.getState().currentTime).toBeCloseTo(1.65, 10);
+    });
+
+    it('keeps the timer stopped when resuming a manual rest between sets', () => {
+      timer.start();
+      vi.advanceTimersByTime(13_000);
+      expect(timer.getState().phase).toBe('SET_COMPLETE');
+      timer.pause();
+      timer.resume();
+      expect(timer.getState().phase).toBe('SET_COMPLETE');
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
   describe('start()', () => {
+    it('rejects invalid durations before scheduling a timer', () => {
+      expect(() => new BreathingTimer({ ...config, inhaleTime: 0, exhaleTime: 0 })).toThrow();
+      expect(() => timer.updateConfig({ ...config, inhaleTime: NaN })).toThrow();
+      expect(vi.getTimerCount()).toBe(0);
+    });
     it('should initialize state and start with INHALE phase', () => {
       timer.start();
       const state = timer.getState();
@@ -285,7 +360,12 @@ describe('BreathingTimer', () => {
       timer.start();
       vi.advanceTimersByTime(6500);
 
-      expect(timer.getState().phase).toBe('EXTENDED_INHALE_HOLD');
+      expect(timer.getState()).toMatchObject({ phase: 'INHALE', isRecoveryBreath: true });
+      vi.advanceTimersByTime(2000);
+      expect(timer.getState()).toMatchObject({
+        phase: 'EXTENDED_INHALE_HOLD',
+        isRecoveryBreath: false,
+      });
     });
 
     it('should ignore endExtendedHold outside an extended hold phase', () => {
@@ -301,6 +381,103 @@ describe('BreathingTimer', () => {
   });
 
   describe('second extended hold', () => {
+    it('uses the second hold duration and mode after a tolerance hold and recovery inhale', () => {
+      const onExtendedHoldEnd = vi.fn();
+      const onRepetitionComplete = vi.fn();
+      timer = new BreathingTimer(
+        {
+          ...DEFAULT_BREATHING_CONFIG,
+          inhaleTime: 1,
+          exhaleTime: 1,
+          repetitions: 1,
+          targetSets: 1,
+          extendedHoldEnabled: true,
+          extendedHoldType: 'EXHALE',
+          extendedHoldMode: 'TOLERANCE',
+          secondExtendedHoldEnabled: true,
+          secondExtendedHoldType: 'INHALE',
+          secondExtendedHoldMode: 'TIMED',
+          secondExtendedHoldDuration: 3,
+        },
+        { onExtendedHoldEnd, onRepetitionComplete }
+      );
+      timer.start();
+      vi.advanceTimersByTime(3000);
+      timer.endExtendedHold();
+      expect(onExtendedHoldEnd.mock.calls[0]?.slice(0, 2)).toEqual([1, 'EXHALE']);
+      expect(timer.getState()).toMatchObject({ phase: 'INHALE', isRecoveryBreath: true });
+      vi.advanceTimersByTime(1000);
+      expect(timer.getState()).toMatchObject({
+        phase: 'EXTENDED_INHALE_HOLD',
+        currentTime: 3,
+        isFirstExtendedHold: false,
+      });
+      vi.advanceTimersByTime(3000);
+      expect(timer.getState().phase).toBe('SESSION_COMPLETE');
+      expect(onExtendedHoldEnd.mock.calls.map(([duration, type]) => [duration, type])).toEqual([
+        [1, 'EXHALE'],
+        [3, 'INHALE'],
+      ]);
+      expect(onRepetitionComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts up a second tolerance hold and lets skip finish it', () => {
+      const onExtendedHoldEnd = vi.fn();
+      timer = new BreathingTimer(
+        {
+          ...DEFAULT_BREATHING_CONFIG,
+          inhaleTime: 1,
+          exhaleTime: 1,
+          repetitions: 1,
+          targetSets: 1,
+          extendedHoldEnabled: true,
+          extendedHoldType: 'EXHALE',
+          extendedHoldMode: 'TIMED',
+          extendedHoldDuration: 2,
+          secondExtendedHoldEnabled: true,
+          secondExtendedHoldType: 'EXHALE',
+          secondExtendedHoldMode: 'TOLERANCE',
+        },
+        { onExtendedHoldEnd }
+      );
+      timer.start();
+      vi.advanceTimersByTime(4500);
+      expect(timer.getState()).toMatchObject({
+        phase: 'EXTENDED_EXHALE_HOLD',
+        currentTime: 0.5,
+        isFirstExtendedHold: false,
+      });
+      timer.skipPhase();
+      expect(timer.getState().phase).toBe('SESSION_COMPLETE');
+      expect(onExtendedHoldEnd.mock.calls.map(([duration, type]) => [duration, type])).toEqual([
+        [2, 'EXHALE'],
+        [0.5, 'EXHALE'],
+      ]);
+    });
+
+    it('records actual elapsed time when a timed hold ends between ticks', () => {
+      const onExtendedHoldEnd = vi.fn();
+      timer = new BreathingTimer(
+        {
+          ...DEFAULT_BREATHING_CONFIG,
+          inhaleTime: 1,
+          exhaleTime: 1,
+          repetitions: 1,
+          targetSets: 1,
+          extendedHoldEnabled: true,
+          extendedHoldType: 'EXHALE',
+          extendedHoldMode: 'TIMED',
+          extendedHoldDuration: 5,
+        },
+        { onExtendedHoldEnd }
+      );
+      timer.start();
+      vi.advanceTimersByTime(2650);
+      timer.endExtendedHold();
+      expect(onExtendedHoldEnd.mock.calls[0]?.[0]).toBeCloseTo(0.65, 10);
+      expect(timer.getState().phase).toBe('SESSION_COMPLETE');
+    });
+
     it('should do second extended hold when enabled', () => {
       config = {
         ...config,
@@ -323,10 +500,10 @@ describe('BreathingTimer', () => {
 
       timer.endExtendedHold(); // End first hold
 
-      // Should start breathing cycle for second hold
+      // Only the recovery inhale is needed before the second hold.
       expect(timer.getState().phase).toBe('INHALE');
 
-      vi.advanceTimersByTime(6500); // Complete cycle
+      vi.advanceTimersByTime(2000);
 
       expect(timer.getState().phase).toBe('EXTENDED_INHALE_HOLD');
     });
@@ -504,7 +681,9 @@ describe('BreathingTimer', () => {
 
           if (
             (state.phase === 'EXTENDED_INHALE_HOLD' || state.phase === 'EXTENDED_EXHALE_HOLD') &&
-            config.extendedHoldMode === 'TOLERANCE'
+            (state.isFirstExtendedHold
+              ? config.extendedHoldMode
+              : config.secondExtendedHoldMode) === 'TOLERANCE'
           ) {
             timer.endExtendedHold();
             continue;
@@ -608,6 +787,39 @@ describe('calculateTotalCycleTime', () => {
 });
 
 describe('calculateSetTime', () => {
+  it.each([
+    ['INHALE', 'EXHALE', 'TIMED', 'TIMED', 46],
+    ['EXHALE', 'INHALE', 'TIMED', 'TIMED', 42],
+    ['EXHALE', 'EXHALE', 'TIMED', 'TIMED', 38],
+    ['INHALE', 'INHALE', 'TIMED', 'TIMED', 46],
+    ['INHALE', 'EXHALE', 'TOLERANCE', 'TIMED', 36],
+    ['EXHALE', 'INHALE', 'TIMED', 'TOLERANCE', 22],
+  ] as const)(
+    'counts scheduled phases for %s/%s holds in %s/%s mode',
+    (
+      extendedHoldType,
+      secondExtendedHoldType,
+      extendedHoldMode,
+      secondExtendedHoldMode,
+      expected
+    ) => {
+      expect(
+        calculateSetTime({
+          ...DEFAULT_BREATHING_CONFIG,
+          repetitions: 1,
+          extendedHoldEnabled: true,
+          extendedHoldType,
+          extendedHoldMode,
+          extendedHoldDuration: 10,
+          secondExtendedHoldEnabled: true,
+          secondExtendedHoldType,
+          secondExtendedHoldMode,
+          secondExtendedHoldDuration: 20,
+        })
+      ).toBe(expected);
+    }
+  );
+
   it('should calculate set time without extended hold', () => {
     const config: BreathingConfig = {
       ...DEFAULT_BREATHING_CONFIG,

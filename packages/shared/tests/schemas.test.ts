@@ -27,6 +27,15 @@ function randomInt(rng: () => number, min: number, max: number): number {
 }
 
 describe('BreathingConfigSchema', () => {
+  it.each(['repetitions', 'targetSets'])(
+    'rejects fractional %s in created and persisted configurations',
+    (field) => {
+      const config = { ...DEFAULT_BREATHING_CONFIG, [field]: 4.5 };
+      expect(BreathingConfigSchema.safeParse(config).success).toBe(false);
+      expect(CreateBreathingConfigSchema.safeParse(config).success).toBe(false);
+    }
+  );
+
   it('validates persisted metadata and applies both timed-hold refinements', () => {
     const persistedConfig = {
       ...DEFAULT_BREATHING_CONFIG,
@@ -444,6 +453,10 @@ describe('AssessmentResultSchema', () => {
   it.each([
     ['empty trials', (value: ReturnType<typeof validAssessment>) => (value.trials = [])],
     [
+      'fractional comfort rating',
+      (value: ReturnType<typeof validAssessment>) => (value.trials[0].comfortRating = 4.5),
+    ],
+    [
       'non-finite rate',
       (value: ReturnType<typeof validAssessment>) => (value.trials[0].rate = Number.NaN),
     ],
@@ -533,6 +546,16 @@ describe('SessionCheckInSchema', () => {
 });
 
 describe('SessionSchema check-in', () => {
+  it('rejects a fractional session target set count', () => {
+    expect(
+      SessionSchema.safeParse({
+        configSnapshot: DEFAULT_BREATHING_CONFIG,
+        startedAt: new Date(),
+        targetSets: 2.5,
+      }).success
+    ).toBe(false);
+  });
+
   const validSession = {
     configSnapshot: DEFAULT_BREATHING_CONFIG,
     startedAt: new Date('2026-07-20T12:00:00.000Z'),

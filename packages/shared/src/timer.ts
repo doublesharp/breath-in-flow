@@ -1,4 +1,10 @@
-import { BreathingConfig, BreathingPhase, TimerState, INITIAL_TIMER_STATE } from './schemas';
+import {
+  BreathingConfig,
+  BreathingConfigSchema,
+  BreathingPhase,
+  TimerState,
+  INITIAL_TIMER_STATE,
+} from './schemas';
 
 export interface BreathingTimerCallbacks {
   onPhaseChange?: (phase: BreathingPhase, state: TimerState) => void;
@@ -16,9 +22,11 @@ export class BreathingTimer {
   private callbacks: BreathingTimerCallbacks;
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private pausedPhase: BreathingPhase | null = null;
+  private phaseStartTime = 0;
+  private pausedElapsedMs = 0;
 
   constructor(config: BreathingConfig, callbacks: BreathingTimerCallbacks = {}) {
-    this.config = config;
+    this.config = BreathingConfigSchema.parse(config);
     this.state = { ...INITIAL_TIMER_STATE };
     this.callbacks = callbacks;
   }
@@ -28,7 +36,7 @@ export class BreathingTimer {
   }
 
   updateConfig(config: BreathingConfig): void {
-    this.config = config;
+    this.config = BreathingConfigSchema.parse(config);
   }
 
   start(): void {
@@ -45,13 +53,16 @@ export class BreathingTimer {
       isPaused: false,
     };
 
-    this.callbacks.onPhaseChange?.('INHALE', this.state);
+    this.setPhase('INHALE', this.config.inhaleTime);
     this.startInterval();
   }
 
   pause(): void {
     if (!this.state.isRunning || this.state.isPaused) return;
 
+    const now = performance.now();
+    if (this.hasActivePhase()) this.updateTime(now);
+    this.pausedElapsedMs = Math.max(0, now - this.phaseStartTime);
     this.pausedPhase = this.state.phase;
     this.state.isPaused = true;
     this.state.phase = 'PAUSED';
@@ -65,7 +76,8 @@ export class BreathingTimer {
     this.state.isPaused = false;
     this.state.phase = this.pausedPhase;
     this.pausedPhase = null;
-    this.startInterval();
+    this.phaseStartTime = performance.now() - this.pausedElapsedMs;
+    if (this.hasActivePhase()) this.startInterval();
     this.callbacks.onPhaseChange?.(this.state.phase, this.state);
   }
 
@@ -73,6 +85,8 @@ export class BreathingTimer {
     this.stopInterval();
     this.state = { ...INITIAL_TIMER_STATE };
     this.pausedPhase = null;
+    this.phaseStartTime = 0;
+    this.pausedElapsedMs = 0;
     this.callbacks.onPhaseChange?.('IDLE', this.state);
   }
 
@@ -85,6 +99,7 @@ export class BreathingTimer {
       return;
     }
 
+    this.updateTime(performance.now());
     const holdType = this.state.phase === 'EXTENDED_INHALE_HOLD' ? 'INHALE' : 'EXHALE';
     const duration = this.state.extendedHoldElapsed;
 
@@ -96,8 +111,12 @@ export class BreathingTimer {
   // Skip to next phase (useful for testing or user control)
   skipPhase(): void {
     if (!this.state.isRunning || this.state.isPaused) return;
+    if (this.isExtendedHoldPhase()) {
+      this.endExtendedHold();
+      return;
+    }
     this.state.currentTime = 0;
-    this.tick();
+    this.transitionToNextPhase();
   }
 
   // Advance to next set manually or skip a configured rest period
@@ -107,76 +126,103 @@ export class BreathingTimer {
   }
 
   private startInterval(): void {
-    if (this.intervalId) return;
+    if (this.intervalId !== null || !this.hasActivePhase()) return;
     this.intervalId = setInterval(() => this.tick(), 100); // 100ms for smooth countdown
   }
 
   private stopInterval(): void {
-    if (this.intervalId) {
+    if (this.intervalId !== null) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
   }
 
-  private tick(): void {
-    if (this.state.isPaused) return;
+  private hasActivePhase(): boolean {
+    return this.state.isRunning && !this.state.isPaused && this.state.phase !== 'SET_COMPLETE';
+  }
 
-    // Handle extended hold tolerance mode (counting up)
-    if (
-      (this.state.phase === 'EXTENDED_INHALE_HOLD' ||
-        this.state.phase === 'EXTENDED_EXHALE_HOLD') &&
-      this.config.extendedHoldMode === 'TOLERANCE'
-    ) {
-      this.state.extendedHoldElapsed += 0.1;
-      this.state.currentTime = this.state.extendedHoldElapsed;
-      this.callbacks.onTick?.(this.state);
-      return;
-    }
+  private isExtendedHoldPhase(): boolean {
+    return (
+      this.state.phase === 'EXTENDED_INHALE_HOLD' || this.state.phase === 'EXTENDED_EXHALE_HOLD'
+    );
+  }
 
-    // Countdown for timed phases
-    this.state.currentTime = Math.max(0, this.state.currentTime - 0.1);
-    this.callbacks.onTick?.(this.state);
+  private isToleranceHold(): boolean {
+    return (
+      this.isExtendedHoldPhase() &&
+      (this.state.isFirstExtendedHold
+        ? this.config.extendedHoldMode
+        : this.config.secondExtendedHoldMode) === 'TOLERANCE'
+    );
+  }
 
-    // Phase transition when timer reaches 0
-    if (this.state.currentTime <= 0) {
-      this.transitionToNextPhase();
+  private updateTime(now: number): void {
+    const elapsed = Math.max(0, (now - this.phaseStartTime) / 1000);
+    const tolerance = this.isToleranceHold();
+    this.state.currentTime = tolerance ? elapsed : Math.max(0, this.state.totalPhaseTime - elapsed);
+    if (this.isExtendedHoldPhase()) {
+      this.state.extendedHoldElapsed = tolerance
+        ? elapsed
+        : Math.min(this.state.totalPhaseTime, elapsed);
     }
   }
 
-  private transitionToNextPhase(): void {
+  private tick(): void {
+    const now = performance.now();
+    while (this.hasActivePhase()) {
+      this.updateTime(now);
+      this.callbacks.onTick?.(this.state);
+      if (!this.hasActivePhase() || this.isToleranceHold() || this.state.currentTime > 0) return;
+      // Carry deadlines forward instead of accumulating interval delay in every phase.
+      this.transitionToNextPhase(this.phaseStartTime + this.state.totalPhaseTime * 1000);
+    }
+  }
+
+  private transitionToNextPhase(startedAt = performance.now()): void {
     const { phase } = this.state;
+
+    if (this.state.isRecoveryBreath && phase === 'INHALE') {
+      this.state.isRecoveryBreath = false;
+      this.startExtendedHold(startedAt);
+      return;
+    }
+    if (this.state.isRecoveryExhale && phase === 'EXHALE') {
+      this.state.isRecoveryExhale = false;
+      this.startExtendedHold(startedAt);
+      return;
+    }
 
     switch (phase) {
       case 'INHALE':
         if (this.config.inhaleHoldTime > 0) {
-          this.setPhase('INHALE_HOLD', this.config.inhaleHoldTime);
+          this.setPhase('INHALE_HOLD', this.config.inhaleHoldTime, startedAt);
         } else {
-          this.setPhase('EXHALE', this.config.exhaleTime);
+          this.setPhase('EXHALE', this.config.exhaleTime, startedAt);
         }
         break;
 
       case 'INHALE_HOLD':
-        this.setPhase('EXHALE', this.config.exhaleTime);
+        this.setPhase('EXHALE', this.config.exhaleTime, startedAt);
         break;
 
       case 'EXHALE':
         if (this.config.exhaleHoldTime > 0) {
-          this.setPhase('EXHALE_HOLD', this.config.exhaleHoldTime);
+          this.setPhase('EXHALE_HOLD', this.config.exhaleHoldTime, startedAt);
         } else {
-          this.handleRepetitionEnd();
+          this.handleRepetitionEnd(startedAt);
         }
         break;
 
       case 'EXHALE_HOLD':
-        this.handleRepetitionEnd();
+        this.handleRepetitionEnd(startedAt);
         break;
 
       case 'EXTENDED_INHALE_HOLD':
       case 'EXTENDED_EXHALE_HOLD':
         // Timed mode complete
         const holdType = phase === 'EXTENDED_INHALE_HOLD' ? 'INHALE' : 'EXHALE';
-        this.callbacks.onExtendedHoldEnd?.(this.config.extendedHoldDuration, holdType, this.state);
-        this.handlePostExtendedHold();
+        this.callbacks.onExtendedHoldEnd?.(this.state.extendedHoldElapsed, holdType, this.state);
+        this.handlePostExtendedHold(startedAt);
         break;
 
       case 'SET_COMPLETE':
@@ -184,7 +230,7 @@ export class BreathingTimer {
         break;
 
       case 'SET_REST':
-        this.startNextSet();
+        this.startNextSet(startedAt);
         break;
 
       default:
@@ -192,7 +238,7 @@ export class BreathingTimer {
     }
   }
 
-  private handleRepetitionEnd(): void {
+  private handleRepetitionEnd(startedAt: number): void {
     this.callbacks.onRepetitionComplete?.(this.state.currentRepetition, this.state);
 
     // Check if we need to do extended hold
@@ -200,102 +246,106 @@ export class BreathingTimer {
       this.config.extendedHoldEnabled &&
       this.state.currentRepetition >= this.config.repetitions
     ) {
-      this.startExtendedHold();
+      this.startExtendedHold(startedAt);
       return;
     }
 
     // Check if we've completed all repetitions
     if (this.state.currentRepetition >= this.config.repetitions) {
-      this.completeSet();
+      this.completeSet(startedAt);
       return;
     }
 
     // Start next repetition
     this.state.currentRepetition++;
-    this.setPhase('INHALE', this.config.inhaleTime);
+    this.setPhase('INHALE', this.config.inhaleTime, startedAt);
   }
 
-  private startExtendedHold(): void {
+  private startExtendedHold(startedAt: number): void {
     const holdType = this.state.isFirstExtendedHold
       ? this.config.extendedHoldType
       : this.config.secondExtendedHoldType;
 
-    // First prepare with appropriate breath
-    if (holdType === 'INHALE') {
-      // Need to inhale first, then hold
-      this.state.extendedHoldElapsed = 0;
-      this.callbacks.onExtendedHoldStart?.('INHALE', this.state);
+    const mode = this.state.isFirstExtendedHold
+      ? this.config.extendedHoldMode
+      : this.config.secondExtendedHoldMode;
+    const duration = this.state.isFirstExtendedHold
+      ? this.config.extendedHoldDuration
+      : this.config.secondExtendedHoldDuration;
+    this.state.extendedHoldElapsed = 0;
 
-      if (this.config.extendedHoldMode === 'TIMED') {
-        this.setPhase('EXTENDED_INHALE_HOLD', this.config.extendedHoldDuration);
-      } else {
-        this.setPhase('EXTENDED_INHALE_HOLD', 0);
-      }
-    } else {
-      // Already exhaled, just hold
-      this.state.extendedHoldElapsed = 0;
-      this.callbacks.onExtendedHoldStart?.('EXHALE', this.state);
-
-      if (this.config.extendedHoldMode === 'TIMED') {
-        this.setPhase('EXTENDED_EXHALE_HOLD', this.config.extendedHoldDuration);
-      } else {
-        this.setPhase('EXTENDED_EXHALE_HOLD', 0);
-      }
+    if (holdType === 'INHALE' && this.state.phase !== 'INHALE') {
+      this.state.isRecoveryBreath = true;
+      this.setPhase('INHALE', this.config.inhaleTime, startedAt);
+      return;
     }
+    this.setPhase(
+      holdType === 'INHALE' ? 'EXTENDED_INHALE_HOLD' : 'EXTENDED_EXHALE_HOLD',
+      mode === 'TIMED' ? duration : 0,
+      startedAt
+    );
+    this.callbacks.onExtendedHoldStart?.(holdType, this.state);
   }
 
-  private handlePostExtendedHold(): void {
+  private handlePostExtendedHold(startedAt = performance.now()): void {
     // Check if we need a second extended hold
     if (this.state.isFirstExtendedHold && this.config.secondExtendedHoldEnabled) {
       this.state.isFirstExtendedHold = false;
 
-      // Do breathing cycle to prepare for second hold
-      this.state.currentRepetition = 1;
-      this.setPhase('INHALE', this.config.inhaleTime);
+      if (this.config.secondExtendedHoldType === 'INHALE') {
+        this.state.isRecoveryBreath = true;
+        this.setPhase('INHALE', this.config.inhaleTime, startedAt);
+      } else if (this.state.phase === 'EXTENDED_INHALE_HOLD') {
+        this.state.isRecoveryExhale = true;
+        this.setPhase('EXHALE', this.config.exhaleTime, startedAt);
+      } else {
+        this.startExtendedHold(startedAt);
+      }
       return;
     }
 
-    this.completeSet();
+    this.completeSet(startedAt);
   }
 
-  private completeSet(): void {
+  private completeSet(startedAt: number): void {
     this.callbacks.onSetComplete?.(this.state.currentSet, this.state);
 
     // Check if session is complete
     if (this.config.targetSets > 0 && this.state.currentSet >= this.config.targetSets) {
-      this.completeSession();
+      this.completeSession(startedAt);
       return;
     }
 
     if (this.config.restBetweenSetsSeconds > 0) {
-      this.setPhase('SET_REST', this.config.restBetweenSetsSeconds);
+      this.setPhase('SET_REST', this.config.restBetweenSetsSeconds, startedAt);
     } else {
-      this.setPhase('SET_COMPLETE', 0);
+      this.setPhase('SET_COMPLETE', 0, startedAt);
       this.stopInterval();
     }
   }
 
-  private startNextSet(): void {
+  private startNextSet(startedAt = performance.now()): void {
     this.state.currentSet++;
     this.state.currentRepetition = 1;
     this.state.isFirstExtendedHold = true;
     this.state.extendedHoldElapsed = 0;
 
-    this.setPhase('INHALE', this.config.inhaleTime);
+    this.setPhase('INHALE', this.config.inhaleTime, startedAt);
     this.startInterval();
   }
 
-  private completeSession(): void {
+  private completeSession(startedAt: number): void {
     this.stopInterval();
     this.state.isRunning = false;
-    this.setPhase('SESSION_COMPLETE', 0);
+    this.setPhase('SESSION_COMPLETE', 0, startedAt);
     this.callbacks.onSessionComplete?.(this.state);
   }
 
-  private setPhase(phase: BreathingPhase, duration: number): void {
+  private setPhase(phase: BreathingPhase, duration: number, startedAt = performance.now()): void {
     this.state.phase = phase;
     this.state.currentTime = duration;
     this.state.totalPhaseTime = duration;
+    this.phaseStartTime = startedAt;
     this.callbacks.onPhaseChange?.(phase, this.state);
   }
 
@@ -334,12 +384,14 @@ export function calculateSetTime(config: BreathingConfig): number {
   const cycleTime = calculateTotalCycleTime(config);
   let totalTime = cycleTime * config.repetitions;
 
-  if (config.extendedHoldEnabled && config.extendedHoldMode === 'TIMED') {
-    totalTime += config.extendedHoldDuration;
+  if (config.extendedHoldEnabled) {
+    if (config.extendedHoldType === 'INHALE') totalTime += config.inhaleTime;
+    if (config.extendedHoldMode === 'TIMED') totalTime += config.extendedHoldDuration;
 
     if (config.secondExtendedHoldEnabled) {
-      // Add another cycle + extended hold
-      totalTime += cycleTime * config.repetitions + config.extendedHoldDuration;
+      if (config.secondExtendedHoldType === 'INHALE') totalTime += config.inhaleTime;
+      else if (config.extendedHoldType === 'INHALE') totalTime += config.exhaleTime;
+      if (config.secondExtendedHoldMode === 'TIMED') totalTime += config.secondExtendedHoldDuration;
     }
   }
 

@@ -1,8 +1,7 @@
 import {
   BreathingConfigSchema,
+  calculateSetTime,
   type BreathingConfig,
-  type ExtendedHoldMode,
-  type ExtendedHoldType,
 } from '@breath-in-flow/shared';
 
 export interface PracticeSummary {
@@ -21,54 +20,16 @@ function formatSeconds(totalSeconds: number): string {
   return `${minutes}m ${secondsText}`;
 }
 
-function scheduledHoldSeconds(mode: ExtendedHoldMode, duration: number): number {
-  return mode === 'TIMED' ? duration : 0;
-}
-
-function preparationSeconds(
-  holdType: ExtendedHoldType,
-  precedingPhase: ExtendedHoldType | 'EXHALE',
-  inhaleTime: number,
-  exhaleTime: number
-): number {
-  if (holdType === 'INHALE') return inhaleTime;
-  return precedingPhase === 'INHALE' ? exhaleTime : 0;
-}
-
 export function getPracticeSummary(config: BreathingConfig): PracticeSummary | null {
   const result = BreathingConfigSchema.safeParse(config);
   if (!result.success) return null;
 
   const parsed = result.data;
-  const cycleSeconds =
-    parsed.inhaleTime + parsed.inhaleHoldTime + parsed.exhaleTime + parsed.exhaleHoldTime;
-  let setSeconds = cycleSeconds * parsed.repetitions;
-  let hasUserControlledHold = false;
-
-  if (parsed.extendedHoldEnabled) {
-    setSeconds += preparationSeconds(
-      parsed.extendedHoldType,
-      'EXHALE',
-      parsed.inhaleTime,
-      parsed.exhaleTime
-    );
-    setSeconds += scheduledHoldSeconds(parsed.extendedHoldMode, parsed.extendedHoldDuration);
-    hasUserControlledHold ||= parsed.extendedHoldMode === 'TOLERANCE';
-
-    if (parsed.secondExtendedHoldEnabled) {
-      setSeconds += preparationSeconds(
-        parsed.secondExtendedHoldType,
-        parsed.extendedHoldType,
-        parsed.inhaleTime,
-        parsed.exhaleTime
-      );
-      setSeconds += scheduledHoldSeconds(
-        parsed.secondExtendedHoldMode,
-        parsed.secondExtendedHoldDuration
-      );
-      hasUserControlledHold ||= parsed.secondExtendedHoldMode === 'TOLERANCE';
-    }
-  }
+  const setSeconds = calculateSetTime(parsed);
+  const hasUserControlledHold =
+    parsed.extendedHoldEnabled &&
+    (parsed.extendedHoldMode === 'TOLERANCE' ||
+      (parsed.secondExtendedHoldEnabled && parsed.secondExtendedHoldMode === 'TOLERANCE'));
 
   const openEnded = parsed.targetSets === 0;
   const scheduledSeconds = openEnded

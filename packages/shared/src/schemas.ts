@@ -45,7 +45,7 @@ const BaseBreathingConfigSchema = z.object({
   exhaleHoldTime: z.number().min(0).max(60).default(0),
 
   // Repetitions before extended hold
-  repetitions: z.number().min(1).max(100).default(4),
+  repetitions: z.number().int().min(1).max(100).default(4),
 
   // Extended hold configuration
   extendedHoldEnabled: z.boolean().default(false),
@@ -60,7 +60,7 @@ const BaseBreathingConfigSchema = z.object({
   secondExtendedHoldDuration: z.number().min(0).max(300).default(15),
 
   // Set configuration
-  targetSets: z.number().min(0).max(20).default(0), // 0 means record as you go
+  targetSets: z.number().int().min(0).max(20).default(0), // 0 means record as you go
   restBetweenSetsSeconds: z.number().int().min(0).max(600).default(0),
 
   // Audio configuration
@@ -216,7 +216,7 @@ export const SessionSchema = z.object({
   configSnapshot: BreathingConfigSchema, // Snapshot of config at session start
   status: SessionStatusSchema.default('IN_PROGRESS'),
   sets: z.array(SessionSetSchema).default([]),
-  targetSets: z.number().min(0).default(0),
+  targetSets: z.number().int().min(0).default(0),
   completedSets: z.number().min(0).default(0),
   startedAt: z.date(),
   completedAt: z.date().optional(),
@@ -476,7 +476,7 @@ export const AssessmentTrialSchema = z.object({
   repetitions: z.number().int().positive(),
 
   // Scoring (filled after all trials)
-  comfortRating: z.number().finite().min(1).max(5).optional(),
+  comfortRating: z.number().int().min(1).max(5).optional(),
   symptoms: z.array(AssessmentSymptomSchema).default([]),
   hrAmplitude: HrAmplitudeSchema.optional(),
   waveformSmoothness: WaveformSmoothnessSchema.optional(),
