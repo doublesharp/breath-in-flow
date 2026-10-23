@@ -6,7 +6,7 @@ import {
   type MeasurementProtocol,
   type SensorSource,
 } from '@breath-in-flow/shared';
-import type { SensorStartResult } from './sensorTypes';
+import { sensorStartFailure, type SensorStartResult } from './sensorTypes';
 
 export type MeasurementState =
   | 'idle'
@@ -59,6 +59,7 @@ export class MeasurementSession {
   private samples: IBISample[] = [];
   private estimates: HeartRateEstimate[] = [];
   private activeSensors = new Map<MeasurementSensorSource, MeasurementSensorAdapter>();
+  private pendingSensors = new Map<MeasurementSensorSource, MeasurementSensorAdapter>();
   private acquisitionSources: MeasurementSensorSource[] = [];
   private contributingSources = new Set<MeasurementSensorSource>();
   private eligibility?: MeasurementEligibility;
@@ -88,9 +89,21 @@ export class MeasurementSession {
     >;
     const outcomes = await Promise.all(
       entries.map(async ([source, adapter]) => {
-        const result = await adapter.start();
+        this.pendingSensors.set(source, adapter);
+        let result: SensorStartResult;
+        try {
+          result = await adapter.start();
+        } catch (error) {
+          adapter.stop();
+          result = sensorStartFailure(
+            'start-failed',
+            error instanceof Error ? error.message : String(error)
+          );
+        } finally {
+          this.pendingSensors.delete(source);
+        }
         if (result.ok) {
-          if (this.isInterrupted()) {
+          if (!this.isStarting()) {
             adapter.stop();
           } else {
             this.activeSensors.set(source, adapter);
@@ -100,8 +113,11 @@ export class MeasurementSession {
       })
     );
 
-    if (this.isInterrupted()) {
-      return { ok: false, message: this.errorMessage };
+    if (!this.isStarting()) {
+      return {
+        ok: false,
+        message: this.errorMessage ?? 'Measurement ended during sensor startup.',
+      };
     }
 
     const failedSources: MeasurementSensorSource[] = [];
@@ -238,6 +254,10 @@ export class MeasurementSession {
   }
 
   private stopActiveSensors(): void {
+    for (const sensor of this.pendingSensors.values()) {
+      sensor.stop();
+    }
+    this.pendingSensors.clear();
     for (const sensor of this.activeSensors.values()) {
       sensor.stop();
     }
@@ -287,7 +307,7 @@ export class MeasurementSession {
     this.onStateChange?.(state);
   }
 
-  private isInterrupted(): boolean {
-    return this.state === 'interrupted';
+  private isStarting(): boolean {
+    return this.state === 'starting';
   }
 }

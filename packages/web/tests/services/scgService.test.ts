@@ -57,6 +57,11 @@ type TestSCGService = {
   rateEstimationTimestamps: number[];
   recentIBIs: number[];
   sampleRateHz: number;
+  sampleIndex: number;
+  template: number[] | null;
+  envelopeSmoothSamples: number;
+  hilbertEnvelope: (sample: number) => number;
+  rebuildFiltersAndDetector: () => void;
   lastPeakDetectionElapsedMs: number | null;
   motionGate: { addSample: (magnitude: number, timestamp: number) => { accepted: boolean } };
 };
@@ -74,19 +79,20 @@ function generateSineWave(
 
 /**
  * Generate an array of SCG-like samples: a sharp positive spike at fixed
- * intervals (simulating the aortic valve opening) on top of small Gaussian
- * noise.
+ * intervals (simulating the aortic valve opening) on top of small, seeded noise.
  *
  * @param heartRateBPM   Target heart rate in BPM (default 60)
  * @param durationSeconds  Total sequence length in seconds
  * @param sampleRateHz   Samples per second
+ * @param noiseSeed      Seed for reproducible background noise
  * @returns Array of { x, y, z } acceleration objects plus corresponding
  *          timestamps (ms), and the exact beat indices.
  */
 function generateSCGSequence(
   heartRateBPM: number,
   durationSeconds: number,
-  sampleRateHz: number
+  sampleRateHz: number,
+  noiseSeed = 1
 ): {
   samples: { x: number; y: number; z: number }[];
   beatIndices: number[];
@@ -95,10 +101,12 @@ function generateSCGSequence(
   const samplesPerBeat = Math.round((60 / heartRateBPM) * sampleRateHz);
   const samples: { x: number; y: number; z: number }[] = [];
   const beatIndices: number[] = [];
+  let noiseState = noiseSeed;
 
   for (let i = 0; i < totalSamples; i++) {
     // Small background noise
-    const noise = (Math.random() - 0.5) * 0.02;
+    noiseState = (Math.imul(1664525, noiseState) + 1013904223) >>> 0;
+    const noise = (noiseState / 2 ** 32 - 0.5) * 0.02;
     // Sharp spike at each beat position
     const isBeat = i % samplesPerBeat === 0;
     const z = isBeat ? 1.5 + noise : noise;
@@ -183,6 +191,32 @@ describe('scgService', () => {
   // ─── 2. Permission handling (iOS) ─────────────────────────────────────────
 
   describe('iOS permission handling', () => {
+    it.each(['granted', 'denied', 'rejected'])(
+      'ignores a %s permission request after capture was stopped',
+      async (outcome) => {
+        let resolvePermission!: (value: string) => void;
+        let rejectPermission!: (error: Error) => void;
+        const requestPermission = vi.fn(
+          () =>
+            new Promise<string>((resolve, reject) => {
+              resolvePermission = resolve;
+              rejectPermission = reject;
+            })
+        );
+        (DeviceMotionEvent as unknown as Record<string, unknown>).requestPermission =
+          requestPermission;
+        const pending = scgService.start();
+        scgService.stop();
+        if (outcome === 'rejected') rejectPermission(new Error('Request cancelled'));
+        else resolvePermission(outcome);
+
+        await expect(pending).resolves.toMatchObject({ ok: false, reason: 'start-failed' });
+        expect(scgService.getStatus()).toBe('idle');
+        expect(errors).toHaveLength(0);
+        expect(statusChanges).not.toContain('capturing');
+      }
+    );
+
     it('calls requestPermission when the method is present and proceeds on grant', async () => {
       const requestPermission = vi.fn().mockResolvedValue('granted');
       (DeviceMotionEvent as unknown as Record<string, unknown>)['requestPermission'] =
@@ -328,11 +362,14 @@ describe('scgService', () => {
     it('uses the peak detector candidate time and index for emitted IBIs', () => {
       const service = scgService as unknown as TestSCGService;
       const identityFilter = { filter: (value: number) => value };
+      let index = 0;
       const peakDetector = {
-        addSample: vi
-          .fn()
-          .mockReturnValueOnce({ index: 10, amplitude: 1, timestamp: 1000 })
-          .mockReturnValueOnce({ index: 20, amplitude: 1, timestamp: 1800 }),
+        addSample: vi.fn(() => {
+          const current = index++;
+          if (current === 11) return { index: 10, amplitude: 1, timestamp: 1000 };
+          if (current === 91) return { index: 90, amplitude: 1, timestamp: 1800 };
+          return null;
+        }),
       };
 
       service.axisCalibrated = true;
@@ -344,8 +381,9 @@ describe('scgService', () => {
       service.lpFilter = identityFilter;
       service.peakDetector = peakDetector;
 
-      service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 1 }, 10));
-      service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 0.5 }, 10));
+      for (let sample = 0; sample <= 100; sample++) {
+        service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: 1 }, 10));
+      }
 
       expect(ibiSamples).toHaveLength(1);
       expect(ibiSamples[0]).toMatchObject({
@@ -353,7 +391,7 @@ describe('scgService', () => {
         interval: 800,
         provenance: { source: 'scg', method: 'peak-detected' },
       });
-      expect(service.detectedPeakSampleIndices).toEqual([10, 20]);
+      expect(service.detectedPeakSampleIndices).toEqual([10, 90]);
     });
 
     it('does not send a rejected motion transient to the peak detector', () => {
@@ -466,33 +504,78 @@ describe('scgService', () => {
   // ─── 5. Template matching ──────────────────────────────────────────────────
 
   describe('template matching', () => {
-    it('does not discard legitimate peaks after template is built', async () => {
-      // Run enough beats to trigger template construction (needs ≥5 peaks),
-      // then continue; the IBI count should keep growing.
-      await scgService.start();
-      bypassMotionGateForSignalProcessingTests();
+    it.each([0, 50])(
+      'waits for a complete template window and rejects inverted beats after %s earlier samples',
+      (offset) => {
+        const service = scgService as unknown as TestSCGService;
+        service.rateEstimated = true;
+        service.axisCalibrated = true;
+        service.measurementStartMonotonicMs = 10_000;
+        service.sampleIndex = offset;
+        service.filteredHistory = Array(offset).fill(0);
+        service.rebuildFiltersAndDetector();
+        service.hpFilter = service.lpFilter = { filter: (value) => value };
+        service.envelopeSmoothSamples = 1;
+        const envelope = vi.spyOn(service, 'hilbertEnvelope').mockImplementation(Math.abs);
+        bypassMotionGateForSignalProcessingTests();
+        const pulse = (distance: number) => Math.max(0, 1 - Math.abs(distance) / 3);
+        service.template = Array.from({ length: 21 }, (_, index) => pulse(index - 10));
+        try {
+          for (let index = 0; index <= 170; index++) {
+            const value = pulse(index - 40) - pulse(index - 100) + pulse(index - 160);
+            service.handleMotion(makeMotionEvent({ x: 0, y: 0, z: value }, 10));
+            if (index === 41) expect(service.detectedPeakSampleIndices).toEqual([]);
+            if (index === 50 || index === 110) {
+              expect(service.detectedPeakSampleIndices).toEqual([offset + 40]);
+              expect(ibiSamples).toHaveLength(0);
+            }
+          }
 
-      const SAMPLE_RATE = 100;
-      const INTERVAL_MS = 1000 / SAMPLE_RATE;
-      const HEART_RATE = 60;
-
-      // Phase 1: 8 seconds — builds initial template (≥5 peaks)
-      const { samples: phase1 } = generateSCGSequence(HEART_RATE, 8, SAMPLE_RATE);
-      for (const s of phase1) {
-        dispatchMotionEvent(s, INTERVAL_MS);
+          expect(service.detectedPeakSampleIndices).toEqual([offset + 40, offset + 160]);
+          expect(ibiSamples).toEqual([
+            expect.objectContaining({ timestamp: 11_610, interval: 1_200 }),
+          ]);
+        } finally {
+          envelope.mockRestore();
+        }
       }
-      const countAfterPhase1 = ibiSamples.length;
-      expect(countAfterPhase1).toBeGreaterThanOrEqual(4);
+    );
 
-      // Phase 2: 6 more seconds — template should accept matching peaks
-      const { samples: phase2 } = generateSCGSequence(HEART_RATE, 6, SAMPLE_RATE);
-      for (const s of phase2) {
-        dispatchMotionEvent(s, INTERVAL_MS);
+    it.each(Array.from({ length: 16 }, (_, index) => index + 1))(
+      'does not discard legitimate peaks after template is built, seed %s',
+      async (noiseSeed) => {
+        // Run enough beats to trigger template construction (needs ≥5 peaks),
+        // then continue; the IBI count should keep growing.
+        await scgService.start();
+        bypassMotionGateForSignalProcessingTests();
+
+        const SAMPLE_RATE = 100;
+        const INTERVAL_MS = 1000 / SAMPLE_RATE;
+        const HEART_RATE = 60;
+
+        // Phase 1: 8 seconds — builds initial template (≥5 peaks)
+        const { samples: phase1 } = generateSCGSequence(HEART_RATE, 8, SAMPLE_RATE, noiseSeed);
+        for (const s of phase1) {
+          dispatchMotionEvent(s, INTERVAL_MS);
+        }
+        const countAfterPhase1 = ibiSamples.length;
+        expect(countAfterPhase1).toBeGreaterThanOrEqual(4);
+
+        // Phase 2: 6 more seconds — template should accept matching peaks
+        const { samples: phase2 } = generateSCGSequence(
+          HEART_RATE,
+          6,
+          SAMPLE_RATE,
+          noiseSeed + 100
+        );
+        for (const s of phase2) {
+          dispatchMotionEvent(s, INTERVAL_MS);
+        }
+
+        // More peaks should have been detected in phase 2
+        expect(ibiSamples.length).toBeGreaterThan(countAfterPhase1);
       }
-
-      // More peaks should have been detected in phase 2
-      expect(ibiSamples.length).toBeGreaterThan(countAfterPhase1);
-    });
+    );
 
     it('IBI detection remains accurate after template construction', async () => {
       await scgService.start();
@@ -666,6 +749,33 @@ describe('scgService', () => {
   // ─── 8. Sample rate handling ──────────────────────────────────────────────
 
   describe('sample rate detection', () => {
+    it.each([0, Number.NaN, -1, Number.POSITIVE_INFINITY])(
+      'derives a missing or invalid interval %s from 20 ms event arrivals',
+      async (interval) => {
+        const now = vi.spyOn(performance, 'now').mockReturnValue(1_000);
+        try {
+          const timestamps: number[] = [];
+          scgService.setCallbacks({
+            onRawSignal: (_value, timestamp) => timestamps.push(timestamp),
+          });
+          await scgService.start();
+          for (let index = 1; index <= 20; index++) {
+            now.mockReturnValue(1_000 + index * 20);
+            dispatchMotionEvent({ x: 0, y: 0, z: 9.81 }, interval);
+          }
+
+          const internal = scgService as unknown as TestSCGService;
+          expect(internal.sampleRateHz).toBeCloseTo(50);
+          expect(internal.lastIntervalMs).toBe(20);
+          expect(timestamps).toHaveLength(20);
+          expect(timestamps[0]).toBe(1_020);
+          expect(timestamps.at(-1)).toBe(1_400);
+        } finally {
+          now.mockRestore();
+        }
+      }
+    );
+
     it('uses a valid native event interval instead of a hard-coded frame rate', () => {
       expect(resolveMotionInterval(25, 10)).toBe(25);
       expect(resolveMotionInterval(0, 10)).toBe(10);

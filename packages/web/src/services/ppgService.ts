@@ -20,6 +20,8 @@ const DEFAULT_LOW_CUT_HZ = 0.7;
 const DEFAULT_HIGH_CUT_HZ = 3.5;
 const DEFAULT_FILTER_ORDER = 4;
 const ADAPTIVE_FILTER_ORDER = 2;
+const REACQUISITION_SAMPLES = 10;
+const REACQUISITION_MAX_RANGE = 5;
 
 function debugLog(message: string, ...args: unknown[]): void {
   if (PPG_DEBUG) {
@@ -128,12 +130,7 @@ class PPGService {
     // 4th-order Butterworth bandpass 0.7-3.5 Hz (42-210 BPM)
     // Higher order = sharper rolloff = better rejection of baseline drift
     // Narrower band = less noise, more focused on cardiac frequency
-    this.bandpassFilter = createBandpassFilter(
-      DEFAULT_LOW_CUT_HZ,
-      DEFAULT_HIGH_CUT_HZ,
-      this.SAMPLE_RATE,
-      DEFAULT_FILTER_ORDER
-    );
+    this.bandpassFilter = this.createDefaultBandpassFilter();
     this.peakDetector = new StreamingPeakDetector({
       minPeakDistance: this.MIN_PEAK_DISTANCE_SAMPLES,
       thresholdFactor: 0.3,
@@ -141,6 +138,15 @@ class PPGService {
       adaptiveRefractory: true,
       minProminence: 0.05,
     });
+  }
+
+  private createDefaultBandpassFilter(): SOSFilter {
+    return createBandpassFilter(
+      DEFAULT_LOW_CUT_HZ,
+      DEFAULT_HIGH_CUT_HZ,
+      this.SAMPLE_RATE,
+      DEFAULT_FILTER_ORDER
+    );
   }
 
   public setCallbacks(callbacks: PPGCallbacks): void {
@@ -367,6 +373,8 @@ class PPGService {
       this.rawBuffer = [];
       this.normBuffer = [];
       this.lastRawValue = -1;
+      this.reacquisitionValues = [];
+      this.signalInterrupted = false;
       this.lastPeakTimestamp = null;
       this.frameCount = 0;
       this.lastFrameTime = 0;
@@ -374,7 +382,7 @@ class PPGService {
       this.recentIBIsMs = [];
       this.currentLowCut = DEFAULT_LOW_CUT_HZ;
       this.currentHighCut = DEFAULT_HIGH_CUT_HZ;
-      this.bandpassFilter.reset();
+      this.bandpassFilter = this.createDefaultBandpassFilter();
       this.peakDetector.reset();
 
       // Start video playback — must happen before torch and canvas setup
@@ -548,13 +556,15 @@ class PPGService {
   }
 
   private lastRawValue: number = -1;
+  private reacquisitionValues: number[] = [];
+  private signalInterrupted = false;
 
   // Exposed for testing purposes
   public processSignalSample(value: number, timestamp: number): IBISample | null {
     // Skip samples where the signal is clearly invalid (camera blocked or saturated)
     if (value < 1 || value > 254) {
-      this.callbacks.onRawSignal?.(0, timestamp);
-      return null;
+      this.reacquisitionValues = [];
+      return this.rejectSignalSample(timestamp);
     }
 
     // Rate-of-change filter: reject sudden jumps from finger movement.
@@ -564,12 +574,19 @@ class PPGService {
     if (this.lastRawValue > 0) {
       const delta = Math.abs(value - this.lastRawValue);
       if (delta > 15) {
-        // Large jump — don't feed to filter, emit zero for chart
-        this.callbacks.onRawSignal?.(0, timestamp);
-        // Don't update lastRawValue — wait for signal to stabilize
-        return null;
+        // Reacquire a shifted baseline only after a short, stable run. Comparing
+        // only against the old baseline would reject every new frame forever.
+        const min = Math.min(value, ...this.reacquisitionValues);
+        const max = Math.max(value, ...this.reacquisitionValues);
+        if (max - min > REACQUISITION_MAX_RANGE) this.reacquisitionValues = [];
+        this.reacquisitionValues.push(value);
+        if (this.reacquisitionValues.length < REACQUISITION_SAMPLES) {
+          return this.rejectSignalSample(timestamp);
+        }
       }
     }
+    this.reacquisitionValues = [];
+    this.signalInterrupted = false;
     this.lastRawValue = value;
 
     // Pass through bandpass filter
@@ -640,6 +657,24 @@ class PPGService {
     }
 
     return ibiSample;
+  }
+
+  private rejectSignalSample(timestamp: number): null {
+    if (!this.signalInterrupted) {
+      this.signalInterrupted = true;
+      this.lastPeakTimestamp = null;
+      this.peakDetector.reset();
+      this.bandpassFilter.reset();
+      this.rawBuffer = [];
+      this.normBuffer = [];
+      this.recentIBIsMs = [];
+      if (this.signalQuality !== 0) {
+        this.signalQuality = 0;
+        this.callbacks.onQualityChange?.(0);
+      }
+    }
+    this.callbacks.onRawSignal?.(0, timestamp);
+    return null;
   }
 
   /**
@@ -909,6 +944,8 @@ class PPGService {
     this.rawBuffer = [];
     this.normBuffer = [];
     this.lastRawValue = -1;
+    this.reacquisitionValues = [];
+    this.signalInterrupted = false;
     this.lastPeakTimestamp = null;
     this.frameCount = 0;
     this.lastFrameTime = 0;
@@ -918,7 +955,7 @@ class PPGService {
     this.currentHighCut = DEFAULT_HIGH_CUT_HZ;
     this.signalQuality = 0;
     this.torchEnabled = false;
-    this.bandpassFilter.reset();
+    this.bandpassFilter = this.createDefaultBandpassFilter();
     this.peakDetector.reset();
 
     this.setStatus('idle');

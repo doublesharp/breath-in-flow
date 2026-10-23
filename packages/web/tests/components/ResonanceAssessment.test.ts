@@ -430,10 +430,11 @@ describe('ResonanceAssessment', () => {
 
     expect(ppgService.start).toHaveBeenCalledOnce();
     await lastLifecycleOptions?.onInactive();
+    expect(ppgService.stop).toHaveBeenCalledOnce();
     finishSensorStart({ ok: true });
     await flushPromises();
 
-    expect(ppgService.stop).toHaveBeenCalledOnce();
+    expect(ppgService.stop).toHaveBeenCalledTimes(2);
     expect(wrapper.text()).toContain('Start Assessment');
     expect(wrapper.text()).toContain(
       'Assessment interrupted when the app became inactive. Return to setup and restart when ready.'
@@ -728,6 +729,14 @@ describe('ResonanceAssessment', () => {
   });
 
   it('advances a manual assessment through warmup, trial, rest, and the next trial', async () => {
+    // This test observes phase transitions, not every animation frame. Render
+    // once per virtual second while still executing every 100 ms timer tick.
+    const advanceSeconds = async (seconds: number) => {
+      for (let second = 0; second < seconds; second++) {
+        vi.advanceTimersByTime(1_000);
+        await flushPromises();
+      }
+    };
     const wrapper = mount(ResonanceAssessment);
     await wrapper
       .findAll('button')
@@ -739,16 +748,16 @@ describe('ResonanceAssessment', () => {
     expect(wrapper.text()).toContain('Warmup');
     expect(requestSensorPermissions).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(130_000);
+    await advanceSeconds(130);
     await flushPromises();
     expect(wrapper.text()).toContain('Trial 1/5');
     expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(true);
 
-    await vi.advanceTimersByTimeAsync(140_000);
+    await advanceSeconds(140);
     await flushPromises();
     expect(wrapper.text()).toContain('Rest Quietly');
 
-    await vi.advanceTimersByTimeAsync(121_000);
+    await advanceSeconds(121);
     await flushPromises();
     expect(wrapper.text()).toContain('Trial 2/5');
   });

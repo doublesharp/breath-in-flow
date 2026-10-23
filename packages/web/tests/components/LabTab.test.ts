@@ -1249,6 +1249,8 @@ describe('LabTab.vue', () => {
     };
     expect(vm.isStartPending).toBe(true);
     expect(vm.showPrep).toBe(false);
+    // Cancellation releases resources even while start() is still unresolved.
+    expect(ppgService.stop).toHaveBeenCalledOnce();
 
     await wrapper
       .findAll('button')
@@ -1265,7 +1267,8 @@ describe('LabTab.vue', () => {
     resolveSensorStart({ ok: true });
     await flushPromises();
 
-    expect(ppgService.stop).toHaveBeenCalledOnce();
+    // A late successful startup is also cleaned up before prep can restart.
+    expect(ppgService.stop).toHaveBeenCalledTimes(2);
     expect(vm.isStartPending).toBe(false);
     expect(vm.isMeasuring).toBe(false);
     expect(reopenedStart.disabled).toBe(false);

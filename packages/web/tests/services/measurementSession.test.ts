@@ -77,6 +77,84 @@ describe('MeasurementSession', () => {
     });
   });
 
+  it.each(['throw', 'reject'] as const)(
+    'cleans up an adapter that fails with %s and resolves a failed start',
+    async (failure) => {
+      const error = new Error('Camera startup crashed.');
+      const camera = {
+        start: vi.fn(() => {
+          if (failure === 'throw') throw error;
+          return Promise.reject(error);
+        }),
+        stop: vi.fn(),
+      };
+      const onElapsed = vi.fn();
+      const session = new MeasurementSession({ protocol: 'quick-check', onElapsed });
+
+      await expect(session.start({ ppg: camera })).resolves.toEqual({
+        ok: false,
+        message: error.message,
+      });
+      expect(camera.stop).toHaveBeenCalledOnce();
+      expect(session.getResult()).toMatchObject({
+        state: 'failed',
+        activeSources: [],
+        errorMessage: error.message,
+      });
+      expect(
+        (session as unknown as { pendingSensors: Map<unknown, unknown> }).pendingSensors.size
+      ).toBe(0);
+      vi.advanceTimersByTime(10_000);
+      expect(onElapsed).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it('continues with a healthy peer when a pending adapter rejects', async () => {
+    let rejectCamera!: (error: Error) => void;
+    const camera = {
+      start: vi.fn(() => new Promise<{ ok: true }>((_resolve, reject) => (rejectCamera = reject))),
+      stop: vi.fn(),
+    };
+    const motion = sensor({ ok: true });
+    const session = new MeasurementSession({ protocol: 'quick-check' });
+    const pending = session.start({ ppg: camera, scg: motion });
+    await Promise.resolve();
+    expect(session.getResult().activeSources).toEqual(['scg']);
+
+    rejectCamera(new Error('Camera startup crashed.'));
+
+    await expect(pending).resolves.toEqual({ ok: true, degradedSources: ['ppg'] });
+    expect(camera.stop).toHaveBeenCalledOnce();
+    expect(motion.stop).not.toHaveBeenCalled();
+    expect(session.getResult()).toMatchObject({ state: 'acquiring', activeSources: ['scg'] });
+    session.addDetectedSample(detectedSample(1_000, 'scg'));
+    expect(session.getResult().state).toBe('measuring');
+    session.stop();
+    expect(camera.stop).toHaveBeenCalledOnce();
+    expect(motion.stop).toHaveBeenCalledOnce();
+  });
+
+  it('cleans up a rejected pending start without changing an interrupted session', async () => {
+    let rejectCamera!: (error: unknown) => void;
+    const camera = {
+      start: vi.fn(() => new Promise<{ ok: true }>((_resolve, reject) => (rejectCamera = reject))),
+      stop: vi.fn(),
+    };
+    const session = new MeasurementSession({ protocol: 'quick-check' });
+    const pending = session.start({ ppg: camera });
+    session.interrupt('App backgrounded.');
+    rejectCamera('Camera registration cancelled.');
+
+    await expect(pending).resolves.toEqual({ ok: false, message: 'App backgrounded.' });
+    expect(session.getResult().state).toBe('interrupted');
+    expect(camera.stop).toHaveBeenCalledTimes(2);
+    expect(
+      (session as unknown as { pendingSensors: Map<unknown, unknown> }).pendingSensors.size
+    ).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('moves to no-data and stops the sensor after five seconds without a detected beat', async () => {
     const camera = sensor({ ok: true });
     const session = new MeasurementSession({
@@ -302,31 +380,36 @@ describe('MeasurementSession', () => {
     expect(onElapsed).not.toHaveBeenCalled();
   });
 
-  it('stops a sensor that finishes starting after the session was interrupted', async () => {
-    let finishStarting!: (result: { ok: true }) => void;
-    const camera = {
-      start: vi.fn(
-        () =>
-          new Promise<{ ok: true }>((resolve) => {
-            finishStarting = resolve;
-          })
-      ),
-      stop: vi.fn(),
-    };
-    const session = new MeasurementSession({ protocol: 'quick-check', now: () => nowMs });
+  it.each(['interrupt', 'stop'] as const)(
+    'stops a pending sensor immediately on %s and cleans up a late successful start',
+    async (action) => {
+      let finishStarting!: (result: { ok: true }) => void;
+      const camera = {
+        start: vi.fn(
+          () =>
+            new Promise<{ ok: true }>((resolve) => {
+              finishStarting = resolve;
+            })
+        ),
+        stop: vi.fn(),
+      };
+      const session = new MeasurementSession({ protocol: 'quick-check', now: () => nowMs });
 
-    const startOutcome = session.start({ ppg: camera });
-    const interrupted = session.interrupt('Measurement interrupted while starting.');
-    finishStarting({ ok: true });
+      const startOutcome = session.start({ ppg: camera });
+      const ended =
+        action === 'interrupt'
+          ? session.interrupt('Measurement interrupted while starting.')
+          : session.stop();
+      expect(camera.stop).toHaveBeenCalledOnce();
+      expect(ended.activeSources).toEqual([]);
+      finishStarting({ ok: true });
 
-    expect(await startOutcome).toEqual({
-      ok: false,
-      message: 'Measurement interrupted while starting.',
-    });
-    expect(interrupted.state).toBe('interrupted');
-    expect(session.getResult().state).toBe('interrupted');
-    expect(camera.stop).toHaveBeenCalledOnce();
-  });
+      expect(await startOutcome).toMatchObject({ ok: false });
+      expect(session.getResult().state).toBe(action === 'interrupt' ? 'interrupted' : 'complete');
+      expect(camera.stop).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
 
   it('stops an already-started adapter immediately while a sibling is still pending', async () => {
     const camera = sensor({ ok: true });
@@ -349,7 +432,7 @@ describe('MeasurementSession', () => {
     const interrupted = session.interrupt('Measurement interrupted during dual startup.');
 
     expect(camera.stop).toHaveBeenCalledOnce();
-    expect(motion.stop).not.toHaveBeenCalled();
+    expect(motion.stop).toHaveBeenCalledOnce();
     expect(interrupted.activeSources).toEqual(['ppg']);
 
     finishMotionStart({ ok: true });
@@ -358,7 +441,7 @@ describe('MeasurementSession', () => {
       ok: false,
       message: 'Measurement interrupted during dual startup.',
     });
-    expect(motion.stop).toHaveBeenCalledOnce();
+    expect(motion.stop).toHaveBeenCalledTimes(2);
     expect(session.getResult().activeSources).toEqual(['ppg']);
   });
 

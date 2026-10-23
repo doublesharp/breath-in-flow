@@ -13,6 +13,7 @@ vi.mock('@capawesome/capacitor-torch', () => ({
 }));
 
 import { listCameras, ppgService } from '../../src/services/ppgService';
+import { MeasurementSession } from '../../src/services/measurementSession';
 import type { PPGStatus } from '../../src/services/ppgService';
 import type { HeartRateEstimate, IBISample } from '@breath-in-flow/shared';
 
@@ -93,6 +94,9 @@ function resetService() {
   (ppgService as unknown as Record<string, unknown>).nativeTorchDesiredGeneration = null;
   (ppgService as unknown as Record<string, unknown>).rawBuffer = [];
   (ppgService as unknown as Record<string, unknown>).normBuffer = [];
+  (ppgService as unknown as Record<string, unknown>).lastRawValue = -1;
+  (ppgService as unknown as Record<string, unknown>).reacquisitionValues = [];
+  (ppgService as unknown as Record<string, unknown>).signalInterrupted = false;
   (ppgService as unknown as Record<string, unknown>).lastPeakTimestamp = null;
   (ppgService as unknown as Record<string, unknown>).frameCount = 0;
   (ppgService as unknown as Record<string, unknown>).lastFrameTime = 0;
@@ -103,8 +107,14 @@ function resetService() {
   (ppgService as unknown as Record<string, unknown>).currentHighCut = 3.5;
   (ppgService as unknown as Record<string, unknown>).torchEnabled = false;
   // Reset filter and peak detector
-  (ppgService as unknown as { bandpassFilter: { reset: () => void } }).bandpassFilter.reset();
+  (ppgService as unknown as Record<string, unknown>).bandpassFilter = (
+    createFreshService() as unknown as Record<string, unknown>
+  ).bandpassFilter;
   (ppgService as unknown as { peakDetector: { reset: () => void } }).peakDetector.reset();
+}
+
+function createFreshService(): typeof ppgService {
+  return new (ppgService.constructor as new () => typeof ppgService)();
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +269,39 @@ describe('ppgService', () => {
       expect(track.stop).toHaveBeenCalledOnce();
       expect(removeChild).toHaveBeenCalledOnce();
       expect(ppgService.getStatus()).toBe('idle');
+    });
+
+    it('releases camera tracks immediately when its session interrupts pending playback', async () => {
+      const track = makeMockTrack();
+      mockGetUserMediaSuccess(makeMockStream(track));
+      let resolvePlay!: () => void;
+      const play = vi.fn(() => new Promise<void>((resolve) => (resolvePlay = resolve)));
+      const video = {
+        srcObject: null,
+        style: {},
+        setAttribute: vi.fn(),
+        play,
+      };
+      const createElement = document.createElement.bind(document);
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) =>
+        tag === 'video' ? (video as unknown as HTMLVideoElement) : createElement(tag)
+      );
+      const session = new MeasurementSession({ protocol: 'quick-check' });
+      const pending = session.start({
+        ppg: {
+          start: () => ppgService.start({ torchEnabled: false }),
+          stop: () => ppgService.stop(),
+        },
+      });
+      await vi.waitFor(() => expect(play).toHaveBeenCalledOnce());
+
+      session.interrupt('App backgrounded during camera startup.');
+
+      expect(track.stop).toHaveBeenCalledOnce();
+      expect(ppgService.getStatus()).toBe('idle');
+      resolvePlay();
+      await expect(pending).resolves.toMatchObject({ ok: false });
+      expect(track.stop).toHaveBeenCalledOnce();
     });
 
     it('allows a new callback owner after stopping a hung video startup', async () => {
@@ -740,6 +783,72 @@ describe('ppgService', () => {
   // -------------------------------------------------------------------------
 
   describe('signal processing pipeline', () => {
+    it('reacquires a stable 150 +/- 2 signal after a 120 baseline without bridging the jump', () => {
+      const service = createFreshService();
+      const raw: Array<{ value: number; timestamp: number }> = [];
+      const samples: IBISample[] = [];
+      service.setCallbacks({
+        onRawSignal: (value, timestamp) => raw.push({ value, timestamp }),
+        onIBI: (sample) => samples.push(sample),
+      });
+      // Include filter settling after the gap as well as several steady beats.
+      for (let index = 0; index < 720; index++) {
+        const baseline = index < 240 ? 120 : 150;
+        service.processSignalSample(
+          baseline + 2 * Math.sin((2 * Math.PI * index) / 30),
+          (index * 1000) / 30
+        );
+      }
+
+      expect(samples.some((sample) => sample.timestamp < 8_000)).toBe(true);
+      expect(
+        raw.some(
+          (sample) => sample.timestamp >= 8_000 && sample.timestamp < 9_000 && sample.value !== 0
+        )
+      ).toBe(true);
+      const recovered = samples.filter((sample) => sample.timestamp >= 8_000);
+      expect(recovered.length).toBeGreaterThan(3);
+      expect(recovered.every((sample) => sample.timestamp - sample.interval >= 8_000)).toBe(true);
+      expect(recovered.at(-1)!.interval).toBeCloseTo(1_000);
+    });
+
+    it.each([0, 255, 180])('does not emit an IBI across a rejected sample of %s', (rejected) => {
+      const service = createFreshService();
+      const samples: IBISample[] = [];
+      service.setCallbacks({ onIBI: (sample) => samples.push(sample) });
+      const gapIndex = 250;
+      const gapTimestamp = (gapIndex * 1000) / 30;
+      for (let index = 0; index < 720; index++) {
+        service.processSignalSample(
+          index === gapIndex ? rejected : 120 + 2 * Math.sin((2 * Math.PI * index) / 30),
+          (index * 1000) / 30
+        );
+      }
+
+      expect(samples.some((sample) => sample.timestamp < gapTimestamp)).toBe(true);
+      const recovered = samples.filter((sample) => sample.timestamp > gapTimestamp);
+      expect(recovered.length).toBeGreaterThan(3);
+      expect(recovered.every((sample) => sample.timestamp - sample.interval > gapTimestamp)).toBe(
+        true
+      );
+    });
+
+    it('keeps rejecting an unstable shifted signal until a stable baseline returns', () => {
+      const service = createFreshService();
+      const onRawSignal = vi.fn();
+      service.setCallbacks({ onRawSignal });
+      service.processSignalSample(120, 0);
+      for (let index = 1; index <= 30; index++) {
+        service.processSignalSample(index % 2 ? 150 : 180, (index * 1000) / 30);
+      }
+      expect(onRawSignal.mock.calls.slice(1).every(([value]) => value === 0)).toBe(true);
+
+      for (let index = 31; index <= 60; index++) {
+        service.processSignalSample(150 + 2 * Math.sin(index), (index * 1000) / 30);
+      }
+      expect(onRawSignal.mock.calls.slice(31).some(([value]) => value !== 0)).toBe(true);
+    });
+
     it('emits filtered raw signal values through onRawSignal callback', () => {
       const rawValues: number[] = [];
       ppgService.setCallbacks({ onRawSignal: (v) => rawValues.push(v) });
@@ -1178,18 +1287,32 @@ describe('ppgService', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Green channel extraction
+  // Camera channel extraction
   // -------------------------------------------------------------------------
 
-  describe('green channel extraction', () => {
-    it('uses green channel as primary signal (index 1 in RGBA pixel data)', async () => {
+  describe('camera channel extraction', () => {
+    it.each([
+      { label: 'unsaturated red and green', red: [40, 60], green: [180, 220], expected: 50 },
+      { label: 'dark red', red: [0, 0], green: [180, 220], expected: 200 },
+      { label: 'saturated red', red: [255, 255], green: [180, 220], expected: 200 },
+      { label: 'dark green', red: [40, 60], green: [0, 0], expected: 50 },
+      { label: 'saturated green', red: [40, 60], green: [255, 255], expected: 50 },
+      { label: 'both channels saturated', red: [255, 255], green: [255, 255], expected: 255 },
+      { label: 'both channels dark', red: [0, 0], green: [0, 0], expected: 0 },
+    ])('extracts the expected signal from $label pixels', async ({ red, green, expected }) => {
       const track = makeMockTrack({ torchSupported: false });
       const stream = makeMockStream(track);
       mockGetUserMediaSuccess(stream);
 
-      // Pixel data: RGBA where R=50, G=200, B=30, A=255
-      const mockPixels = new Uint8ClampedArray([50, 200, 30, 255]);
+      // captureFrame reads the central 160 x 120 ROI of a 320 x 240 frame.
+      const mockPixels = new Uint8ClampedArray(160 * 120 * 4);
+      for (let index = 0; index < 160 * 120; index++) {
+        mockPixels.set([red[index % 2], green[index % 2], 30, 255], index * 4);
+      }
+      const getImageData = vi.fn().mockReturnValue({ data: mockPixels });
       const rawValues: number[] = [];
+      const processSample = vi.spyOn(ppgService, 'processSignalSample');
+      const createElement = document.createElement.bind(document);
 
       vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
         if (tag === 'video') {
@@ -1212,14 +1335,17 @@ describe('ppgService', () => {
             height: 240,
             getContext: vi.fn().mockReturnValue({
               drawImage: vi.fn(),
-              getImageData: vi.fn().mockReturnValue({ data: mockPixels }),
+              getImageData,
             }),
           } as unknown as HTMLCanvasElement;
         }
-        return document.createElement(tag);
+        return createElement(tag);
       });
 
-      await ppgService.start({ onRawSignal: (v) => rawValues.push(v) });
+      await ppgService.start({
+        torchEnabled: false,
+        callbacks: { onRawSignal: (value) => rawValues.push(value) },
+      });
 
       // Manually trigger a frame via captureFrame
       const captureFrame = (
@@ -1229,24 +1355,12 @@ describe('ppgService', () => {
       (ppgService as unknown as { lastFrameTime: number }).lastFrameTime = 0;
       captureFrame(10000);
 
-      // The raw value piped into processSignalSample should be derived from green (200),
-      // not red (50). After bandpass filtering the value will differ, but we can verify
-      // the signal fed is based on green by checking that processing greenAvg=200 differs
-      // from what redAvg=50 would produce.
-      // We do this indirectly: process both manually and compare.
-      resetService();
-
-      const greenOnlyValues: number[] = [];
-      ppgService.setCallbacks({ onRawSignal: (v) => greenOnlyValues.push(v) });
-      ppgService.processSignalSample(200, 0); // green channel value
-
-      const redOnlyValues: number[] = [];
-      resetService();
-      ppgService.setCallbacks({ onRawSignal: (v) => redOnlyValues.push(v) });
-      ppgService.processSignalSample(50, 0); // red channel value
-
-      // Green-based output should differ from red-based output
-      expect(greenOnlyValues[0]).not.toEqual(redOnlyValues[0]);
+      expect(getImageData).toHaveBeenCalledExactlyOnceWith(80, 60, 160, 120);
+      expect(processSample).toHaveBeenCalledExactlyOnceWith(expected, 10000);
+      expect(rawValues).toHaveLength(1);
+      if (expected < 1 || expected > 254) expect(rawValues[0]).toBe(0);
+      else expect(rawValues[0]).not.toBe(0);
+      ppgService.stop();
     });
   });
 
@@ -1255,6 +1369,55 @@ describe('ppgService', () => {
   // -------------------------------------------------------------------------
 
   describe('adaptive bandpass filter', () => {
+    it.each(['stop', 'start'] as const)(
+      'restores fresh-service filter output on %s after adapting the coefficients',
+      async (reset) => {
+        const service = createFreshService();
+        const fresh = createFreshService();
+        const internal = service as unknown as TestPPGService & { status: PPGStatus };
+        internal.recentIBIsMs = [1_000, 1_000, 1_000];
+        internal.updateAdaptiveFilter();
+        expect(internal.currentHighCut).toBe(2.5);
+        service.processSignalSample(120, 0);
+
+        if (reset === 'stop') {
+          internal.status = 'capturing';
+          service.stop();
+        } else {
+          mockGetUserMediaSuccess(makeMockStream());
+          const createElement = document.createElement.bind(document);
+          vi.spyOn(document, 'createElement').mockImplementation((tag: string) =>
+            tag === 'video'
+              ? ({
+                  srcObject: null,
+                  style: {},
+                  setAttribute: vi.fn(),
+                  play: vi.fn().mockResolvedValue(undefined),
+                  videoWidth: 320,
+                  videoHeight: 240,
+                } as unknown as HTMLVideoElement)
+              : createElement(tag)
+          );
+          await expect(service.start({ torchEnabled: false })).resolves.toEqual({ ok: true });
+        }
+
+        const actual: number[] = [];
+        const expected: number[] = [];
+        service.setCallbacks({ onRawSignal: (value) => actual.push(value) });
+        fresh.setCallbacks({ onRawSignal: (value) => expected.push(value) });
+        for (let index = 0; index < 90; index++) {
+          const value = 120 + 2 * Math.sin((2 * Math.PI * index) / 30);
+          service.processSignalSample(value, (index * 1000) / 30);
+          fresh.processSignalSample(value, (index * 1000) / 30);
+        }
+
+        expect(internal.currentLowCut).toBe(0.7);
+        expect(internal.currentHighCut).toBe(3.5);
+        expect(actual).toEqual(expected);
+        service.stop();
+      }
+    );
+
     it('updateAdaptiveFilter does not throw with insufficient IBI data', () => {
       (ppgService as unknown as { currentLowCut: number }).currentLowCut = 1.2;
       (ppgService as unknown as { currentHighCut: number }).currentHighCut = 2.4;

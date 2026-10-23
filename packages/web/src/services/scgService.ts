@@ -13,9 +13,8 @@
  * while still rejecting respiratory artifacts (1–5 Hz).
  *
  * Timing note: the service maintains a synthetic elapsed-time counter
- * incremented by event.interval each sample.  This makes it both accurate on
- * real hardware and fully deterministic in tests where performance.now() does
- * not advance between synchronous dispatches.
+ * incremented by event.interval each sample, or measured arrival intervals when
+ * the device does not provide one.
  */
 
 import {
@@ -129,6 +128,7 @@ class SCGService {
   // Sample-rate estimation
   private sampleRateHz: number = DEFAULT_SAMPLE_RATE_HZ;
   private lastIntervalMs: number = DEFAULT_INTERVAL_MS;
+  private lastMotionArrivalMs: number = 0;
   private rateEstimationTimestamps: number[] = []; // wall-clock ms
   private rateEstimated = false;
 
@@ -168,14 +168,18 @@ class SCGService {
   // Detected peak sample indices since start (for template extraction)
   private detectedPeakSampleIndices: number[] = [];
   private sampleIndex: number = 0;
+  private peakDetectorStartSampleIndex = 0;
+  private pendingPeaks: Array<{ index: number; timestamp: number }> = [];
 
   // Quality
   private currentQuality = 0;
   private motionGate = new AdaptiveMotionGate();
 
   // Bound event handler reference (needed for removeEventListener)
-  private boundHandleMotion = this.handleMotion.bind(this);
+  private boundHandleMotion: ((event: DeviceMotionEvent) => void) | null = null;
   private capacitorListenerId: { remove: () => Promise<void> } | null = null;
+  private startGeneration = 0;
+  private pendingStartPromise: Promise<SensorStartResult> | null = null;
   // ─── Public API ─────────────────────────────────────────────────────────────
 
   public setCallbacks(callbacks: SCGCallbacks): void {
@@ -190,29 +194,49 @@ class SCGService {
     return this.currentQuality;
   }
 
-  public async start(): Promise<SensorStartResult> {
-    if (this.status === 'capturing') return { ok: true };
+  public start(): Promise<SensorStartResult> {
+    if (this.pendingStartPromise) return this.pendingStartPromise;
+    if (this.status === 'capturing') return Promise.resolve({ ok: true });
 
+    const generation = ++this.startGeneration;
     this.setStatus('initializing');
     this.resetInternals();
+    const pending = this.startCapture(generation);
+    this.pendingStartPromise = pending;
+    void pending.finally(() => {
+      if (this.pendingStartPromise === pending) this.pendingStartPromise = null;
+    });
+    return pending;
+  }
+
+  private async startCapture(generation: number): Promise<SensorStartResult> {
+    const cancelled = () => sensorStartFailure('start-failed', 'Motion startup was cancelled.');
+    if (generation !== this.startGeneration) return cancelled();
 
     // Strategy 1: Use Capacitor Motion plugin on native (more reliable than DeviceMotionEvent in WebView)
     if (Capacitor.isNativePlatform()) {
       try {
         this.debug('SCG: Using Capacitor Motion plugin (native)');
-        this.capacitorListenerId = await Motion.addListener('accel', (event) => {
+        const listener = await Motion.addListener('accel', (event) => {
+          if (generation !== this.startGeneration || this.status !== 'capturing') return;
           // Convert Capacitor motion event to DeviceMotionEvent-like format
           const fakeEvent = {
             acceleration: event.acceleration,
             accelerationIncludingGravity: event.accelerationIncludingGravity,
-            interval: resolveMotionInterval(event.interval, this.lastIntervalMs),
+            interval: event.interval,
           } as DeviceMotionEvent;
           this.handleMotion(fakeEvent);
         });
+        if (generation !== this.startGeneration) {
+          void listener.remove();
+          return cancelled();
+        }
+        this.capacitorListenerId = listener;
         this.setStatus('capturing');
         this.debug('SCG: Capacitor Motion listener added, status: capturing');
         return { ok: true };
       } catch (err) {
+        if (generation !== this.startGeneration) return cancelled();
         console.warn('SCG: Capacitor Motion failed, falling back to web API:', err);
       }
     }
@@ -233,6 +257,7 @@ class SCGService {
         const permission = await (
           DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> }
         ).requestPermission();
+        if (generation !== this.startGeneration) return cancelled();
         if (permission !== 'granted') {
           const message =
             'Motion sensor permission denied. Please enable in iOS Settings > Privacy > Motion & Fitness.';
@@ -240,6 +265,7 @@ class SCGService {
           return sensorStartFailure('permission-denied', message);
         }
       } catch (err) {
+        if (generation !== this.startGeneration) return cancelled();
         const message = `Failed to request motion permission: ${
           err instanceof Error ? err.message : String(err)
         }`;
@@ -249,6 +275,10 @@ class SCGService {
     }
 
     this.debug('SCG: Using web DeviceMotionEvent API');
+    this.boundHandleMotion = (event) => {
+      if (generation !== this.startGeneration || this.status !== 'capturing') return;
+      this.handleMotion(event);
+    };
     window.addEventListener('devicemotion', this.boundHandleMotion);
     this.setStatus('capturing');
     this.debug('SCG: Status set to capturing');
@@ -256,14 +286,17 @@ class SCGService {
   }
 
   public stop(): void {
+    this.startGeneration++;
+    this.pendingStartPromise = null;
     // Remove Capacitor Motion listener if used
     if (this.capacitorListenerId) {
       void this.capacitorListenerId.remove();
       this.capacitorListenerId = null;
     }
     // Remove web API listener
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && this.boundHandleMotion) {
       window.removeEventListener('devicemotion', this.boundHandleMotion);
+      this.boundHandleMotion = null;
     }
     this.resetInternals();
     this.setStatus('idle');
@@ -283,8 +316,14 @@ class SCGService {
     }
 
     // ── 1. Advance synthetic clock ──
-    // Use event.interval when available; fall back to the last known interval.
-    const intervalMs = resolveMotionInterval(event.interval, this.lastIntervalMs);
+    // Missing device intervals must use actual arrivals, not the assumed sample rate.
+    const arrivalMs = performance.now();
+    const arrivalIntervalMs = resolveMotionInterval(
+      arrivalMs - this.lastMotionArrivalMs,
+      this.lastIntervalMs
+    );
+    this.lastMotionArrivalMs = arrivalMs;
+    const intervalMs = resolveMotionInterval(event.interval, arrivalIntervalMs);
     this.lastIntervalMs = intervalMs;
     this.elapsedMs += intervalMs;
     this.sampleCount++;
@@ -299,9 +338,9 @@ class SCGService {
 
     // ── 2. Sample-rate estimation ──
     if (!this.rateEstimated) {
-      this.rateEstimationTimestamps.push(performance.now());
+      this.rateEstimationTimestamps.push(arrivalMs);
 
-      const rateFromInterval = 1000 / intervalMs;
+      const rateFromInterval = 1000 / resolveMotionInterval(event.interval, Number.NaN);
       if (rateFromInterval >= 10 && rateFromInterval <= 1000) {
         this.applySampleRate(rateFromInterval);
       } else if (this.rateEstimationTimestamps.length >= RATE_ESTIMATION_EVENTS) {
@@ -351,8 +390,19 @@ class SCGService {
     const peak = this.peakDetector!.addSample(envelope, this.elapsedMs);
 
     if (peak) {
-      const peakSampleIndex = peak.index;
-      const peakElapsedMs = peak.timestamp ?? this.elapsedMs;
+      this.pendingPeaks.push({
+        index: this.peakDetectorStartSampleIndex + peak.index,
+        timestamp: peak.timestamp ?? this.elapsedMs,
+      });
+    }
+
+    // A streaming candidate refers to the previous sample. Wait until its
+    // trailing template window has arrived before accepting or rejecting it.
+    while (
+      this.pendingPeaks.length > 0 &&
+      this.pendingPeaks[0].index + this.TEMPLATE_WINDOW_SAMPLES < this.sampleIndex
+    ) {
+      const { index: peakSampleIndex, timestamp: peakElapsedMs } = this.pendingPeaks.shift()!;
 
       // Template validation: only apply after we have a template
       const accepted = this.validatePeakWithTemplate(peakSampleIndex);
@@ -529,13 +579,17 @@ class SCGService {
 
     for (const peakIdx of recentPeaks) {
       const segment = this.extractSegmentAroundSample(peakIdx, W);
-      if (segment !== null) segments.push(segment);
+      if (segment === null) continue;
+      const norm = Math.sqrt(segment.reduce((sum, value) => sum + value * value, 0));
+      if (norm > 1e-12) segments.push(segment.map((value) => value / norm));
     }
 
     if (segments.length === 0) return;
 
     const len = segments[0].length;
     const avg = new Array(len).fill(0);
+    // NCC compares shape independently of amplitude. Give each beat equal
+    // weight so a large startup transient cannot dominate the learned shape.
     for (const seg of segments) {
       for (let i = 0; i < len; i++) {
         avg[i] += seg[i] / segments.length;
@@ -574,7 +628,7 @@ class SCGService {
 
     const W = this.TEMPLATE_WINDOW_SAMPLES;
     const segment = this.extractSegmentAroundSample(peakSampleIdx, W);
-    if (segment === null) return true; // not enough history — accept
+    if (segment === null) return false;
 
     const ncc = this.normalizedCrossCorrelation(this.template, segment);
     if (ncc >= this.TEMPLATE_NCC_THRESHOLD) {
@@ -700,6 +754,8 @@ class SCGService {
     this.envelopeBuffer = [];
 
     const minPeakDistance = Math.max(1, Math.floor(fs * (60 / MAX_HEART_RATE_BPM)));
+    this.peakDetectorStartSampleIndex = this.sampleIndex;
+    this.pendingPeaks = [];
     this.peakDetector = new StreamingPeakDetector({
       minPeakDistance,
       thresholdFactor: 0.3, // Lower for quantized accelerometer data (0.1 m/s² resolution)
@@ -859,6 +915,7 @@ class SCGService {
     this.lastIntervalMs = DEFAULT_INTERVAL_MS;
     this.elapsedMs = 0;
     this.measurementStartMonotonicMs = performance.now();
+    this.lastMotionArrivalMs = this.measurementStartMonotonicMs;
     this.lastPeakElapsedMs = null;
     this.lastPeakDetectionElapsedMs = null;
     this.recentIBIs = [];
@@ -874,6 +931,8 @@ class SCGService {
     this.filteredHistoryMaxLen = Math.round(DEFAULT_SAMPLE_RATE_HZ * 6);
     this.detectedPeakSampleIndices = [];
     this.sampleIndex = 0;
+    this.peakDetectorStartSampleIndex = 0;
+    this.pendingPeaks = [];
     this.TEMPLATE_WINDOW_SAMPLES = Math.round(DEFAULT_SAMPLE_RATE_HZ * 0.1);
   }
 
