@@ -44,7 +44,7 @@ export function assessSignalQuality(signal: number[], peaks: DetectedPeak[]): nu
   const consistencyScore = Math.max(0, 1 - ampCV);
 
   // Weighted combination
-  return 0.4 * regularityScore + 0.3 * consistencyScore + 0.3 * snrScore;
+  return Math.max(0, Math.min(1, 0.4 * regularityScore + 0.3 * consistencyScore + 0.3 * snrScore));
 }
 
 /**

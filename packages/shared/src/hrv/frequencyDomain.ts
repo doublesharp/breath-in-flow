@@ -13,7 +13,9 @@ import type {
  * @param timestamps - sample times in seconds
  * @param values     - mean-subtracted RR intervals in ms
  * @param frequencies - frequencies (Hz) at which to evaluate power
- * @returns power spectral density at each frequency (ms²/Hz)
+ * @returns per-sample projection power at each frequency (ms²), using
+ * the classical unnormalized periodogram divided by N/2. This is not a
+ * calibrated power density; consumers report relative band/spectral power.
  */
 export function lombScargle(
   timestamps: number[],
@@ -56,11 +58,11 @@ export function lombScargle(
 
     // Normalized Lomb-Scargle power (units: ms²)
     let power = 0;
-    if (cosDenom > 1e-12 && sinDenom > 1e-12) {
-      power = 0.5 * ((cosNumer * cosNumer) / cosDenom + (sinNumer * sinNumer) / sinDenom);
-    }
+    if (cosDenom > 1e-12) power += (0.5 * (cosNumer * cosNumer)) / cosDenom;
+    if (sinDenom > 1e-12) power += (0.5 * (sinNumer * sinNumer)) / sinDenom;
 
-    // Normalize to PSD: divide by N/2 to get ms²/Hz
+    // Preserve the existing per-sample power normalization, including at
+    // frequencies where only one of the orthogonal bases is nondegenerate.
     result.push(power / (N / 2));
   }
 
@@ -150,12 +152,13 @@ function findPeakFrequency(
   frequencies: number[],
   psd: number[],
   low: number,
-  high: number
+  high: number,
+  includeHigh: boolean
 ): number {
   let maxPower = -Infinity;
   let peakFreq = (low + high) / 2;
   for (let i = 0; i < frequencies.length; i++) {
-    if (frequencies[i] >= low && frequencies[i] <= high) {
+    if (frequencies[i] >= low && (includeHigh ? frequencies[i] <= high : frequencies[i] < high)) {
       if (psd[i] > maxPower) {
         maxPower = psd[i];
         peakFreq = frequencies[i];
@@ -281,13 +284,15 @@ export function computeFrequencyDomainMetrics(
     frequencies,
     psd,
     FREQUENCY_BANDS.LF.low,
-    FREQUENCY_BANDS.LF.high
+    FREQUENCY_BANDS.LF.high,
+    false
   );
   const hfPeak = findPeakFrequency(
     frequencies,
     psd,
     FREQUENCY_BANDS.HF.low,
-    FREQUENCY_BANDS.HF.high
+    FREQUENCY_BANDS.HF.high,
+    true
   );
 
   return availableFrequencyDomain({

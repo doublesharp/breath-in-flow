@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   lombScargle,
   computeFrequencyDomainMetrics,
@@ -6,7 +6,7 @@ import {
   hanningWindow,
   integrateFrequencyBand,
 } from '../../src/hrv/frequencyDomain.js';
-import { analyzeRawHRV } from '../../src/hrv/index.js';
+import { analyzeRawHRV, analyzeHRV, finalizeMeasurement } from '../../src/hrv/index.js';
 import { FREQUENCY_BANDS } from '../../src/hrv/types.js';
 
 /**
@@ -42,6 +42,11 @@ function availableFrequency(rrIntervals: number[], timestamps: number[]) {
 }
 
 describe('lombScargle', () => {
+  it('retains the nondegenerate cosine basis at the sampling Nyquist frequency', () => {
+    // The normalized projection is sum(values²)/N = 1 even though sine is zero.
+    expect(lombScargle([0, 2, 4, 6], [1, -1, 1, -1], [0.25])[0]).toBeCloseTo(1, 12);
+  });
+
   it('returns array of same length as frequencies input', () => {
     const timestamps = [0, 1, 2, 3, 4];
     const values = [1, -1, 1, -1, 1];
@@ -157,27 +162,24 @@ describe('hanningWindow', () => {
     expect(windowed[Math.floor(N / 2)]).toBeGreaterThan(0.9);
   });
 
-  it('reduces spectral leakage: peak is narrower with windowing', () => {
-    // 0.1 Hz sinusoid: windowed PSD should have less power in adjacent bins
-    // than the raw signal (leakage check at an off-peak frequency)
-    const timestamps: number[] = [];
-    const values: number[] = [];
-    for (let t = 0; t < 60; t++) {
-      timestamps.push(t);
-      values.push(Math.sin(2 * Math.PI * 0.1 * t));
-    }
-
-    const offPeakFreqs = [0.05, 0.07]; // well away from the 0.1 Hz peak
+  it('reduces normalized sidelobes while retaining the sinusoid and window energy', () => {
+    // Non-bin-centered tone. Hann broadens the main lobe but lowers sidelobes.
+    const timestamps = Array.from({ length: 128 }, (_, i) => i);
+    const values = timestamps.map((t) => Math.sin(2 * Math.PI * 0.103 * t));
+    const frequencies = [0.103, 0.05, 0.06, 0.15, 0.17];
     const windowedValues = hanningWindow(values);
-
-    const psdRaw = lombScargle(timestamps, values, offPeakFreqs);
-    const psdWindowed = lombScargle(timestamps, windowedValues, offPeakFreqs);
-
-    const totalRaw = psdRaw.reduce((a, b) => a + b, 0);
-    const totalWindowed = psdWindowed.reduce((a, b) => a + b, 0);
-
-    // Off-peak leakage should be reduced (or equal in edge cases) after windowing
-    expect(totalWindowed).toBeLessThanOrEqual(totalRaw * 1.01);
+    const raw = lombScargle(timestamps, values, frequencies);
+    const windowed = lombScargle(timestamps, windowedValues, frequencies);
+    const rawSideRatio = raw.slice(1).reduce((sum, power) => sum + power, 0) / raw[0];
+    const windowedSideRatio =
+      windowed.slice(1).reduce((sum, power) => sum + power, 0) / windowed[0];
+    // Coherent amplitude gain is about 1/2, hence power near 1/4.
+    expect(windowed[0] / raw[0]).toBeGreaterThan(0.23);
+    expect(windowedSideRatio).toBeLessThan(rawSideRatio * 0.01);
+    expect(windowed[0] / raw[0]).toBeLessThan(0.27);
+    const energy = (samples: number[]) => samples.reduce((sum, value) => sum + value * value, 0);
+    expect(energy(windowedValues) / energy(values)).toBeGreaterThan(0.35);
+    expect(energy(windowedValues) / energy(values)).toBeLessThan(0.4);
   });
 
   it('handles length-1 input', () => {
@@ -187,6 +189,15 @@ describe('hanningWindow', () => {
 });
 
 describe('computeFrequencyDomainMetrics', () => {
+  it('excludes the 0.15 Hz HF boundary from the reported LF peak', () => {
+    const timestamps = Array.from({ length: 401 }, (_, i) => i * 1000);
+    const intervals = timestamps.map((t) => 1000 + 50 * Math.sin((2 * Math.PI * 0.15 * t) / 1000));
+    const result = availableFrequency(intervals, timestamps);
+    expect(result.hfPeak).toBe(0.15);
+    expect(result.lfPeak).toBeLessThan(0.15);
+    expect(result.lfPeak).toBeGreaterThanOrEqual(0.04);
+  });
+
   it('assigns the shared 0.15 Hz boundary to HF only', () => {
     const frequencies = [0.149, 0.15, 0.151];
     const power = [1, 10, 1];
@@ -416,5 +427,67 @@ describe('computeFrequencyDomainMetrics', () => {
     // Detrending + windowing must not destroy the primary oscillation
     expect(result.lfPeak).toBeCloseTo(0.1, 1);
     expect(result.lfPowerNorm).toBeGreaterThan(0);
+  });
+});
+
+describe('analysis spectrum work', () => {
+  const samples = (seconds: number) =>
+    Array.from({ length: seconds + 1 }, (_, i) => ({
+      timestamp: i * 1000,
+      interval: 1000 + 20 * Math.sin((2 * Math.PI * i) / 10),
+      quality: 0.9,
+      provenance: { source: 'ppg' as const, method: 'peak-detected' as const },
+    }));
+
+  it('skips trigonometry for a 61-sample quick check with no usable spectral metrics', () => {
+    const input = samples(60);
+    const measurement = finalizeMeasurement(input, 'quick-check');
+    expect(measurement.eligibility.eligible).toBe(true);
+    const sin = vi.spyOn(Math, 'sin');
+    const cos = vi.spyOn(Math, 'cos');
+    try {
+      const raw = analyzeRawHRV(input);
+      const finalized = analyzeHRV(measurement);
+      expect(raw.frequencyDomain).toEqual({ available: false, reason: 'duration-too-short' });
+      expect(finalized.frequencyDomain.available).toBe(false);
+      expect(finalized.timeDomain).toEqual(raw.timeDomain);
+      expect(sin.mock.calls.length + cos.mock.calls.length).toBe(0);
+    } finally {
+      sin.mockRestore();
+      cos.mockRestore();
+    }
+  });
+
+  it.each([undefined, 6])(
+    'skips rejected protocol spectrum work with breathing rate %s',
+    (rate) => {
+      const measurement = finalizeMeasurement(samples(300), 'full-analysis');
+      measurement.eligibility = {
+        ...measurement.eligibility,
+        eligible: false,
+        reasons: ['sensor-error'],
+        availableMetrics: [],
+      };
+      const sin = vi.spyOn(Math, 'sin');
+      const cos = vi.spyOn(Math, 'cos');
+      try {
+        const result = analyzeHRV(measurement, rate);
+        expect(result.frequencyDomain).toEqual({ available: false, reason: 'sensor-error' });
+        expect(result.resonance).toEqual({ available: false, reason: 'sensor-error' });
+        expect(sin.mock.calls.length + cos.mock.calls.length).toBe(0);
+      } finally {
+        sin.mockRestore();
+        cos.mockRestore();
+      }
+    }
+  );
+
+  it('retains spectrum work needed by a short eligible resonance trial', () => {
+    const result = analyzeHRV(finalizeMeasurement(samples(120), 'resonance-trial'), 6);
+    expect(result.frequencyDomain.available).toBe(false);
+    expect(result.resonance.available).toBe(true);
+    if (!result.resonance.available) throw new Error('Expected resonance metrics');
+    expect(result.resonance.value.waveformSmoothness).toBeGreaterThan(0.9);
+    expect(result.resonance.value.phaseSynchrony).toBeGreaterThan(0.99);
   });
 });

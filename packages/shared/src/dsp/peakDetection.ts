@@ -9,7 +9,7 @@ export interface PeakDetectionOptions {
   minPeakDistance: number; // Minimum samples between peaks (refractory period)
   thresholdFactor?: number; // Threshold as fraction of signal range (default 0.5)
   adaptiveWindow?: number; // Window size for adaptive threshold (default 10)
-  minProminence?: number; // Minimum peak prominence as fraction of running range (default 0, disabled)
+  minProminence?: number; // Fraction of batch range or streaming adaptive-window range (default 0)
   adaptiveRefractory?: boolean; // Adapt refractory period based on recent IBIs (default false)
 }
 
@@ -65,6 +65,30 @@ function minInRange(signal: number[], start: number, end: number): number {
 }
 
 /**
+ * Find each sample's minimum up to the nearest strictly higher sample (or edge).
+ * Scan left-to-right for left minima, and right-to-left for right minima.
+ */
+function prominenceMinima(signal: number[], direction: 1 | -1): number[] {
+  const minima = new Array<number>(signal.length);
+  const stack: number[] = [];
+  const start = direction === 1 ? 0 : signal.length - 1;
+
+  for (let i = start; i >= 0 && i < signal.length; i += direction) {
+    let minimum = signal[i];
+    // Stack heights decrease strictly. Each removed sample carries the minimum
+    // back to its higher neighbor, so smaller shoulders and equal peaks cannot
+    // truncate a valley. Each index is pushed and popped at most once: O(N).
+    while (stack.length > 0 && signal[stack[stack.length - 1]] <= signal[i]) {
+      minimum = Math.min(minimum, minima[stack.pop()!]);
+    }
+    minima[i] = minimum;
+    stack.push(i);
+  }
+
+  return minima;
+}
+
+/**
  * Detect peaks in a signal array (batch mode).
  * A peak is a local maximum above the adaptive threshold, with minimum distance enforced.
  * Optional prominence filter rejects small bumps relative to the signal range.
@@ -79,7 +103,6 @@ export function detectPeaks(signal: number[], options: PeakDetectionOptions): De
 
   const thresholds = computeAdaptiveThreshold(signal, adaptiveWindow, thresholdFactor);
   const candidatePeaks: DetectedPeak[] = [];
-  let lastPeakIndex = -minPeakDistance; // allow first peak at index 0
 
   for (let i = 1; i < signal.length - 1; i++) {
     const val = signal[i];
@@ -87,47 +110,37 @@ export function detectPeaks(signal: number[], options: PeakDetectionOptions): De
     if (val > signal[i - 1] && val > signal[i + 1]) {
       // Above adaptive threshold
       if (val > thresholds[i]) {
-        // Enforce refractory period
-        if (i - lastPeakIndex >= minPeakDistance) {
-          candidatePeaks.push({ index: i, amplitude: val });
-          lastPeakIndex = i;
-        }
+        candidatePeaks.push({ index: i, amplitude: val });
       }
     }
   }
 
-  // Prominence filter pass
-  if (minProminenceFraction <= 0 || candidatePeaks.length === 0) {
-    return candidatePeaks;
-  }
+  if (candidatePeaks.length === 0) return [];
 
-  const range = signalRange(signal);
+  const range = minProminenceFraction > 0 ? signalRange(signal) : 0;
   const minProminenceAbs = minProminenceFraction * range;
+  const leftMinima = minProminenceFraction > 0 ? prominenceMinima(signal, 1) : [];
+  const rightMinima = minProminenceFraction > 0 ? prominenceMinima(signal, -1) : [];
 
   const peaks: DetectedPeak[] = [];
-  for (let pi = 0; pi < candidatePeaks.length; pi++) {
-    const peak = candidatePeaks[pi];
+  let lastPeakIndex = -minPeakDistance;
+  for (const peak of candidatePeaks) {
     const peakIdx = peak.index;
-
-    // Find valley to the left: minimum between previous peak (or start) and this peak
-    const leftBoundary = pi > 0 ? candidatePeaks[pi - 1].index : 0;
-    const leftValley =
-      leftBoundary < peakIdx ? minInRange(signal, leftBoundary, peakIdx) : signal[0];
-
-    // Find valley to the right: minimum between this peak and next peak (or end)
-    const rightBoundary =
-      pi < candidatePeaks.length - 1 ? candidatePeaks[pi + 1].index : signal.length - 1;
-    const rightValley =
-      peakIdx < rightBoundary
-        ? minInRange(signal, peakIdx, rightBoundary)
-        : signal[signal.length - 1];
+    if (peakIdx - lastPeakIndex < minPeakDistance) continue;
+    if (minProminenceFraction <= 0) {
+      peaks.push(peak);
+      lastPeakIndex = peakIdx;
+      continue;
+    }
 
     // Prominence = peak height minus the higher of the two surrounding valleys
-    const referenceValley = Math.max(leftValley, rightValley);
+    const referenceValley = Math.max(leftMinima[peakIdx], rightMinima[peakIdx]);
     const prominence = peak.amplitude - referenceValley;
 
     if (prominence >= minProminenceAbs) {
       peaks.push(peak);
+      // Only accepted peaks start the refractory period.
+      lastPeakIndex = peakIdx;
     }
   }
 
@@ -159,10 +172,6 @@ export class StreamingPeakDetector {
   private recentIntervals: number[] = [];
   private currentRefractoryPeriod: number;
 
-  // For prominence check: track the minimum value since the last peak
-  private minSinceLastPeak: number = Infinity;
-  private hasSeenFirstValue = false;
-
   constructor(options: PeakDetectionOptions) {
     this.options = {
       minPeakDistance: options.minPeakDistance,
@@ -178,19 +187,16 @@ export class StreamingPeakDetector {
    * Add a new sample. Returns a DetectedPeak if the previous sample is identified as a peak.
    */
   addSample(value: number, timestamp?: number): DetectedPeak | null {
-    // Track running minimum for prominence computation
-    if (!this.hasSeenFirstValue) {
-      this.minSinceLastPeak = value;
-      this.hasSeenFirstValue = true;
-    } else {
-      if (value < this.minSinceLastPeak) {
-        this.minSinceLastPeak = value;
-      }
-    }
-
     this.buffer.push(value);
     this.timestamps.push(timestamp);
     const currentIndex = this.sampleIndex++;
+    // Keep the candidate's adaptive window and its confirming next sample.
+    // Trim before any early return so flat/noisy streams also stay bounded.
+    const retainedLength = Math.max(3, this.options.adaptiveWindow + 1);
+    if (this.buffer.length > retainedLength) {
+      this.buffer.shift();
+      this.timestamps.shift();
+    }
 
     // Need at least 3 samples: prev-prev, prev, current to determine if prev was a peak
     if (this.buffer.length < 3) {
@@ -235,12 +241,13 @@ export class StreamingPeakDetector {
 
     // Prominence check
     if (this.options.minProminence > 0) {
-      // Compute running range from the buffer
+      // Old amplitude excursions must age out of the prominence reference.
       const range = signalRange(this.buffer);
       const minProminenceAbs = this.options.minProminence * range;
 
-      // The valley since the last peak is the minimum value observed
-      const nearestValley = this.minSinceLastPeak;
+      const bufferStartIndex = currentIndex - this.buffer.length + 1;
+      const valleyStart = Math.max(0, this.lastPeakIndex - bufferStartIndex + 1);
+      const nearestValley = minInRange(this.buffer, valleyStart, this.buffer.length - 1);
       const prominence = candidateValue - nearestValley;
 
       if (prominence < minProminenceAbs) {
@@ -266,8 +273,6 @@ export class StreamingPeakDetector {
     }
 
     this.lastPeakIndex = candidateGlobalIndex;
-    // Reset valley tracker for the next inter-peak period
-    this.minSinceLastPeak = value; // start from current sample
 
     return {
       index: candidateGlobalIndex,
@@ -283,7 +288,5 @@ export class StreamingPeakDetector {
     this.sampleIndex = 0;
     this.recentIntervals = [];
     this.currentRefractoryPeriod = this.options.minPeakDistance;
-    this.minSinceLastPeak = Infinity;
-    this.hasSeenFirstValue = false;
   }
 }

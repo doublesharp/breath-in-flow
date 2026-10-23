@@ -88,6 +88,17 @@ describe('computeResonanceMetrics', () => {
     expect(result.phaseSynchrony).toBe(0);
   });
 
+  it('returns zero synchrony when all samples have the same reference phase', () => {
+    const result = computeResonanceMetrics([1000, 900, 1100], [0, 10000, 20000], 6, []);
+    expect(result.phaseSynchrony).toBe(0);
+  });
+
+  it('uses the independent basis when the sampled sine and cosine are collinear', () => {
+    const timestamps = [0, 5000, 10000, 15000];
+    const result = computeResonanceMetrics([1000, 750, 1000, 750], timestamps, 6, []);
+    expect(result.phaseSynchrony).toBeCloseTo(1, 12);
+  });
+
   it('handles spectra with no LF power and one LF point', () => {
     const noLfPower = computeResonanceMetrics([1000, 900], [0, 1000], 6, [
       { frequency: 0.2, power: 10 },
@@ -104,7 +115,7 @@ describe('computeResonanceMetrics', () => {
     });
   });
 
-  it('counts dominant peaks at both LF spectrum boundaries', () => {
+  it('counts peaks in the half-open LF band and excludes its HF boundary', () => {
     const result = computeResonanceMetrics([1000, 900], [0, 1000], 6, [
       { frequency: 0.04, power: 8 },
       { frequency: 0.08, power: 1 },
@@ -113,8 +124,40 @@ describe('computeResonanceMetrics', () => {
       { frequency: 0.15, power: 9 },
     ]);
 
-    expect(result.lfPeakCount).toBe(3);
-    expect(result.lfPeakAmplitude).toBe(9);
+    expect(result.lfPeakCount).toBe(2);
+    expect(result.lfPeakAmplitude).toBe(8);
+    expect(result.waveformSmoothness).toBeCloseTo(2 / 12, 12);
+  });
+
+  it('fits an exact sinusoidal heart rate at irregular times independently of time origin', () => {
+    const timestamps = [0, 250, 800, 1700, 2400, 2800, 3500, 5300, 7600, 10100, 13400, 17700];
+    const intervals = timestamps.map(
+      (t) => 60000 / (60 + 5 * Math.sin((2 * Math.PI * t) / 10000 + 0.4))
+    );
+    for (const offset of [0, 1250, 3700, 1_700_000_000_000]) {
+      const result = computeResonanceMetrics(
+        intervals,
+        timestamps.map((t) => t + offset),
+        6,
+        []
+      );
+      expect(result.phaseSynchrony).toBeCloseTo(1, 10);
+    }
+  });
+
+  it('reports the square root of explained variance for mixed-frequency heart rate', () => {
+    const timestamps = Array.from({ length: 200 }, (_, i) => i * 1000);
+    const intervals = timestamps.map(
+      (t) =>
+        60000 /
+        (60 +
+          8 * Math.sin((2 * Math.PI * t) / 10000) +
+          6 * Math.cos((2 * Math.PI * 0.23 * t) / 1000))
+    );
+    expect(computeResonanceMetrics(intervals, timestamps, 6, []).phaseSynchrony).toBeCloseTo(
+      0.8,
+      10
+    );
   });
 
   it('returns high waveform smoothness for clean sinusoidal oscillation at breathing freq', () => {

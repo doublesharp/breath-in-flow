@@ -18,7 +18,7 @@ export class BiquadFilter {
   }
 
   filter(sample: number): number {
-    // Direct Form II Transposed
+    // Direct Form I
     const y =
       this.b[0] * sample +
       this.b[1] * this.x1 +
@@ -67,24 +67,23 @@ export class SOSFilter {
 }
 
 /**
- * Compute 2nd order Butterworth lowpass digital coefficients via bilinear transform.
- * Returns [b0, b1, b2, a0, a1, a2] (a0 normalized to 1).
+ * Compute a lowpass pole-pair section via the bilinear transform, a0 = 1.
+ * damping = 1/Q is determined by the poles of the complete Butterworth filter.
  */
-function butterworth2ndOrderLP(cutoffHz: number, sampleRateHz: number): BiquadFilter {
-  // Pre-warp the cutoff frequency
-  const Wd = 2 * sampleRateHz * Math.tan((Math.PI * cutoffHz) / sampleRateHz);
-  // Bilinear transform for 2nd order Butterworth LP
-  // H(s) = Wn^2 / (s^2 + sqrt(2)*Wn*s + Wn^2)
-  const k = Wd / (2 * sampleRateHz); // normalized pre-warped freq (= tan(pi*fc/fs))
+function butterworth2ndOrderLP(
+  cutoffHz: number,
+  sampleRateHz: number,
+  damping: number
+): BiquadFilter {
+  const k = Math.tan((Math.PI * cutoffHz) / sampleRateHz);
   const k2 = k * k;
-  const sqrt2 = Math.SQRT2;
-  const norm = 1 / (1 + sqrt2 * k + k2);
+  const norm = 1 / (1 + damping * k + k2);
 
   const b0 = k2 * norm;
   const b1 = 2 * k2 * norm;
   const b2 = k2 * norm;
   const a1 = 2 * (k2 - 1) * norm;
-  const a2 = (1 - sqrt2 * k + k2) * norm;
+  const a2 = (1 - damping * k + k2) * norm;
 
   return new BiquadFilter([b0, b1, b2], [1, a1, a2]);
 }
@@ -92,37 +91,59 @@ function butterworth2ndOrderLP(cutoffHz: number, sampleRateHz: number): BiquadFi
 /**
  * Compute 2nd order Butterworth highpass digital coefficients via bilinear transform.
  */
-function butterworth2ndOrderHP(cutoffHz: number, sampleRateHz: number): BiquadFilter {
+function butterworth2ndOrderHP(
+  cutoffHz: number,
+  sampleRateHz: number,
+  damping: number
+): BiquadFilter {
   const k = Math.tan((Math.PI * cutoffHz) / sampleRateHz);
   const k2 = k * k;
-  const sqrt2 = Math.SQRT2;
-  const norm = 1 / (1 + sqrt2 * k + k2);
+  const norm = 1 / (1 + damping * k + k2);
 
   const b0 = norm;
   const b1 = -2 * norm;
   const b2 = norm;
   const a1 = 2 * (k2 - 1) * norm;
-  const a2 = (1 - sqrt2 * k + k2) * norm;
+  const a2 = (1 - damping * k + k2) * norm;
 
   return new BiquadFilter([b0, b1, b2], [1, a1, a2]);
 }
 
-export function createLowpassFilter(cutoffHz: number, sampleRateHz: number, order = 2): SOSFilter {
-  const numSections = Math.ceil(order / 2);
-  const sections: BiquadFilter[] = [];
-  for (let i = 0; i < numSections; i++) {
-    sections.push(butterworth2ndOrderLP(cutoffHz, sampleRateHz));
+function butterworthSections(
+  cutoffHz: number,
+  sampleRateHz: number,
+  order: number,
+  highpass: boolean
+): BiquadFilter[] {
+  if (!Number.isInteger(order) || order < 1) {
+    throw new RangeError('Filter order must be a positive integer');
   }
-  return new SOSFilter(sections);
+  const sections: BiquadFilter[] = [];
+  if (order % 2 === 1) {
+    // The unpaired real pole contributes one first-order section.
+    const k = Math.tan((Math.PI * cutoffHz) / sampleRateHz);
+    const b0 = (highpass ? 1 : k) / (1 + k);
+    sections.push(new BiquadFilter([b0, highpass ? -b0 : b0, 0], [1, (k - 1) / (k + 1), 0]));
+  }
+  // Conjugate poles on the left unit semicircle. Order 4 gives
+  // Q = 0.541196... and 1.306562..., not two identical order-2 sections.
+  for (let i = Math.floor(order / 2) - 1; i >= 0; i--) {
+    const damping = 2 * Math.sin(((2 * i + 1) * Math.PI) / (2 * order));
+    sections.push(
+      highpass
+        ? butterworth2ndOrderHP(cutoffHz, sampleRateHz, damping)
+        : butterworth2ndOrderLP(cutoffHz, sampleRateHz, damping)
+    );
+  }
+  return sections;
+}
+
+export function createLowpassFilter(cutoffHz: number, sampleRateHz: number, order = 2): SOSFilter {
+  return new SOSFilter(butterworthSections(cutoffHz, sampleRateHz, order, false));
 }
 
 export function createHighpassFilter(cutoffHz: number, sampleRateHz: number, order = 2): SOSFilter {
-  const numSections = Math.ceil(order / 2);
-  const sections: BiquadFilter[] = [];
-  for (let i = 0; i < numSections; i++) {
-    sections.push(butterworth2ndOrderHP(cutoffHz, sampleRateHz));
-  }
-  return new SOSFilter(sections);
+  return new SOSFilter(butterworthSections(cutoffHz, sampleRateHz, order, true));
 }
 
 export function createBandpassFilter(
@@ -131,14 +152,10 @@ export function createBandpassFilter(
   sampleRateHz: number,
   order = 2
 ): SOSFilter {
-  // Implement bandpass as HP followed by LP (cascade approach)
-  const numSections = Math.ceil(order / 2);
-  const sections: BiquadFilter[] = [];
-  for (let i = 0; i < numSections; i++) {
-    sections.push(butterworth2ndOrderHP(lowHz, sampleRateHz));
-  }
-  for (let i = 0; i < numSections; i++) {
-    sections.push(butterworth2ndOrderLP(highHz, sampleRateHz));
-  }
-  return new SOSFilter(sections);
+  // Preserve the cascade convention: each leg has the requested order,
+  // so the combined HP + LP transfer function has order 2 * order.
+  return new SOSFilter([
+    ...butterworthSections(lowHz, sampleRateHz, order, true),
+    ...butterworthSections(highHz, sampleRateHz, order, false),
+  ]);
 }

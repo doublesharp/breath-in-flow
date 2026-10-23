@@ -40,6 +40,18 @@ function generateNoise(numSamples: number, seed = 123): number[] {
 }
 
 describe('assessSignalQuality', () => {
+  it('keeps a negative-baseline signal quality within the documented range', () => {
+    const quality = assessSignalQuality(
+      [-5, -4, -5, -4, -5],
+      [
+        { index: 1, amplitude: -4 },
+        { index: 3, amplitude: -4 },
+      ]
+    );
+    expect(quality).toBeGreaterThanOrEqual(0);
+    expect(quality).toBeLessThanOrEqual(1);
+  });
+
   it('returns high quality for perfect sine wave with regular peaks', () => {
     // Perfect sine at 1 Hz, 100 Hz sample rate
     const signal = generateSine(1, 100, 600, 1);

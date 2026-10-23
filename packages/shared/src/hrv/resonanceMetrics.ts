@@ -3,29 +3,43 @@ import { FREQUENCY_BANDS } from './types.js';
 import type { ResonanceMetrics, SpectralPoint } from './types.js';
 
 /**
- * Computes Pearson correlation coefficient between two equal-length arrays.
+ * Square root of the variance explained by a joint sine/cosine fit with an
+ * intercept. Irregular sampling makes the centered bases non-orthogonal, so
+ * summing their independent squared correlations would double-count covariance.
  */
-function pearsonCorrelation(x: number[], y: number[]): number {
-  const n = x.length;
-  if (n < 2) return 0;
-
-  const mx = mean(x);
-  const my = mean(y);
-
-  let num = 0;
-  let dx2 = 0;
-  let dy2 = 0;
-
-  for (let i = 0; i < n; i++) {
-    const dx = x[i] - mx;
-    const dy = y[i] - my;
-    num += dx * dy;
-    dx2 += dx * dx;
-    dy2 += dy * dy;
+function sinusoidalFitCorrelation(values: number[], cosRef: number[], sinRef: number[]): number {
+  const meanValue = mean(values);
+  const meanCos = mean(cosRef);
+  const meanSin = mean(sinRef);
+  let cc = 0;
+  let ss = 0;
+  let cs = 0;
+  let yc = 0;
+  let ys = 0;
+  let yy = 0;
+  for (let i = 0; i < values.length; i++) {
+    const y = values[i] - meanValue;
+    const c = cosRef[i] - meanCos;
+    const s = sinRef[i] - meanSin;
+    cc += c * c;
+    ss += s * s;
+    cs += c * s;
+    yc += y * c;
+    ys += y * s;
+    yy += y * y;
   }
-
-  const denom = Math.sqrt(dx2 * dy2);
-  return denom < 1e-12 ? 0 : num / denom;
+  if (yy <= 1e-12) return 0;
+  const determinant = cc * ss - cs * cs;
+  let explained: number;
+  if (determinant > 1e-12 * (cc + ss) ** 2) {
+    explained = (ss * yc * yc - 2 * cs * yc * ys + cc * ys * ys) / determinant;
+  } else {
+    // At degenerate sample phases, use the single independent basis.
+    const energy = Math.max(cc, ss);
+    const covariance = cc >= ss ? yc : ys;
+    explained = energy > 1e-12 ? (covariance * covariance) / energy : 0;
+  }
+  return Math.sqrt(Math.min(1, Math.max(0, explained / yy)));
 }
 
 /**
@@ -69,7 +83,8 @@ export function computeResonanceMetrics(
 
   // Compute instantaneous HR series (BPM)
   const instantaneousHR = rrIntervals.map((rr) => 60000 / rr);
-  const timestampsSec = timestamps.map((t) => t / 1000);
+  // Subtract before converting to seconds to avoid large epoch-angle errors.
+  const timestampsSec = timestamps.map((t) => (t - timestamps[0]) / 1000);
 
   // --- Peak-to-trough amplitude ---
   let peakToTroughAmplitude = 0;
@@ -122,7 +137,7 @@ export function computeResonanceMetrics(
 
     for (const point of spectrum) {
       const f = point.frequency;
-      if (f >= FREQUENCY_BANDS.LF.low && f <= FREQUENCY_BANDS.LF.high) {
+      if (f >= FREQUENCY_BANDS.LF.low && f < FREQUENCY_BANDS.LF.high) {
         totalLFPower += point.power;
         if (f >= focalLow && f <= focalHigh) {
           focalPower += point.power;
@@ -134,25 +149,19 @@ export function computeResonanceMetrics(
   }
 
   // --- Phase synchrony ---
-  // Correlate instantaneous HR with expected breathing signal.
-  // Since the absolute phase offset between breathing and HR is unknown,
-  // we compute correlation with both cosine and sine reference signals and
-  // take the maximum absolute value (equivalent to amplitude of cross-correlation).
+  // Absolute pacer phase is not retained. Fit both quadratures jointly so
+  // their covariance cannot make synchrony depend on timestamp origin.
   let phaseSynchrony = 0;
   if (instantaneousHR.length >= 2) {
     const cosRef = timestampsSec.map((t) => Math.cos(2 * Math.PI * breathingFreqHz * t));
     const sinRef = timestampsSec.map((t) => Math.sin(2 * Math.PI * breathingFreqHz * t));
-    const corrCos = pearsonCorrelation(instantaneousHR, cosRef);
-    const corrSin = pearsonCorrelation(instantaneousHR, sinRef);
-    // Amplitude of the complex correlation: sqrt(corrCos² + corrSin²)
-    // This is phase-independent and reflects the degree of synchrony
-    phaseSynchrony = Math.min(1, Math.sqrt(corrCos * corrCos + corrSin * corrSin));
+    phaseSynchrony = sinusoidalFitCorrelation(instantaneousHR, cosRef, sinRef);
   }
 
   // --- LF peak count ---
   // Find local maxima in LF band above 10% of max peak amplitude
   const lfPoints = spectrum.filter(
-    (p) => p.frequency >= FREQUENCY_BANDS.LF.low && p.frequency <= FREQUENCY_BANDS.LF.high
+    (p) => p.frequency >= FREQUENCY_BANDS.LF.low && p.frequency < FREQUENCY_BANDS.LF.high
   );
 
   let lfPeakCount = 0;

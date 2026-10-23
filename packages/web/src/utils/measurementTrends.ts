@@ -82,27 +82,19 @@ export function buildWithinPersonInsights(measurements: HrvMeasurement[]): Welln
   const eligibleMeasurements = measurements
     .filter((measurement) => hasAvailableMetric(measurement, 'rmssd'))
     .sort((left, right) => right.completedAt.getTime() - left.completedAt.getTime());
-  let anchor: HrvMeasurement | undefined;
-  let prior: HrvMeasurement[] = [];
-  for (const candidate of eligibleMeasurements) {
-    // A baseline must precede the reading, even when falling back to an older
-    // protocol cohort. No chronological sort is needed to average this set.
-    const candidatePrior = eligibleMeasurements.filter(
-      (measurement) =>
-        measurement.id !== candidate.id &&
-        measurement.completedAt.getTime() < candidate.completedAt.getTime() &&
-        measurement.type === candidate.type &&
-        hasComparableDuration(measurement, candidate) &&
-        hasComparableContext(measurement, candidate)
-    );
-    if (candidatePrior.length >= 2) {
-      anchor = candidate;
-      prior = candidatePrior;
-      break;
-    }
-  }
-
+  const anchor = eligibleMeasurements[0];
   if (!anchor) return [];
+  // The message describes the latest eligible reading. An older protocol
+  // cohort cannot substitute for a missing baseline for that reading.
+  const prior = eligibleMeasurements.filter(
+    (measurement) =>
+      measurement.id !== anchor.id &&
+      measurement.completedAt.getTime() < anchor.completedAt.getTime() &&
+      measurement.type === anchor.type &&
+      hasComparableDuration(measurement, anchor) &&
+      hasComparableContext(measurement, anchor)
+  );
+  if (prior.length < 2) return [];
   const priorAverage =
     prior.reduce((sum, measurement) => sum + measurement.analysis.timeDomain.rmssd, 0) /
     prior.length;

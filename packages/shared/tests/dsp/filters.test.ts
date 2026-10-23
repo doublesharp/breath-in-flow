@@ -99,6 +99,16 @@ describe('SOSFilter', () => {
 });
 
 describe('createLowpassFilter', () => {
+  it.each([1, 2, 3, 4, 5, 6])('has the Butterworth magnitude response for order %i', (order) => {
+    for (const frequency of [5, 10, 20]) {
+      const signal = generateSineSignal([frequency], [1], 100, 2000);
+      const output = createLowpassFilter(10, 100, order).filterBatch(signal);
+      const warpedRatio = Math.tan((Math.PI * frequency) / 100) / Math.tan((Math.PI * 10) / 100);
+      const expectedGain = 1 / Math.sqrt(1 + warpedRatio ** (2 * order));
+      expect(rms(output.slice(1000)) / rms(signal.slice(1000))).toBeCloseTo(expectedGain, 8);
+    }
+  });
+
   it('attenuates high frequencies while passing low frequencies', () => {
     const fs = 1000; // 1 kHz sample rate
     const cutoff = 10; // 10 Hz cutoff
@@ -139,6 +149,16 @@ describe('createLowpassFilter', () => {
 });
 
 describe('createHighpassFilter', () => {
+  it.each([1, 2, 3, 4, 5, 6])('has the Butterworth magnitude response for order %i', (order) => {
+    for (const frequency of [5, 10, 20]) {
+      const signal = generateSineSignal([frequency], [1], 100, 2000);
+      const output = createHighpassFilter(10, 100, order).filterBatch(signal);
+      const warpedRatio = Math.tan((Math.PI * 10) / 100) / Math.tan((Math.PI * frequency) / 100);
+      const expectedGain = 1 / Math.sqrt(1 + warpedRatio ** (2 * order));
+      expect(rms(output.slice(1000)) / rms(signal.slice(1000))).toBeCloseTo(expectedGain, 8);
+    }
+  });
+
   it('attenuates low frequencies while passing high frequencies', () => {
     const fs = 1000;
     const cutoff = 10; // 10 Hz cutoff
@@ -176,6 +196,22 @@ describe('createHighpassFilter', () => {
 });
 
 describe('createBandpassFilter', () => {
+  it.each([1, 3, 4])('uses order %i for each cascaded bandpass leg', (order) => {
+    const signal = generateSineSignal([10], [1], 100, 2000);
+    const output = createBandpassFilter(5, 20, 100, order).filterBatch(signal);
+    const lowRatio = Math.tan((Math.PI * 5) / 100) / Math.tan((Math.PI * 10) / 100);
+    const highRatio = Math.tan((Math.PI * 10) / 100) / Math.tan((Math.PI * 20) / 100);
+    const expectedGain =
+      1 / Math.sqrt((1 + lowRatio ** (2 * order)) * (1 + highRatio ** (2 * order)));
+    expect(rms(output.slice(1000)) / rms(signal.slice(1000))).toBeCloseTo(expectedGain, 8);
+  });
+
+  it.each([0, -1, 2.5, NaN])('rejects invalid filter order %s', (order) => {
+    expect(() => createLowpassFilter(10, 100, order)).toThrow(RangeError);
+    expect(() => createHighpassFilter(10, 100, order)).toThrow(RangeError);
+    expect(() => createBandpassFilter(5, 20, 100, order)).toThrow(RangeError);
+  });
+
   it('passes only the target frequency band', () => {
     const fs = 1000;
     const numSamples = 3000;

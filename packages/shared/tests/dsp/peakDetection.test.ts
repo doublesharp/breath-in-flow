@@ -65,13 +65,8 @@ describe('detectPeaks (batch)', () => {
       adaptiveWindow: 30,
     });
 
-    // Each peak should be near the quarter-period mark
-    // For sine starting at 0, peak at n = fs/4 = 25, 125, 225...
-    if (peaks.length > 0) {
-      const firstPeakPos = peaks[0].index;
-      expect(firstPeakPos).toBeGreaterThan(20);
-      expect(firstPeakPos).toBeLessThan(30);
-    }
+    // For sine starting at 0, every peak is at a quarter-period offset.
+    expect(peaks.map((peak) => peak.index)).toEqual([25, 125, 225, 325, 425]);
   });
 
   it('enforces minimum peak distance', () => {
@@ -83,6 +78,7 @@ describe('detectPeaks (batch)', () => {
       thresholdFactor: 0.3,
     });
 
+    expect(peaks).toHaveLength(5);
     for (let i = 1; i < peaks.length; i++) {
       const distance = peaks[i].index - peaks[i - 1].index;
       expect(distance).toBeGreaterThanOrEqual(minDist);
@@ -117,6 +113,71 @@ describe('detectPeaks (batch)', () => {
 });
 
 describe('detectPeaks (batch) — prominence filter', () => {
+  it.each([
+    {
+      name: 'a smaller right shoulder inside the refractory period',
+      signal: [0, 0, 10, 9, 9.5, 0, 0, 0, 0, 0],
+      minPeakDistance: 4,
+      indices: [2],
+    },
+    {
+      name: 'a smaller rejected left shoulder before the dominant peak',
+      signal: [0, 0, 9.5, 9, 10, 0, 0, 0, 0, 0],
+      minPeakDistance: 4,
+      indices: [4],
+    },
+    {
+      name: 'smaller shoulders on both sides of the dominant peak',
+      signal: [0, 0, 9.5, 9, 10, 9, 9.5, 0, 0, 0],
+      minPeakDistance: 4,
+      indices: [4],
+    },
+    {
+      name: 'multiple smaller shoulders extending past the refractory period',
+      signal: [0, 0, 10, 9, 9.5, 8, 9, 7, 8.5, 0, 0],
+      minPeakDistance: 4,
+      indices: [2],
+    },
+    {
+      name: 'equal-height peaks separated by a shallow valley',
+      signal: [0, 0, 10, 9, 10, 0, 0, 0],
+      minPeakDistance: 1,
+      indices: [2, 4],
+    },
+  ])('finds the full prominence despite $name', ({ signal, minPeakDistance, indices }) => {
+    const peaks = detectPeaks(signal, {
+      minPeakDistance,
+      adaptiveWindow: 10,
+      thresholdFactor: 0,
+      minProminence: 0.2,
+    });
+
+    expect(peaks).toEqual(indices.map((index) => ({ index, amplitude: signal[index] })));
+  });
+
+  it('stops prominence at higher samples even when they are not peak candidates', () => {
+    // The taller plateau is not a strict local maximum, but it bounds both small peaks.
+    expect(
+      detectPeaks([0, 2, 1, 10, 10, 1, 2, 0], {
+        minPeakDistance: 1,
+        adaptiveWindow: 2,
+        thresholdFactor: 0,
+        minProminence: 0.15,
+      })
+    ).toEqual([]);
+  });
+
+  it('does not let a rejected bump consume the refractory period', () => {
+    expect(
+      detectPeaks([0, 0.2, 0, 1, 0, 0, 0], {
+        minPeakDistance: 4,
+        adaptiveWindow: 10,
+        thresholdFactor: 0.1,
+        minProminence: 0.5,
+      })
+    ).toEqual([{ index: 3, amplitude: 1 }]);
+  });
+
   it('rejects low-prominence peaks when minProminence is set', () => {
     // Construct a signal with one tall peak and one shallow bump
     // Tall peak at index 10: rises to 10 above a baseline of 0
@@ -149,14 +210,8 @@ describe('detectPeaks (batch) — prominence filter', () => {
       adaptiveWindow: 5,
     });
 
-    // Without prominence filter, both bumps may be detected
-    // With prominence filter, the shallow bump should be rejected
-    expect(peaksWithProminence.length).toBeLessThanOrEqual(peaksWithoutProminence.length);
-
-    // Any remaining peaks should be the tall one
-    for (const p of peaksWithProminence) {
-      expect(p.amplitude).toBeGreaterThanOrEqual(5);
-    }
+    expect(peaksWithoutProminence.map((peak) => peak.index)).toEqual([10, 30]);
+    expect(peaksWithProminence).toEqual([{ index: 10, amplitude: 10 }]);
   });
 
   it('accepts all peaks when minProminence is 0 (disabled)', () => {
@@ -180,6 +235,38 @@ describe('detectPeaks (batch) — prominence filter', () => {
 });
 
 describe('StreamingPeakDetector', () => {
+  it('recovers after an old amplitude spike leaves the adaptive window', () => {
+    const detector = new StreamingPeakDetector({
+      minPeakDistance: 20,
+      adaptiveWindow: 30,
+      thresholdFactor: 0.1,
+      minProminence: 0.5,
+    });
+    const signal = Array.from({ length: 1000 }, (_, i) =>
+      i === 10 ? 100 : i >= 60 && i % 50 === 10 ? 1 : 0
+    );
+    const peaks = signal
+      .map((value, i) => detector.addSample(value, i * 10))
+      .filter((peak) => peak !== null);
+    expect(peaks).toEqual([
+      { index: 10, amplitude: 100, timestamp: 100 },
+      ...Array.from({ length: 19 }, (_, i) => ({
+        index: 60 + i * 50,
+        amplitude: 1,
+        timestamp: (60 + i * 50) * 10,
+      })),
+    ]);
+  });
+
+  it('bounds retained samples and timestamps even when no peaks are found', () => {
+    const detector = new StreamingPeakDetector({ minPeakDistance: 20, adaptiveWindow: 30 });
+    for (let i = 0; i < 10_000; i++) detector.addSample(0, i);
+    // Inspect only retained storage: output assertions alone cannot detect a memory leak.
+    const retained = detector as unknown as { buffer: number[]; timestamps: number[] };
+    expect(retained.buffer.length).toBeLessThanOrEqual(32);
+    expect(retained.timestamps.length).toBe(retained.buffer.length);
+  });
+
   it('detects peaks in a sine wave (streaming mode)', () => {
     const signal = generateSine(1, 100, 500, 1, 0);
     const detector = new StreamingPeakDetector({
@@ -283,7 +370,7 @@ describe('StreamingPeakDetector', () => {
     signal[10] = 10;
     signal[11] = 7;
     signal[12] = 3;
-    // Shallow bump at index 50 (prominence ~1, below 30% of range ~10)
+    // Shallow bump while the tall peak is still in the adaptive window.
     signal[48] = 0.4;
     signal[49] = 0.8;
     signal[50] = 1.0;
@@ -293,14 +380,14 @@ describe('StreamingPeakDetector', () => {
     const detectorWithProminence = new StreamingPeakDetector({
       minPeakDistance: 5,
       thresholdFactor: 0.1,
-      adaptiveWindow: 5,
+      adaptiveWindow: 60,
       minProminence: 0.3,
     });
 
     const detectorWithout = new StreamingPeakDetector({
       minPeakDistance: 5,
       thresholdFactor: 0.1,
-      adaptiveWindow: 5,
+      adaptiveWindow: 60,
     });
 
     const peaksWithProminence = signal
@@ -370,6 +457,48 @@ describe('StreamingPeakDetector', () => {
 });
 
 describe('peak detection fuzz invariants', () => {
+  it('matches direct prominence searches on randomized signals with ties and shoulders', () => {
+    const rng = createRng(0x9eae2027);
+
+    for (let trial = 0; trial < 100; trial++) {
+      const signal = Array.from({ length: randomInt(rng, 3, 80) }, () => randomInt(rng, -5, 10));
+      const minPeakDistance = randomInt(rng, 1, 8);
+      const minProminence = randomInt(rng, 1, 10) / 10;
+      const requiredProminence = minProminence * (Math.max(...signal) - Math.min(...signal));
+      const expected: { index: number; amplitude: number }[] = [];
+
+      for (let i = 1; i < signal.length - 1; i++) {
+        const amplitude = signal[i];
+        if (amplitude <= signal[i - 1] || amplitude <= signal[i + 1]) continue;
+
+        let leftMin = amplitude;
+        for (let j = i - 1; j >= 0 && signal[j] <= amplitude; j--) {
+          leftMin = Math.min(leftMin, signal[j]);
+        }
+        let rightMin = amplitude;
+        for (let j = i + 1; j < signal.length && signal[j] <= amplitude; j++) {
+          rightMin = Math.min(rightMin, signal[j]);
+        }
+
+        if (amplitude - Math.max(leftMin, rightMin) < requiredProminence) continue;
+        if (expected.length > 0 && i - expected[expected.length - 1].index < minPeakDistance) {
+          continue;
+        }
+        expected.push({ index: i, amplitude });
+      }
+
+      // With a two-sample window and factor 0, every strict local maximum clears threshold.
+      expect(
+        detectPeaks(signal, {
+          minPeakDistance,
+          minProminence,
+          adaptiveWindow: 2,
+          thresholdFactor: 0,
+        })
+      ).toEqual(expected);
+    }
+  });
+
   it('detects randomized impulse trains without violating refractory distance', () => {
     const rng = createRng(0x9eae2026);
 

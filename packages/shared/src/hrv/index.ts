@@ -89,6 +89,15 @@ function normalizeIBISamples(samples: IBISample[]): {
  * @param breathingRateBPM  - optional breathing rate for resonance metrics
  */
 export function analyzeRawHRV(samples: IBISample[], breathingRateBPM?: number): HRVAnalysis {
+  return analyzeSamples(samples, breathingRateBPM, true, true);
+}
+
+function analyzeSamples(
+  samples: IBISample[],
+  breathingRateBPM: number | undefined,
+  allowFrequencyDomain: boolean,
+  allowResonance: boolean
+): HRVAnalysis {
   const normalized = normalizeIBISamples(samples);
   const usableSamples = normalized.samples;
 
@@ -105,14 +114,18 @@ export function analyzeRawHRV(samples: IBISample[], breathingRateBPM?: number): 
   const timeDomain = computeTimeDomainMetrics(cleanedIntervals);
 
   // 4. Frequency-domain metrics
-  const computedFrequencyDomain = computeFrequencyDomainMetrics(
-    cleanedIntervals,
-    cleanedTimestamps
-  );
   const hasBreathingContext =
     breathingRateBPM != null && Number.isFinite(breathingRateBPM) && breathingRateBPM > 0;
   const analysisDurationSeconds =
     cleanedTimestamps.length > 1 ? (cleanedTimestamps.at(-1)! - cleanedTimestamps[0]) / 1_000 : 0;
+  // Short recordings without breathing context and ineligible protocols
+  // cannot use the spectrum. Eligible resonance trials still need it.
+  const needsSpectrum = hasBreathingContext
+    ? allowResonance
+    : allowFrequencyDomain && analysisDurationSeconds >= 300;
+  const computedFrequencyDomain = needsSpectrum
+    ? computeFrequencyDomainMetrics(cleanedIntervals, cleanedTimestamps)
+    : ({ available: false, reason: 'protocol-not-supported' } as const);
   const frequencyDomain = hasBreathingContext
     ? ({ available: false, reason: 'protocol-not-supported' } as const)
     : analysisDurationSeconds < 300
@@ -175,8 +188,13 @@ export function analyzeHRV(
   measurement: FinalizedMeasurement,
   breathingRateBPM?: number
 ): HRVAnalysis {
-  const analysis = analyzeRawHRV(measurement.samples, breathingRateBPM);
   const { eligibility } = measurement;
+  const analysis = analyzeSamples(
+    measurement.samples,
+    breathingRateBPM,
+    eligibility.availableMetrics.includes('frequency-domain'),
+    eligibility.availableMetrics.includes('resonance-training')
+  );
   const unavailableReason =
     eligibility.reasons[0] ??
     (eligibility.eligible ? 'protocol-not-supported' : 'insufficient-data');

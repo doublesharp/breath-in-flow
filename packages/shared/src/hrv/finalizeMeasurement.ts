@@ -21,6 +21,21 @@ export function finalizeMeasurement(
   protocol: MeasurementProtocol,
   options: FinalizeMeasurementOptions = {}
 ): FinalizedMeasurement {
+  // Trimming assumes an ordered capture. Reject malformed timing before a
+  // timestamp outside the retained interval can silently disappear.
+  if (
+    samples.some(
+      (sample, index) =>
+        !Number.isFinite(sample.timestamp) ||
+        (index > 0 && sample.timestamp <= samples[index - 1].timestamp)
+    )
+  ) {
+    return {
+      samples: samples.slice(),
+      analyzedDurationSeconds: 0,
+      eligibility: evaluateMeasurementEligibility(samples, protocol, 0),
+    };
+  }
   const firstTimestamp = samples.at(0)?.timestamp;
   const lastTimestamp = samples.at(-1)?.timestamp;
   const settlingMilliseconds = nonNegativeSeconds(options.settlingSeconds) * 1_000;

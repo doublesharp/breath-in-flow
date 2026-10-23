@@ -116,14 +116,47 @@ describe('measurement trends', () => {
 
     expect(buildWithinPersonInsights(twoComparable)).toEqual([]);
 
+    expect(
+      buildWithinPersonInsights([
+        ...twoComparable,
+        makeMeasurement('middle', '2026-07-01T12:00:00Z'),
+      ])
+    ).toEqual([]);
+
     const insights = buildWithinPersonInsights([
-      ...twoComparable,
+      ...twoComparable.filter((measurement) => measurement.type === 'quick-check'),
       makeMeasurement('middle', '2026-07-01T12:00:00Z'),
     ]);
     expect(insights).toHaveLength(1);
     expect(insights[0]).toMatchObject({ id: 'rmssd-comparison', direction: 'higher' });
     expect(insights[0].message).toContain('higher than your recent comparable measurements');
     expect(insights[0].message).toContain('same protocol, duration, sensor, and conditions');
+  });
+
+  it('anchors the latest insight to the newest eligible protocol, never an older cohort', () => {
+    const measurements = [
+      makeMeasurement('quick-1', '2026-07-01T08:00:00Z'),
+      makeMeasurement('quick-2', '2026-07-02T08:00:00Z'),
+      makeMeasurement('quick-3', '2026-07-03T08:00:00Z'),
+      makeMeasurement('full-latest', '2026-07-04T08:00:00Z', {
+        type: 'full-analysis',
+        durationSeconds: 300,
+      }),
+    ];
+    expect(buildWithinPersonInsights(measurements)).toEqual([]);
+    const fullOlder = makeMeasurement('full-1', '2026-06-29T08:00:00Z', {
+      type: 'full-analysis',
+      durationSeconds: 300,
+    });
+    const fullMiddle = makeMeasurement('full-2', '2026-06-30T08:00:00Z', {
+      type: 'full-analysis',
+      durationSeconds: 300,
+    });
+    fullOlder.analysis.timeDomain.rmssd = 60;
+    fullMiddle.analysis.timeDomain.rmssd = 60;
+    expect(buildWithinPersonInsights([...measurements, fullOlder, fullMiddle])[0]).toMatchObject({
+      direction: 'lower',
+    });
   });
 
   it('excludes records without explicit eligibility from directional comparisons', () => {

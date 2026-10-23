@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { finalizeMeasurement, type IBISample } from '../../src/hrv/index.js';
+import { analyzeHRV, finalizeMeasurement, type IBISample } from '../../src/hrv/index.js';
 
 function detectedSamplesSpanning(durationSeconds: number): IBISample[] {
   return Array.from({ length: durationSeconds + 1 }, (_, index) => ({
@@ -11,6 +11,44 @@ function detectedSamplesSpanning(durationSeconds: number): IBISample[] {
 }
 
 describe('finalizeMeasurement', () => {
+  it.each([
+    { index: 50, timestamp: -1_000 },
+    { index: 50, timestamp: 200_000 },
+    { index: 1, timestamp: 0 },
+  ])('rejects non-monotonic timing before trimming can hide it: %o', ({ index, timestamp }) => {
+    const samples = detectedSamplesSpanning(130);
+    samples[index].timestamp = timestamp;
+    const result = finalizeMeasurement(samples, 'morning-readiness', {
+      settlingSeconds: 5,
+      endingSeconds: 3,
+    });
+
+    expect(result.eligibility.eligible).toBe(false);
+    expect(result.eligibility.reasons).toContain('non-monotonic-timestamps');
+    expect(result.eligibility.availableMetrics).toEqual([]);
+    expect(result.samples).toEqual(samples);
+  });
+
+  it.each([0, 50, 130])(
+    'rejects an invalid timestamp at index %i before trimming can hide it',
+    (index) => {
+      const samples = detectedSamplesSpanning(130);
+      samples[index].timestamp = NaN;
+      const result = finalizeMeasurement(samples, 'morning-readiness', {
+        settlingSeconds: 5,
+        endingSeconds: 3,
+      });
+      expect(result.eligibility.eligible).toBe(false);
+      expect(result.eligibility.reasons).toContain('invalid-sample');
+      expect(result.eligibility.availableMetrics).toEqual([]);
+      expect(result.samples).toEqual(samples);
+      expect(result.analyzedDurationSeconds).toBe(0);
+      const analysis = analyzeHRV(result);
+      expect(analysis.quality.artifactsDetected).toBe(1);
+      expect(analysis.frequencyDomain.available).toBe(false);
+    }
+  );
+
   it('returns an eligible 300-second analysis window after inclusive settling and ending trims', () => {
     const result = finalizeMeasurement(detectedSamplesSpanning(308), 'full-analysis', {
       settlingSeconds: 5,
