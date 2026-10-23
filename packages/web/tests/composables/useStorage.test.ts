@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import {
   useStorage,
   resetStorageForTesting,
@@ -670,16 +670,27 @@ describe('useStorage', () => {
   });
 
   describe('useStorage Branches - Error Handling', () => {
-    it('handles localStorage.getItem throwing error', () => {
-      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    it('handles localStorage.getItem throwing error during a production reload', async () => {
+      vi.resetModules();
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const getItem = vi.spyOn(localStorageMock, 'getItem').mockImplementation(() => {
         throw new Error('Storage error');
       });
+      onTestFinished(() => getItem.mockRestore());
 
-      const storage = useStorage();
-      // Should have configs available (from default or fallback)
-      expect(storage.configs).toBeDefined();
-      // DEFAULT_BREATHING_CONFIG should be available
-      expect(storage.DEFAULT_BREATHING_CONFIG).toBeDefined();
+      const { useStorage: reloadStorage } = await import('../../src/composables/useStorage');
+      const storage = reloadStorage();
+      expect(getItem).toHaveBeenCalledWith('breath-in-flow-configs');
+      expect(getItem).toHaveBeenCalledWith('breath-in-flow-sessions');
+      expect(error).toHaveBeenCalledWith(
+        'Failed to load breath-in-flow-configs from storage:',
+        expect.any(Error)
+      );
+      expect(storage.exportPracticeState()).toEqual({
+        configs: [],
+        sessions: [],
+        soundTheme: 'wood',
+      });
     });
 
     it('throws and rolls back in-memory state when a durable write fails', () => {
@@ -739,16 +750,52 @@ describe('useStorage', () => {
       });
     });
 
-    it('handles invalid JSON in localStorage', () => {
-      vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('{invalid-json');
-      const storage = useStorage();
-      // useStorage should fall back to defaults if JSON parsing fails
-      expect(storage.configs).toBeDefined();
-      expect(storage.DEFAULT_BREATHING_CONFIG).toBeDefined();
+    it('handles invalid JSON in localStorage during a production reload', async () => {
+      vi.resetModules();
+      localStorageMock.setItem('breath-in-flow-configs', '{invalid-json');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const { useStorage: reloadStorage } = await import('../../src/composables/useStorage');
+      expect(localStorageMock.getItem).toHaveBeenCalledWith('breath-in-flow-configs');
+      expect(reloadStorage().getAllConfigs()).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        'Failed to parse breath-in-flow-configs from storage',
+        expect.any(SyntaxError)
+      );
     });
   });
 
   describe('useStorage loadFromStorage behavior', () => {
+    it('keeps only records with unique persisted IDs on reload', async () => {
+      const storage = useStorage();
+      const config = storage.createConfig(createTestConfigInput());
+      const session = storage.createSession({ ...DEFAULT_BREATHING_CONFIG });
+      storage.completeSession(session.id!);
+      const snapshot = storage.exportPracticeState();
+      localStorageMock.setItem(
+        'breath-in-flow-configs',
+        JSON.stringify([
+          { ...config, id: undefined },
+          config,
+          { ...config, name: 'Duplicate config' },
+        ])
+      );
+      localStorageMock.setItem(
+        'breath-in-flow-sessions',
+        JSON.stringify([
+          { ...snapshot.sessions[0], id: undefined },
+          snapshot.sessions[0],
+          snapshot.sessions[0],
+        ])
+      );
+      vi.resetModules();
+
+      const { useStorage: reloadedStorage } = await import('../../src/composables/useStorage');
+      expect(reloadedStorage().getAllConfigs()).toEqual([config]);
+      expect(reloadedStorage().getAllSessions()).toEqual(snapshot.sessions);
+      expect(reloadedStorage().getAllSessions()[0].configSnapshot.id).toBeUndefined();
+    });
+
     it('reconciles sessions left in progress by an interrupted app process', async () => {
       vi.resetModules();
       const startedAt = new Date('2026-07-25T10:00:00.000Z');
@@ -1199,26 +1246,25 @@ describe('useStorage', () => {
       expect(result?.sets[0].extendedHolds.length).toBe(1);
     });
 
-    it('skips sessions with null required date fields from localStorage', async () => {
+    it('skips only the session with a null date field from otherwise valid stored records', async () => {
       vi.resetModules();
+      const validSession = {
+        id: crypto.randomUUID(),
+        configSnapshot: { ...DEFAULT_BREATHING_CONFIG, name: 'Valid dated config' },
+        status: 'COMPLETED',
+        sets: [],
+        targetSets: 1,
+        completedSets: 0,
+        startedAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+        completedAt: new Date('2026-01-01T00:01:00.000Z').toISOString(),
+      };
 
       const mockLS = {
         getItem: vi.fn((key: string) => {
           if (key === 'breath-in-flow-sessions') {
-            // Simulate stored session with null completedAt
             return JSON.stringify([
-              {
-                id: 's1',
-                configId: 'c1',
-                configSnapshot: {},
-                status: 'IN_PROGRESS',
-                sets: [],
-                targetSets: 1,
-                completedSets: 0,
-                startedAt: new Date().toISOString(),
-                completedAt: null, // null date field
-                notes: '',
-              },
+              { ...validSession, id: crypto.randomUUID(), completedAt: null },
+              validSession,
             ]);
           }
           return null;
@@ -1236,7 +1282,9 @@ describe('useStorage', () => {
       const storage = mod.useStorage();
       const sessions = storage.getAllSessions();
 
-      expect(sessions).toEqual([]);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].id).toBe(validSession.id);
+      expect(sessions[0].completedAt).toEqual(new Date(validSession.completedAt));
     });
   });
 
@@ -1366,6 +1414,30 @@ describe('useStorage', () => {
         ...overrides,
       };
     }
+
+    it.each(['configs', 'sessions'] as const)(
+      'rejects missing and duplicate persisted IDs in replacement %s',
+      (collection) => {
+        const storage = useStorage();
+        storage.createConfig(createTestConfigInput({ name: 'Keep original' }));
+        const original = storage.exportPracticeState();
+        const config = makeStoredConfig();
+        const session = makeStoredSession({ configSnapshot: { ...DEFAULT_BREATHING_CONFIG } });
+        const snapshot = {
+          configs: [config],
+          sessions: [session],
+          soundTheme: 'wood',
+        } as PracticeStorageSnapshot;
+        const record = snapshot[collection][0];
+
+        for (const records of [[{ ...record, id: undefined }], [record, record]]) {
+          expect(() =>
+            storage.replacePracticeState({ ...snapshot, [collection]: records })
+          ).toThrow(/ID/i);
+          expect(storage.exportPracticeState()).toEqual(original);
+        }
+      }
+    );
 
     it('exportPracticeState returns detached copies so mutations do not leak into live state', () => {
       const storage = useStorage();

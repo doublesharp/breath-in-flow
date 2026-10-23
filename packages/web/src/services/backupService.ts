@@ -17,6 +17,7 @@ import {
 } from '@breath-in-flow/shared';
 import type { HrvMeasurement, HrvStorageSnapshot } from '@/composables/useHrvStorage';
 import type { PracticeStorageSnapshot } from '@/composables/useStorage';
+import { assertUniqueRecordIds } from '@/utils/storedRecordValidation';
 
 // ---------------------------------------------------------------------------
 // Dependency-injection surface
@@ -28,10 +29,13 @@ import type { PracticeStorageSnapshot } from '@/composables/useStorage';
 export interface BackupRepositories {
   practice: {
     exportState(): PracticeStorageSnapshot;
+    // May write some localStorage keys before throwing; undo must be registered
+    // before this call. All other replacements below must be atomic on failure.
     replaceState(value: PracticeStorageSnapshot): void;
   };
   hrv: {
     exportState(): Promise<HrvStorageSnapshot>;
+    // Rejection means neither store changed, including synchronous enqueue errors.
     replaceState(value: HrvStorageSnapshot): Promise<void>;
     // The HRV store owns measurement validation; the coordinator never touches
     // raw IndexedDB records, it validates through this repository-provided parser.
@@ -317,6 +321,19 @@ export function createBackupService(repositories: BackupRepositories): BackupSer
     const lastConfig =
       envelope.data.lastConfig === null ? null : validateConfig(envelope.data.lastConfig);
 
+    try {
+      assertUniqueRecordIds(configs, 'Breathing configs');
+      assertUniqueRecordIds(sessions, 'Sessions');
+      assertUniqueRecordIds(measurements, 'Measurements');
+      assertUniqueRecordIds(assessments, 'Assessments');
+    } catch (error) {
+      throw new BackupRestoreError(
+        'validate',
+        'Backup contains missing or duplicate record IDs.',
+        error
+      );
+    }
+
     return {
       envelope,
       data: {
@@ -372,19 +389,19 @@ export function createBackupService(repositories: BackupRepositories): BackupSer
       assessments: hrvSnapshot.assessments,
     };
 
-    // Undo in the reverse order writes were applied. HRV is replaced last (and
-    // atomically), so it is rolled back first; practice was written first, so it
-    // is restored last. Re-invoking practice.replaceState re-consistifies
-    // localStorage even if an earlier partial write left refs and storage out of
-    // sync (per useStorage's documented rollback contract).
+    // Register atomic stores only after they commit. Retrying a failed atomic
+    // write can fail again and prevent undoing stores that actually changed.
+    const undoWrites: Array<() => void | Promise<void>> = [];
     const rollback = async (): Promise<void> => {
-      await repositories.hrv.replaceState({
-        measurements: hrvSnapshot.measurements,
-        assessments: hrvSnapshot.assessments,
-      });
-      repositories.lastConfig.replace(lastConfigSnapshot);
-      repositories.preferences.replaceState(prefsSnapshot);
-      repositories.practice.replaceState(practiceSnapshot);
+      const errors: unknown[] = [];
+      for (const undo of [...undoWrites].reverse()) {
+        try {
+          await undo();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length) throw new AggregateError(errors, 'Failed to restore one or more stores.');
     };
 
     // Roll back, confirm the original state is truly back, then throw. If the
@@ -419,17 +436,23 @@ export function createBackupService(repositories: BackupRepositories): BackupSer
 
     // --- WRITE: practice, preferences, last-config, then the atomic HRV replace. ---
     try {
+      // Practice spans separate localStorage keys and may need compensation even
+      // when the call throws. The remaining repositories guarantee atomic failure.
+      undoWrites.push(() => repositories.practice.replaceState(practiceSnapshot));
       repositories.practice.replaceState({
         configs: expected.configs,
         sessions: expected.sessions,
         soundTheme: expected.soundTheme,
       });
       repositories.preferences.replaceState(expected.preferences);
+      undoWrites.push(() => repositories.preferences.replaceState(prefsSnapshot));
       repositories.lastConfig.replace(expected.lastConfig);
+      undoWrites.push(() => repositories.lastConfig.replace(lastConfigSnapshot));
       await repositories.hrv.replaceState({
         measurements: expected.measurements,
         assessments: expected.assessments,
       });
+      undoWrites.push(() => repositories.hrv.replaceState(hrvSnapshot));
     } catch (error) {
       return rollbackAndThrow('write', error);
     }

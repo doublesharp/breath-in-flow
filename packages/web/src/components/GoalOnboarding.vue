@@ -39,6 +39,8 @@
         </label>
       </fieldset>
 
+      <p v-if="saveError" role="alert" class="mt-4 text-sm text-red-300">{{ saveError }}</p>
+
       <div
         data-testid="goal-onboarding-actions"
         class="sticky bottom-0 z-10 -mx-6 -mb-6 mt-6 flex justify-end border-t border-white/[0.06] bg-[#2b241d]/95 px-6 py-4 backdrop-blur-sm"
@@ -56,7 +58,7 @@ import { ref, watch, onMounted } from 'vue';
 import type { UserGoal } from '@breath-in-flow/shared';
 import { useModalIsolation } from '../composables/useModalIsolation';
 
-const props = defineProps<{ open: boolean }>();
+const props = defineProps<{ open: boolean; saveError?: string | null }>();
 const emit = defineEmits<{ select: [goal: UserGoal] }>();
 
 const choices: Array<{ goal: UserGoal; testId: string; label: string; description: string }> = [

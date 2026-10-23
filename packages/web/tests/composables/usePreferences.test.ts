@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import type { UserPreferences } from '@breath-in-flow/shared';
 import { usePreferences, reloadPreferencesForTesting } from '../../src/composables/usePreferences';
 import { PREFERENCES_STORAGE_KEY } from '../../src/constants/storageKeys';
@@ -78,7 +78,9 @@ describe('usePreferences', () => {
     const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
       throw new DOMException('quota exceeded', 'QuotaExceededError');
     });
-    state.setGoal('TRAIN_DIAPHRAGM');
+    onTestFinished(() => setItem.mockRestore());
+    expect(state.setGoal('TRAIN_DIAPHRAGM')).toBe(false);
+    expect(state.saveError.value).toMatch(/try again/i);
     setItem.mockRestore();
 
     expect(state.selectedGoal.value).toBe('RELAX');
@@ -86,6 +88,42 @@ describe('usePreferences', () => {
       version: 1,
       goal: 'RELAX',
     });
+
+    expect(state.setGoal('TRAIN_DIAPHRAGM')).toBe(true);
+    expect(state.saveError.value).toBeNull();
+    expect(state.selectedGoal.value).toBe('TRAIN_DIAPHRAGM');
+  });
+
+  it('reports a failed removal and preserves the saved goal until a retry succeeds', () => {
+    const state = usePreferences();
+    state.setGoal('RELAX');
+    const remove = vi.spyOn(localStorage, 'removeItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+    onTestFinished(() => remove.mockRestore());
+
+    expect(state.clearGoal()).toBe(false);
+    expect(state.saveError.value).toMatch(/try again/i);
+    expect(state.selectedGoal.value).toBe('RELAX');
+    expect(localStorage.getItem(PREFERENCES_STORAGE_KEY)).toContain('RELAX');
+
+    remove.mockRestore();
+    expect(state.clearGoal()).toBe(true);
+    expect(state.saveError.value).toBeNull();
+    expect(state.needsOnboarding.value).toBe(true);
+  });
+
+  it('throws on failed backup replacement without changing saved preferences', () => {
+    const state = usePreferences();
+    state.setGoal('RELAX');
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+    onTestFinished(() => setItem.mockRestore());
+
+    expect(() => state.replacePreferences({ version: 1, goal: 'TRAIN_DIAPHRAGM' })).toThrow();
+    expect(state.selectedGoal.value).toBe('RELAX');
+    expect(localStorage.getItem(PREFERENCES_STORAGE_KEY)).toContain('RELAX');
   });
 
   it('clears the goal back to the onboarding state', () => {

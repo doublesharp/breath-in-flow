@@ -1,4 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type {
+  EligibilityReason,
+  FrequencyDomainUnavailableReason,
+  PoincareUnavailableReason,
+  ResonanceUnavailableReason,
+} from '@breath-in-flow/shared';
 import { isHrvAnalysis, normalizeLegacyHrvAnalysis } from '../../src/utils/hrvAnalysisValidation';
 
 function validCurrentAnalysis() {
@@ -53,6 +59,59 @@ function validCurrentAnalysis() {
 }
 
 describe('HRV analysis record validation', () => {
+  const eligibilityReasons = {
+    'duration-too-short': true,
+    'insufficient-beats': true,
+    'invalid-sample': true,
+    'non-monotonic-timestamps': true,
+    'implausible-interval': true,
+    'unknown-provenance': true,
+    'estimated-samples': true,
+    'low-signal-quality': true,
+    'too-many-artifacts': true,
+    'insufficient-coverage': true,
+    'sample-gap-too-long': true,
+    'sensor-error': true,
+  } satisfies Record<EligibilityReason, true>;
+  const frequencyReasons = {
+    ...eligibilityReasons,
+    'insufficient-data': true,
+    'invalid-series': true,
+    'no-variability': true,
+    'protocol-not-supported': true,
+  } satisfies Record<FrequencyDomainUnavailableReason, true>;
+  const poincareReasons = {
+    ...eligibilityReasons,
+    'insufficient-data': true,
+    'protocol-not-supported': true,
+  } satisfies Record<PoincareUnavailableReason, true>;
+  const resonanceReasons = {
+    ...frequencyReasons,
+    'missing-breathing-rate': true,
+  } satisfies Record<ResonanceUnavailableReason, true>;
+
+  it.each([
+    ['frequencyDomain', frequencyReasons],
+    ['poincare', poincareReasons],
+    ['resonance', resonanceReasons],
+  ] as const)('accepts every supported unavailable reason for %s', (group, reasons) => {
+    for (const reason of Object.keys(reasons)) {
+      expect(
+        isHrvAnalysis({
+          ...validCurrentAnalysis(),
+          [group]: { available: false, reason },
+        }),
+        `${group}: ${reason}`
+      ).toBe(true);
+    }
+    expect(
+      isHrvAnalysis({
+        ...validCurrentAnalysis(),
+        [group]: { available: false, reason: 'unrecognized-reason' },
+      })
+    ).toBe(false);
+  });
+
   it('rejects an available frequency group without a spectrum array', () => {
     const analysis = validCurrentAnalysis();
     analysis.frequencyDomain.value.spectrum = null as never;

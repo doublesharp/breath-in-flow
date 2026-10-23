@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type {
   AssessmentResult,
   BreathingConfig,
@@ -416,6 +416,31 @@ describe('backupService round trip', () => {
 });
 
 describe('backupService parsing and validation', () => {
+  it.each(['configs', 'sessions', 'measurements', 'assessments'] as const)(
+    'rejects missing and duplicate IDs in persisted %s',
+    async (collection) => {
+      const service = createBackupService(makeFakes(seededState()).repositories);
+      const base = JSON.parse((await service.createBackup()).json);
+      const original = base.data[collection][0];
+      const { id: _id, ...withoutId } = original;
+
+      for (const records of [[withoutId], [original, { ...original }]]) {
+        base.data[collection] = records;
+        expect(captureParse(service, JSON.stringify(base)).stage).toBe('validate');
+      }
+    }
+  );
+
+  it('accepts ad hoc configs without IDs in lastConfig and session snapshots', async () => {
+    const service = createBackupService(makeFakes(seededState()).repositories);
+    const base = JSON.parse((await service.createBackup()).json);
+    delete base.data.lastConfig.id;
+    delete base.data.sessions[0].configSnapshot.id;
+    delete base.data.sessions[0].configId;
+
+    expect(service.parseBackupText(JSON.stringify(base)).data.lastConfig?.id).toBeUndefined();
+  });
+
   it('rejects malformed JSON as a validate failure', () => {
     const service = createBackupService(makeFakes(seededState()).repositories);
     let error: BackupRestoreError | undefined;
@@ -521,6 +546,28 @@ describe('backupService parsing and validation', () => {
 });
 
 describe('backupService restore safety', () => {
+  it.each(['preferences', 'lastConfig', 'hrv'] as const)(
+    'preserves every store when %s keeps rejecting atomic replacements',
+    async (store) => {
+      const incoming = seededState();
+      incoming.preferences = { version: 1, goal: 'BUILD_CONSISTENCY' };
+      incoming.practice.soundTheme = 'wind';
+      const parsed = await buildParsed(incoming);
+      const fakes = makeFakes(seededState());
+      const service = createBackupService(fakes.repositories);
+      const original = await service.createBackup();
+      fakes.ctl[store].replaceThrows = 'always';
+
+      const error = await captureError(() => service.restoreBackup(parsed));
+
+      expect(normalizeExport((await service.createBackup()).envelope)).toEqual(
+        normalizeExport(original.envelope)
+      );
+      expect(error.stage).toBe('write');
+      expect(fakes.log.filter((entry) => entry === store)).toHaveLength(1);
+    }
+  );
+
   it('performs no writes until restore is invoked', async () => {
     const fakes = makeFakes(seededState());
     const service = createBackupService(fakes.repositories);
@@ -578,12 +625,22 @@ describe('backupService restore safety', () => {
 
   it('reports stage "rollback" when the rollback itself throws', async () => {
     const parsed = await buildParsed(seededState());
-    const fakes = makeFakes(seededState());
-    fakes.ctl.preferences.replaceThrows = 'always';
+    const original = seededState();
+    const fakes = makeFakes(original);
+    fakes.ctl.hrv.corruptReplace = 'once';
+    const replaceLastConfig = fakes.repositories.lastConfig.replace;
+    vi.spyOn(fakes.repositories.lastConfig, 'replace')
+      .mockImplementationOnce(replaceLastConfig)
+      .mockImplementationOnce(() => {
+        throw new Error('rollback write blocked');
+      });
     const service = createBackupService(fakes.repositories);
 
     const error = await captureError(() => service.restoreBackup(parsed));
     expect(error.stage).toBe('rollback');
+    expect(fakes.repositories.practice.exportState()).toEqual(original.practice);
+    expect(fakes.repositories.preferences.exportState()).toEqual(original.preferences);
+    expect(await fakes.repositories.hrv.exportState()).toEqual(original.hrv);
   });
 
   it('reports stage "rollback" when rollback does not restore the original state', async () => {

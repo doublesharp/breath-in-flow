@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { validateStoredArray } from '../../src/utils/storedRecordValidation';
+import { assertUniqueRecordIds, validateStoredArray } from '../../src/utils/storedRecordValidation';
 
 type StoredRecord = { id: string; createdAt: Date; enabled: boolean };
 
@@ -25,6 +25,27 @@ const RecordSchema = {
 describe('validateStoredArray', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('rejects missing, blank, and duplicate IDs while accepting distinct IDs', () => {
+    for (const records of [[{}], [{ id: '' }], [{ id: '  ' }], [{ id: 'same' }, { id: 'same' }]]) {
+      expect(() => assertUniqueRecordIds(records, 'Records')).toThrow(/IDs/);
+    }
+    expect(() => assertUniqueRecordIds([{ id: 'first' }, { id: 'last' }], 'Records')).not.toThrow();
+  });
+
+  it('keeps the first valid record for each persisted ID and warns about missing IDs', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const records = validateStoredArray({
+      key: 'records',
+      value: JSON.stringify([{ id: '' }, { id: 'first' }, { id: 'first' }, { id: 'last' }]),
+      schema: RecordSchema,
+      normalize: (record) => ({ ...(record as object), createdAt: new Date('2026-01-01') }),
+      getId: (record) => record.id,
+    });
+
+    expect(records.map((record) => record.id)).toEqual(['first', 'last']);
+    expect(warn).toHaveBeenCalledWith('Skipped 2 invalid records from records');
   });
 
   it('returns no records when stored JSON is not an array', () => {

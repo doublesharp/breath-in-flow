@@ -6,6 +6,7 @@ import { PREFERENCES_STORAGE_KEY } from '@/constants/storageKeys';
 // Module-scoped singleton so every caller shares one reactive source of truth,
 // matching the pattern in useStorage.
 const preferences = ref<UserPreferences | null>(null);
+const saveError = ref<string | null>(null);
 
 const selectedGoal = computed<UserGoal | null>(() => preferences.value?.goal ?? null);
 const needsOnboarding = computed(() => preferences.value === null);
@@ -46,10 +47,23 @@ function writePreferences(next: UserPreferences | null): void {
       localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(validated));
     }
   } catch (error) {
-    console.error('Failed to persist preferences:', error);
-    return;
+    throw new Error(
+      'Your preferences could not be saved. Check your storage settings or free up space, then try again.',
+      { cause: error }
+    );
   }
   preferences.value = validated;
+  saveError.value = null;
+}
+
+function savePreferences(next: UserPreferences | null): boolean {
+  try {
+    writePreferences(next);
+    return true;
+  } catch (error) {
+    saveError.value = (error as Error).message;
+    return false;
+  }
 }
 
 preferences.value = readPreferencesFromStorage();
@@ -57,15 +71,16 @@ preferences.value = readPreferencesFromStorage();
 // Re-reads storage into the singleton; used by tests to simulate an app reload.
 export function reloadPreferencesForTesting(): void {
   preferences.value = readPreferencesFromStorage();
+  saveError.value = null;
 }
 
 export function usePreferences() {
-  function setGoal(goal: UserGoal): void {
-    writePreferences({ version: 1, goal });
+  function setGoal(goal: UserGoal): boolean {
+    return savePreferences({ version: 1, goal });
   }
 
-  function clearGoal(): void {
-    writePreferences(null);
+  function clearGoal(): boolean {
+    return savePreferences(null);
   }
 
   // Returns a detached copy so the backup service can serialize without
@@ -74,7 +89,8 @@ export function usePreferences() {
     return preferences.value === null ? null : clonePreferences(preferences.value);
   }
 
-  // Accepts null to clear; zod's parse detaches the stored value from the input.
+  // Atomic replacement for backup: a rejected write leaves both storage and
+  // reactive state unchanged, and must throw so the coordinator can roll back.
   function replacePreferences(next: UserPreferences | null): void {
     writePreferences(next);
   }
@@ -83,6 +99,7 @@ export function usePreferences() {
     preferences,
     selectedGoal,
     needsOnboarding,
+    saveError,
     setGoal,
     clearGoal,
     exportPreferences,

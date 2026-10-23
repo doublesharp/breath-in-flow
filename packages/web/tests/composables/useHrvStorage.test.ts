@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, onTestFinished, vi } from 'vitest';
 import { reactive } from 'vue';
 import { useHrvStorage, type HrvMeasurement } from '../../src/composables/useHrvStorage';
 import type { AssessmentResult, MeasurementEligibility } from '@breath-in-flow/shared';
@@ -864,6 +864,114 @@ describe('useHrvStorage', () => {
   });
 
   describe('snapshot repository (backup)', () => {
+    it('requires migration before replacement so initialization cannot reintroduce legacy data', async () => {
+      const hrv = useHrvStorage();
+      localStorage.setItem('breath-in-flow-assessments', JSON.stringify([makeAssessment()]));
+
+      await hrv.replaceHrvState({ measurements: [], assessments: [] });
+      await hrv.initialize();
+
+      expect(await hrv.getAssessments()).toEqual([]);
+    });
+
+    it('blocks export and replacement if legacy storage cannot be read', async () => {
+      const hrv = useHrvStorage();
+      const original = makeMeasurement();
+      await hrv.saveMeasurement(original);
+      const getItem = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+        throw new Error('storage access blocked');
+      });
+      onTestFinished(() => getItem.mockRestore());
+
+      await expect(hrv.exportHrvState()).rejects.toThrow(/migrat/i);
+      await expect(hrv.replaceHrvState({ measurements: [], assessments: [] })).rejects.toThrow(
+        /migrat/i
+      );
+      expect(await hrv.getMeasurementById(original.id)).toEqual(original);
+    });
+
+    it.each(['measurements', 'assessments'] as const)(
+      'rejects duplicate %s before replacing either store',
+      async (collection) => {
+        const hrv = useHrvStorage();
+        const original = makeMeasurement();
+        await hrv.saveMeasurement(original);
+        const snapshot = { measurements: [makeMeasurement()], assessments: [makeAssessment()] };
+        snapshot[collection].push(snapshot[collection][0] as never);
+
+        await expect(hrv.replaceHrvState(snapshot)).rejects.toThrow(/ID/i);
+        expect(await hrv.getMeasurements()).toEqual([original]);
+        expect(await hrv.getAssessments()).toEqual([]);
+      }
+    );
+
+    it.each([false, true])(
+      'aborts both stores when enqueuing throws, already aborted: %s',
+      async (alreadyAborted) => {
+        const hrv = useHrvStorage();
+        const originalMeasurement = makeMeasurement();
+        const originalAssessment = makeAssessment();
+        await hrv.saveMeasurement(originalMeasurement);
+        await hrv.saveAssessment(originalAssessment);
+        const realPut = IDBObjectStore.prototype.put;
+        const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+          this: IDBObjectStore,
+          value: unknown
+        ) {
+          if (this.name === 'assessments') {
+            if (alreadyAborted) this.transaction.abort();
+            throw new Error('Cannot enqueue assessment');
+          }
+          return realPut.call(this, value);
+        });
+        onTestFinished(() => put.mockRestore());
+
+        await expect(
+          hrv.replaceHrvState({
+            measurements: [makeMeasurement()],
+            assessments: [makeAssessment()],
+          })
+        ).rejects.toThrow('Cannot enqueue assessment');
+
+        expect(await hrv.getMeasurements()).toEqual([originalMeasurement]);
+        expect(await hrv.getAssessments()).toEqual([originalAssessment]);
+      }
+    );
+
+    it('requires legacy cleanup to succeed before replacing assessments', async () => {
+      const hrv = useHrvStorage();
+      const original = makeAssessment();
+      localStorage.setItem('breath-in-flow-assessments', JSON.stringify([original]));
+      const remove = vi.spyOn(localStorage, 'removeItem').mockImplementation(() => {
+        throw new Error('legacy cleanup blocked');
+      });
+      onTestFinished(() => remove.mockRestore());
+
+      await expect(hrv.replaceHrvState({ measurements: [], assessments: [] })).rejects.toThrow(
+        /migrat/i
+      );
+      expect(await hrv.getAssessments()).toEqual([original]);
+      expect(localStorage.getItem('breath-in-flow-assessments')).not.toBeNull();
+
+      remove.mockRestore();
+      await hrv.replaceHrvState({ measurements: [], assessments: [] });
+      await hrv.initialize();
+      expect(await hrv.getAssessments()).toEqual([]);
+    });
+
+    it('shares in-flight migration between Lab initialization and backup reads', async () => {
+      const hrv = useHrvStorage();
+      const original = makeAssessment();
+      localStorage.setItem('breath-in-flow-assessments', JSON.stringify([original]));
+      const put = vi.spyOn(IDBObjectStore.prototype, 'put');
+      onTestFinished(() => put.mockRestore());
+
+      const [, snapshot] = await Promise.all([hrv.initialize(), hrv.exportHrvState()]);
+
+      expect(snapshot.assessments).toEqual([original]);
+      expect(put).toHaveBeenCalledTimes(1);
+    });
+
     it('exportHrvState returns both measurements and assessments via validated readers', async () => {
       const hrv = useHrvStorage();
       await hrv.saveMeasurement(makeMeasurement());

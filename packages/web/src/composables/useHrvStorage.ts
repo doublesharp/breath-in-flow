@@ -9,6 +9,7 @@ import { AssessmentResultSchema } from '@breath-in-flow/shared';
 import { isProxy, toRaw } from 'vue';
 import { isHrvAnalysis, normalizeLegacyHrvAnalysis } from '@/utils/hrvAnalysisValidation';
 import {
+  assertUniqueRecordIds,
   createStoredRecordWarningLogger,
   validateStoredArray,
 } from '@/utils/storedRecordValidation';
@@ -347,6 +348,15 @@ function waitForTransaction(tx: IDBTransaction): Promise<void> {
   });
 }
 
+async function abortTransaction(tx: IDBTransaction, completion: Promise<void>): Promise<void> {
+  try {
+    tx.abort();
+  } catch {
+    // A failed request may have already aborted the transaction.
+  }
+  await completion.catch(() => {});
+}
+
 async function saveMeasurement(measurement: HrvMeasurement): Promise<void> {
   const dto = validateMeasurement(toStructuredCloneSafe(measurement));
   if (!dto) throw new TypeError('Cannot save an invalid pulse variability measurement.');
@@ -560,7 +570,7 @@ async function getLatestAssessment(): Promise<AssessmentResult | null> {
   return results[0] ?? null;
 }
 
-async function migrateLegacyAssessments(): Promise<void> {
+async function performLegacyAssessmentMigration(): Promise<void> {
   if (typeof localStorage === 'undefined') return;
 
   let stored: string | null;
@@ -568,8 +578,7 @@ async function migrateLegacyAssessments(): Promise<void> {
     if (localStorage.getItem(ASSESSMENTS_MIGRATION_KEY) === 'complete') return;
     stored = localStorage.getItem(LEGACY_ASSESSMENTS_KEY);
   } catch (error) {
-    console.warn('Failed to access legacy resonance assessments:', error);
-    return;
+    throw new Error('Could not read legacy assessments for migration.', { cause: error });
   }
   if (!stored) return;
 
@@ -584,10 +593,16 @@ async function migrateLegacyAssessments(): Promise<void> {
     db = await openDB();
     try {
       const tx = db.transaction('assessments', 'readwrite');
-      for (const assessment of assessments) {
-        tx.objectStore('assessments').put(assessment);
+      const completion = waitForTransaction(tx);
+      try {
+        for (const assessment of assessments) {
+          tx.objectStore('assessments').put(assessment);
+        }
+      } catch (error) {
+        await abortTransaction(tx, completion);
+        throw error;
       }
-      await waitForTransaction(tx);
+      await completion;
     } finally {
       db.close();
       db = undefined;
@@ -596,11 +611,28 @@ async function migrateLegacyAssessments(): Promise<void> {
     localStorage.setItem(ASSESSMENTS_MIGRATION_KEY, 'complete');
   } catch (error) {
     db?.close();
+    throw new Error('Could not finish legacy assessment migration.', { cause: error });
+  }
+}
+
+let legacyMigration: Promise<void> | undefined;
+
+async function migrateLegacyAssessments({ throwOnError = false } = {}): Promise<void> {
+  // Lab initialization and backup operations must await the same migration.
+  // Otherwise a delayed importer could put legacy records back after a restore.
+  const migration = (legacyMigration ??= performLegacyAssessmentMigration());
+  try {
+    await migration;
+  } catch (error) {
+    if (throwOnError) throw error;
     console.warn('Failed to migrate assessments from localStorage:', error);
+  } finally {
+    if (legacyMigration === migration) legacyMigration = undefined;
   }
 }
 
 async function exportHrvState(): Promise<HrvStorageSnapshot> {
+  await migrateLegacyAssessments({ throwOnError: true });
   const measurements = await getMeasurements();
   const assessments = await getAssessments();
   return { measurements, assessments };
@@ -620,18 +652,32 @@ async function replaceHrvState(snapshot: HrvStorageSnapshot): Promise<void> {
     return dto;
   });
 
+  assertUniqueRecordIds(measurements, 'Measurements');
+  assertUniqueRecordIds(assessments, 'Assessments');
+  // Finish migration before replacing data, or a later Lab initialization could
+  // merge the stale localStorage source into the restored database.
+  await migrateLegacyAssessments({ throwOnError: true });
+
   const db = await openDB();
   try {
     // One transaction spanning both stores makes the replacement atomic: an
     // abort rolls both stores back rather than leaving one partially replaced.
     const tx = db.transaction(['measurements', 'assessments'], 'readwrite');
-    const measurementsStore = tx.objectStore('measurements');
-    const assessmentsStore = tx.objectStore('assessments');
-    measurementsStore.clear();
-    assessmentsStore.clear();
-    for (const measurement of measurements) measurementsStore.put(measurement);
-    for (const assessment of assessments) assessmentsStore.put(assessment);
-    await waitForTransaction(tx);
+    const completion = waitForTransaction(tx);
+    try {
+      const measurementsStore = tx.objectStore('measurements');
+      const assessmentsStore = tx.objectStore('assessments');
+      measurementsStore.clear();
+      assessmentsStore.clear();
+      for (const measurement of measurements) measurementsStore.put(measurement);
+      for (const assessment of assessments) assessmentsStore.put(assessment);
+    } catch (error) {
+      // A synchronous DataCloneError/put failure does not automatically abort
+      // queued clears and writes. Explicitly abort before reporting failure.
+      await abortTransaction(tx, completion);
+      throw error;
+    }
+    await completion;
   } finally {
     db.close();
   }

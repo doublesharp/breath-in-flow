@@ -103,6 +103,29 @@ describe('App.vue', () => {
     expect(remounted.find('[role="dialog"]').exists()).toBe(false);
   });
 
+  it('shows a save error during first-run onboarding and lets the selected goal be retried', async () => {
+    const wrapper = mount(App, { global: { stubs: childStubs } });
+    await wrapper.get('[data-testid="goal-relax"]').setValue();
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage full', 'QuotaExceededError');
+    });
+    try {
+      await wrapper.get('[data-testid="save-goal"]').trigger('click');
+      expect(wrapper.get('[role="dialog"]').text()).toMatch(/try again/i);
+      expect(wrapper.get('[role="alert"]').text()).toMatch(/storage|space/i);
+      expect(usePreferences().selectedGoal.value).toBeNull();
+      expect(wrapper.get('[data-testid="save-goal"]').attributes('disabled')).toBeUndefined();
+
+      setItem.mockRestore();
+      await wrapper.get('[data-testid="save-goal"]').trigger('click');
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+      expect(usePreferences().selectedGoal.value).toBe('RELAX');
+    } finally {
+      setItem.mockRestore();
+      wrapper.unmount();
+    }
+  });
+
   it('renders header and navigation buttons', () => {
     const wrapper = mount(App, {
       global: {

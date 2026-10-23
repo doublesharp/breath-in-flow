@@ -1,35 +1,43 @@
-import type { HRVAnalysis } from '@breath-in-flow/shared';
+import type {
+  HRVAnalysis,
+  EligibilityReason,
+  FrequencyDomainUnavailableReason,
+  PoincareUnavailableReason,
+  ResonanceUnavailableReason,
+} from '@breath-in-flow/shared';
 
-const ELIGIBILITY_REASONS = [
-  'duration-too-short',
-  'insufficient-beats',
-  'invalid-sample',
-  'non-monotonic-timestamps',
-  'implausible-interval',
-  'unknown-provenance',
-  'estimated-samples',
-  'low-signal-quality',
-  'too-many-artifacts',
-  'sensor-error',
-] as const;
-const FREQUENCY_REASONS = [
+// Exhaustive maps make additions to the shared unions a type-checking error
+// here until persisted-record validation supports them too.
+const ELIGIBILITY_REASONS = {
+  'duration-too-short': true,
+  'insufficient-beats': true,
+  'invalid-sample': true,
+  'non-monotonic-timestamps': true,
+  'implausible-interval': true,
+  'unknown-provenance': true,
+  'estimated-samples': true,
+  'low-signal-quality': true,
+  'too-many-artifacts': true,
+  'insufficient-coverage': true,
+  'sample-gap-too-long': true,
+  'sensor-error': true,
+} satisfies Record<EligibilityReason, true>;
+const FREQUENCY_REASONS = {
   ...ELIGIBILITY_REASONS,
-  'insufficient-data',
-  'invalid-series',
-  'no-variability',
-  'protocol-not-supported',
-] as const;
-const POINCARE_REASONS = [
+  'insufficient-data': true,
+  'invalid-series': true,
+  'no-variability': true,
+  'protocol-not-supported': true,
+} satisfies Record<FrequencyDomainUnavailableReason, true>;
+const POINCARE_REASONS = {
   ...ELIGIBILITY_REASONS,
-  'insufficient-data',
-  'protocol-not-supported',
-] as const;
-const RESONANCE_REASONS = [
-  ...ELIGIBILITY_REASONS,
-  'insufficient-data',
-  'missing-breathing-rate',
-  'protocol-not-supported',
-] as const;
+  'insufficient-data': true,
+  'protocol-not-supported': true,
+} satisfies Record<PoincareUnavailableReason, true>;
+const RESONANCE_REASONS = {
+  ...FREQUENCY_REASONS,
+  'missing-breathing-rate': true,
+} satisfies Record<ResonanceUnavailableReason, true>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -190,12 +198,12 @@ export function normalizeLegacyHrvAnalysis(
 function isAvailability(
   value: unknown,
   validateAvailableValue: (availableValue: unknown) => boolean,
-  validReasons: readonly string[]
+  validReasons: Readonly<Record<string, true>>
 ): boolean {
   if (!isRecord(value) || typeof value.available !== 'boolean') return false;
   return value.available
     ? validateAvailableValue(value.value)
-    : typeof value.reason === 'string' && validReasons.includes(value.reason);
+    : typeof value.reason === 'string' && Object.hasOwn(validReasons, value.reason);
 }
 
 function isFrequencyDomain(value: unknown): boolean {

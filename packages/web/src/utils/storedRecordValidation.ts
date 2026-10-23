@@ -7,7 +7,22 @@ export interface ValidateStoredArrayOptions<T> {
   value: string | null | undefined;
   schema: SafeParseSchema<T>;
   normalize?: (value: unknown) => unknown;
+  // Only independently persisted records need IDs. Embedded/ad hoc configs do not.
+  getId?: (record: T) => string | undefined;
   logLimit?: number;
+}
+
+export function assertUniqueRecordIds(
+  records: readonly { id?: string }[],
+  collection: string
+): void {
+  const seen = new Set<string>();
+  for (const record of records) {
+    if (typeof record.id !== 'string' || !record.id.trim() || seen.has(record.id)) {
+      throw new TypeError(`${collection} must have non-empty, unique record IDs.`);
+    }
+    seen.add(record.id);
+  }
 }
 
 export function createStoredRecordWarningLogger(key: string, logLimit: number = 3) {
@@ -40,6 +55,7 @@ export function validateStoredArray<T>({
   value,
   schema,
   normalize = (record) => record,
+  getId,
   logLimit = 3,
 }: ValidateStoredArrayOptions<T>): T[] {
   if (!value) return [];
@@ -58,12 +74,21 @@ export function validateStoredArray<T>({
   }
 
   const records: T[] = [];
+  const seenIds = new Set<string>();
   const warnings = createStoredRecordWarningLogger(key, logLimit);
 
   for (const [index, record] of parsed.entries()) {
     try {
       const result = schema.safeParse(normalize(record));
       if (result.success) {
+        if (getId) {
+          const id = getId(result.data);
+          if (typeof id !== 'string' || !id.trim() || seenIds.has(id)) {
+            warnings.warn(index, new TypeError('Missing or duplicate persisted record ID.'));
+            continue;
+          }
+          seenIds.add(id);
+        }
         records.push(result.data);
         continue;
       }

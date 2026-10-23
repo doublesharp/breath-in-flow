@@ -6,7 +6,7 @@
     <!-- Animated background -->
     <div class="animated-bg"></div>
 
-    <GoalOnboarding :open="needsOnboarding" @select="handleGoalSelect" />
+    <GoalOnboarding :open="needsOnboarding" :save-error="saveError" @select="handleGoalSelect" />
 
     <header
       :class="[
@@ -308,7 +308,7 @@ import HelpSystem from './components/HelpSystem.vue';
 import { usePreferences } from './composables';
 import { AppConfig, type BreathingConfig, type UserGoal } from '@breath-in-flow/shared';
 
-const { selectedGoal, needsOnboarding, setGoal } = usePreferences();
+const { selectedGoal, needsOnboarding, saveError, setGoal } = usePreferences();
 
 function handleGoalSelect(goal: UserGoal) {
   setGoal(goal);

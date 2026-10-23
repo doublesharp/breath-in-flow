@@ -16,7 +16,7 @@ import {
   SessionSchema,
   SoundThemeSchema,
 } from '@breath-in-flow/shared';
-import { validateStoredArray } from '@/utils/storedRecordValidation';
+import { assertUniqueRecordIds, validateStoredArray } from '@/utils/storedRecordValidation';
 import {
   CONFIGS_STORAGE_KEY,
   SESSIONS_STORAGE_KEY,
@@ -78,6 +78,7 @@ function loadFromStorage() {
     value: loadValueFromStorage(CONFIGS_STORAGE_KEY),
     schema: BreathingConfigSchema,
     normalize: restoreDateFields,
+    getId: (config) => config.id,
   });
 
   sessions.value = validateStoredArray({
@@ -85,6 +86,7 @@ function loadFromStorage() {
     value: loadValueFromStorage(SESSIONS_STORAGE_KEY),
     schema: SessionSchema,
     normalize: restoreDateFields,
+    getId: (session) => session.id,
   });
 
   const storedTheme = loadStringFromStorage(SOUND_THEME_STORAGE_KEY);
@@ -420,6 +422,9 @@ export function useStorage() {
       if (!parsed.success) throw new TypeError('Cannot restore an invalid session.');
       nextSessions.push(parsed.data);
     }
+
+    assertUniqueRecordIds(nextConfigs, 'Breathing configs');
+    assertUniqueRecordIds(nextSessions, 'Sessions');
 
     const previousConfigs = configs.value;
     const previousSessions = sessions.value;
