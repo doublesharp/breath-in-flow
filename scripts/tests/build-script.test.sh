@@ -210,9 +210,50 @@ test_desktop_builds_prepare_shared() {
   done
 }
 
+test_electron_mode_selects_native_build() {
+  cd "$SOURCE_ROOT/packages/web"
+  BUILD_TARGET= pnpm exec node --input-type=module <<'NODE'
+import assert from 'node:assert/strict';
+import { loadConfigFromFile } from 'vite';
+
+const { config } = await loadConfigFromFile({ command: 'build', mode: 'electron' });
+assert.equal(config.base, './', 'Electron builds must resolve assets through file:// URLs');
+assert.ok(config.plugins.flat(Infinity).some((plugin) => plugin?.name?.includes('electron')),
+  'Electron mode must build the native entry points without shell environment assignments');
+NODE
+}
+
+test_release_versions_match() {
+  node - "$SOURCE_ROOT" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const read = (name) => fs.readFileSync(path.join(process.argv[2], name), 'utf8');
+const version = JSON.parse(read('packages/web/package.json')).version;
+assert.match(version, /^\d+\.\d+\.\d+$/);
+const [major, minor, patch] = version.split('.').map(Number);
+const buildNumber = String(major * 10000 + minor * 100 + patch);
+assert.equal(JSON.parse(read('package.json')).version, version, 'Root and app versions differ');
+assert.equal(read('packages/shared/src/config.ts').match(/version:\s*'([^']+)'/)?.[1], version,
+  'AppConfig must report the release version');
+const android = read('packages/web/android/app/build.gradle');
+assert.equal(android.match(/appVersionName"\)\s*\?:\s*"([^"]+)"/)?.[1], version,
+  'Direct Android builds must use the release version');
+assert.equal(android.match(/appVersionCode"\)\s*\?:\s*"([^"]+)"/)?.[1], buildNumber,
+  'Direct Android builds must use the release build number');
+const ios = read('packages/web/ios/App/App.xcodeproj/project.pbxproj');
+for (const [key, expected] of [['MARKETING_VERSION', version], ['CURRENT_PROJECT_VERSION', buildNumber]]) {
+  const values = [...ios.matchAll(new RegExp(`${key} = ([^;]+);`, 'g'))];
+  assert.ok(values.length > 0, `Missing iOS ${key}`);
+  for (const [, value] of values) assert.equal(value, expected, `iOS ${key} differs from the release`);
+}
+NODE
+}
+
 case "${1:-all}" in
   version)
     test_uses_web_package_version
+    test_release_versions_match
     ;;
   missing-artifact)
     test_missing_electron_artifact_fails
@@ -228,7 +269,11 @@ case "${1:-all}" in
     test_workspace_build_orders_shared_before_web
     test_desktop_builds_prepare_shared
     ;;
+  electron-mode)
+    test_electron_mode_selects_native_build
+    ;;
   all)
+    test_release_versions_match
     test_uses_web_package_version
     test_missing_electron_artifact_fails
     test_present_artifacts_are_copied
@@ -236,6 +281,7 @@ case "${1:-all}" in
     test_android_build_rejects_stale_native_assets
     test_workspace_build_orders_shared_before_web
     test_desktop_builds_prepare_shared
+    test_electron_mode_selects_native_build
     ;;
   *)
     fail "unknown test selection: $1"

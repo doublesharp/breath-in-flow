@@ -178,6 +178,14 @@ Releases are automated via GitHub Actions when a version tag is pushed.
    - `packages/database/package.json`
    - `packages/web/package.json`
 
+   Keep the application version aligned in `packages/shared/src/config.ts`,
+   `packages/web/android/app/build.gradle`, and both configurations in
+   `packages/web/ios/App/App.xcodeproj/project.pbxproj`. Native build numbers use
+   `major * 10000 + minor * 100 + patch`. Shared and database package versions
+   have their own version numbers.
+
+   Verify the release metadata with `bash scripts/tests/build-script.test.sh version`.
+
 2. **Commit Version Bump**
 
    ```bash
@@ -188,8 +196,8 @@ Releases are automated via GitHub Actions when a version tag is pushed.
 3. **Create and Push Tag**
 
    ```bash
-   git tag v0.1.0
-   git push origin main --tags
+   git tag -a v0.1.0 -m "Breath in Flow 0.1.0"
+   git push --atomic origin main refs/tags/v0.1.0
    ```
 
 4. **Review Draft Release**
@@ -211,11 +219,9 @@ We follow [Semantic Versioning](https://semver.org/):
 - **Minor** (0.1.0): New features, backward compatible
 - **Patch** (0.0.1): Bug fixes, backward compatible
 
-Pre-release versions:
-
-- `v0.1.0-alpha.1` - Alpha releases
-- `v0.1.0-beta.1` - Beta releases
-- `v0.1.0-rc.1` - Release candidates
+The native build script currently requires numeric `major.minor.patch` versions,
+with minor and patch components no greater than 99. Prerelease suffixes are not
+supported by that packaging path.
 
 ### Hotfixes
 

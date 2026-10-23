@@ -72,8 +72,9 @@ jobs:
       - name: Build Electron app (macOS)
         working-directory: packages/web
         run: |
+          pnpm --filter @breath-in-flow/shared build
           pnpm build:electron
-          pnpm exec electron-builder --mac --arm64
+          pnpm exec electron-builder --mac --arm64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -89,7 +90,7 @@ jobs:
   # Build for macOS Intel (x64)
   build-macos-intel:
     needs: test
-    runs-on: macos-13 # Intel Mac runner
+    runs-on: macos-15-intel
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -114,8 +115,9 @@ jobs:
       - name: Build Electron app (macOS Intel)
         working-directory: packages/web
         run: |
+          pnpm --filter @breath-in-flow/shared build
           pnpm build:electron
-          pnpm exec electron-builder --mac --x64
+          pnpm exec electron-builder --mac --x64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -156,8 +158,9 @@ jobs:
       - name: Build Electron app (Windows)
         working-directory: packages/web
         run: |
+          pnpm --filter @breath-in-flow/shared build
           pnpm build:electron
-          pnpm exec electron-builder --win
+          pnpm exec electron-builder --win --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -197,8 +200,9 @@ jobs:
       - name: Build Electron app (Linux)
         working-directory: packages/web
         run: |
+          pnpm --filter @breath-in-flow/shared build
           pnpm build:electron
-          pnpm exec electron-builder --linux
+          pnpm exec electron-builder --linux --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -245,28 +249,14 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
-      - name: Build web assets
-        working-directory: packages/web
-        run: pnpm build
-
-      - name: Sync Capacitor
-        working-directory: packages/web
-        run: npx cap sync android
-
-      - name: Build Android APK
-        working-directory: packages/web/android
-        run: ./gradlew assembleDebug
-
-      - name: Rename APK
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          cp packages/web/android/app/build/outputs/apk/debug/app-debug.apk "breath-in-flow-${VERSION}.apk"
+      - name: Build and verify versioned Android APK
+        run: pnpm build:android
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-build
-          path: '*.apk'
+          path: 'dist/android/*.apk'
           retention-days: 7
 
   # Create GitHub Release
@@ -295,7 +285,7 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

@@ -1,6 +1,6 @@
 {
   "name": "@breath-in-flow/web",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "A breathing exercise app for guided breathwork sessions",
   "author": {
     "name": "Breath in Flow",
@@ -11,9 +11,9 @@
   "main": "dist-electron/main/main.js",
   "scripts": {
     "dev": "vite",
-    "dev:electron": "BUILD_TARGET=electron vite",
+    "dev:electron": "vite --mode electron",
     "build": "vue-tsc -b && vite build",
-    "build:electron": "BUILD_TARGET=electron vue-tsc -b && BUILD_TARGET=electron vite build",
+    "build:electron": "vue-tsc -b && vite build --mode electron",
     "build:mac": "pnpm build:electron && electron-builder --mac",
     "build:win": "pnpm build:electron && electron-builder --win",
     "build:linux": "pnpm build:electron && electron-builder --linux",

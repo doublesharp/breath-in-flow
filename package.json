@@ -1,6 +1,6 @@
 {
   "name": "breath-in-flow",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "license": "UNLICENSED",

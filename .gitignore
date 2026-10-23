@@ -5,7 +5,7 @@ node_modules/
 # Build outputs
 dist/
 packages/web/dist/
-packages/web/dist-electron/
+packages/web/dist-electron
 packages/web/release/
 *.tsbuildinfo
 *.d.ts.map
