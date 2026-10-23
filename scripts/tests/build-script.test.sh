@@ -57,11 +57,24 @@ if [[ "${1:-}" == "exec" && "${2:-}" == "cap" && "${3:-}" == "sync" && "${4:-}" 
   fi
 fi
 
-if [[ "${1:-}" == "build:mac" && "${BUILD_TEST_ARTIFACTS:-absent}" == "present" ]]; then
+if [[ "${1:-}" == "--filter" && "${2:-}" == "@breath-in-flow/shared" && "${3:-}" == "build" ]]; then
+  touch "$fixture_root/shared-built"
+fi
+
+if [[ "${1:-}" == build:mac || "${1:-}" == build:win || "${1:-}" == build:linux ]]; then
+  if [[ "${BUILD_TEST_REQUIRE_SHARED:-0}" == "1" && ! -f "$fixture_root/shared-built" ]]; then
+    exit 1
+  fi
+fi
+
+if [[ "${BUILD_TEST_ARTIFACTS:-absent}" == "present" && "${1:-}" == build:* ]]; then
   release_dir="$PWD/release/${BUILD_TEST_WEB_VERSION:?}"
   mkdir -p "$release_dir"
   touch "$release_dir/Breath in Flow-${BUILD_TEST_WEB_VERSION}-arm64.dmg"
   touch "$release_dir/Breath in Flow-${BUILD_TEST_WEB_VERSION}-arm64-mac.zip"
+  touch "$release_dir/Breath in Flow-${BUILD_TEST_WEB_VERSION}.exe"
+  touch "$release_dir/Breath in Flow-${BUILD_TEST_WEB_VERSION}.AppImage"
+  touch "$release_dir/Breath in Flow-${BUILD_TEST_WEB_VERSION}.deb"
 fi
 STUB
   chmod +x "$fixture_root/test-bin/pnpm"
@@ -185,6 +198,18 @@ if (!Number.isInteger(shared) || shared < 0 || !Number.isInteger(web) || web < 0
 NODE
 }
 
+test_desktop_builds_prepare_shared() {
+  local platform fixture_root
+  for platform in mac win linux; do
+    fixture_root="$(create_fixture "desktop-$platform" 1.2.3 1.2.3)"
+    if ! PATH="$fixture_root/test-bin:$PATH" \
+      BUILD_TEST_REQUIRE_SHARED=1 BUILD_TEST_ARTIFACTS=present BUILD_TEST_WEB_VERSION=1.2.3 \
+      "$fixture_root/scripts/build.sh" "$platform" >"$fixture_root/build.log" 2>&1; then
+      fail "$platform build did not build shared before compiling the desktop app"
+    fi
+  done
+}
+
 case "${1:-all}" in
   version)
     test_uses_web_package_version
@@ -201,6 +226,7 @@ case "${1:-all}" in
     ;;
   workspace-order)
     test_workspace_build_orders_shared_before_web
+    test_desktop_builds_prepare_shared
     ;;
   all)
     test_uses_web_package_version
@@ -209,6 +235,7 @@ case "${1:-all}" in
     test_android_build_orders_and_versions_release_inputs
     test_android_build_rejects_stale_native_assets
     test_workspace_build_orders_shared_before_web
+    test_desktop_builds_prepare_shared
     ;;
   *)
     fail "unknown test selection: $1"

@@ -201,6 +201,9 @@ build_web() {
 # Build macOS app
 build_mac() {
     print_header "Building macOS App ($APP_NAME)"
+
+    cd "$ROOT_DIR"
+    pnpm --filter @breath-in-flow/shared build
     
     cd "$WEB_DIR"
     
@@ -221,6 +224,9 @@ build_mac() {
 # Build Windows app
 build_win() {
     print_header "Building Windows App ($APP_NAME)"
+
+    cd "$ROOT_DIR"
+    pnpm --filter @breath-in-flow/shared build
     
     cd "$WEB_DIR"
     
@@ -240,6 +246,9 @@ build_win() {
 # Build Linux app
 build_linux() {
     print_header "Building Linux App ($APP_NAME)"
+
+    cd "$ROOT_DIR"
+    pnpm --filter @breath-in-flow/shared build
     
     cd "$WEB_DIR"
     
