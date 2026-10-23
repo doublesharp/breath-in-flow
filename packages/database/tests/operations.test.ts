@@ -158,6 +158,16 @@ describe('Database Operations', () => {
     expect(await operations.getConfig(first.id)).toBeNull();
   });
 
+  it('preserves the previous default when the requested config does not exist', async () => {
+    const original = await operations.createConfig({ name: 'Keep default', isDefault: true });
+    const other = await operations.createConfig({ name: 'Other config' });
+
+    await expect(operations.setDefaultConfig(randomUUID())).rejects.toThrow();
+
+    expect((await operations.getDefaultConfig())?.id).toBe(original.id);
+    expect((await operations.getConfig(other.id))?.isDefault).toBe(false);
+  });
+
   it('records sessions, sets, holds, and aggregate stats', async () => {
     const config = await operations.createConfig({
       name: 'Timed Hold',

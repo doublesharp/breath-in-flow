@@ -63,16 +63,15 @@ export async function getDefaultConfig(): Promise<ExerciseConfig | null> {
 }
 
 export async function setDefaultConfig(id: string): Promise<ExerciseConfig> {
-  // First, unset any existing default
-  await prisma.exerciseConfig.updateMany({
-    where: { isDefault: true },
-    data: { isDefault: false },
-  });
-
-  // Set the new default
-  return prisma.exerciseConfig.update({
-    where: { id },
-    data: { isDefault: true },
+  return prisma.$transaction(async (tx) => {
+    await tx.exerciseConfig.updateMany({
+      where: { isDefault: true },
+      data: { isDefault: false },
+    });
+    return tx.exerciseConfig.update({
+      where: { id },
+      data: { isDefault: true },
+    });
   });
 }
 
