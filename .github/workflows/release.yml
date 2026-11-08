@@ -90,7 +90,7 @@ jobs:
   # Build for macOS Intel (x64)
   build-macos-intel:
     needs: test
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
