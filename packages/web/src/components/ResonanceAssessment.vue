@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen" style="background: linear-gradient(135deg, #1f1a15 0%, #2a241d 40%, #1f1a15 100%)">
+  <div class="min-h-screen bg-surface-page">
     <div ref="assessmentContentRef" class="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8">
       <!-- ======================== INTRO PHASE ======================== -->
       <template v-if="phase === 'INTRO'">
@@ -7,7 +7,7 @@
           <h1
             ref="phaseHeadingRef"
             data-assessment-phase-heading
-            class="text-2xl sm:text-3xl font-bold text-white mb-4"
+            class="text-2xl sm:text-3xl font-bold text-primary mb-4"
             tabindex="-1"
             aria-live="polite"
           >
@@ -16,13 +16,9 @@
 
           <!-- Safety Notice -->
           <div
-            class="p-4 rounded-2xl mb-6"
-            style="
-              background: linear-gradient(135deg, rgba(194, 106, 79, 0.15) 0%, rgba(194, 106, 79, 0.05) 100%);
-              border: 1px solid rgba(194, 106, 79, 0.25);
-            "
+            class="mb-6 rounded-xl border border-clay/25 bg-clay/10 p-4"
           >
-            <p class="text-sm text-slate-300 leading-relaxed">
+            <p class="text-sm text-secondary leading-relaxed">
               Breathe through your nose. Keep breathing comfortable and shallow — do not breathe deeply. If you feel
               faint, dizzy, or your heart beats too hard, take shallower, smoother breaths.
             </p>
@@ -30,8 +26,8 @@
 
           <!-- Protocol Summary -->
           <div class="mb-6">
-            <h3 class="font-semibold text-slate-200 mb-2">Protocol</h3>
-            <p class="text-sm text-slate-400 leading-relaxed">
+            <h3 class="font-semibold text-primary mb-2">Protocol</h3>
+            <p class="text-sm text-muted leading-relaxed">
               5 breathing trials from 6.5 to 4.5 BPM, approximately 2 minutes each, with 2-minute rest periods between
               trials.
             </p>
@@ -39,7 +35,7 @@
 
           <!-- Warmup Configuration -->
           <div class="mb-6 space-y-4">
-            <h3 class="font-semibold text-slate-200">Warmup Settings</h3>
+            <h3 class="font-semibold text-primary">Warmup Settings</h3>
 
             <div class="grid grid-cols-2 gap-4">
               <div>
@@ -63,7 +59,7 @@
 
           <!-- Sensor Selection -->
           <div class="mb-6 space-y-3" data-testid="sensor-selection">
-            <label class="text-sm font-medium text-white/80">Pulse Timing Measurement</label>
+            <label class="text-sm font-medium text-secondary">Pulse Timing Measurement</label>
             <div class="grid grid-cols-1 gap-2">
               <button
                 v-for="mode in sensorModes"
@@ -73,25 +69,25 @@
                 :class="[
                   'p-3 rounded-lg border text-left transition-all',
                   selectedSensorMode === mode.value
-                    ? 'border-emerald-500 bg-emerald-500/10'
-                    : 'border-white/10 bg-white/5',
+                    ? 'border-sage bg-sage/10'
+                    : 'border-line-subtle bg-surface-inset',
                 ]"
               >
-                <div class="font-medium text-white">{{ mode.label }}</div>
-                <div class="text-xs text-white/50 mt-1">{{ mode.description }}</div>
+                <div class="font-medium text-primary">{{ mode.label }}</div>
+                <div class="text-xs text-muted mt-1">{{ mode.description }}</div>
               </button>
             </div>
           </div>
 
           <div
             v-if="sensorStatusMessage"
-            class="mb-4 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200"
+            class="mb-4 rounded-xl border border-clay/25 bg-clay/8 p-3 text-sm text-sand"
             role="status"
           >
             {{ sensorStatusMessage }}
           </div>
           <!-- Action Buttons -->
-          <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
+          <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-line-subtle">
             <button data-testid="cancel-btn" @click="requestCancel" class="btn-secondary">Back</button>
             <button
               data-testid="start-btn"
@@ -113,7 +109,7 @@
           <h2
             ref="phaseHeadingRef"
             data-assessment-phase-heading
-            class="text-xl sm:text-2xl font-bold text-white text-center mb-4"
+            class="text-xl sm:text-2xl font-bold text-primary text-center mb-4"
             tabindex="-1"
             aria-live="polite"
           >
@@ -121,7 +117,7 @@
           </h2>
           <div
             v-if="sensorStatusMessage && phase === 'TRIAL_BREATHING'"
-            class="mb-4 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-center text-sm text-amber-200"
+            class="mb-4 rounded-xl border border-clay/25 bg-clay/8 p-3 text-center text-sm text-sand"
             role="status"
           >
             {{ sensorStatusMessage }}
@@ -129,7 +125,7 @@
           <div
             v-if="isFinishingTrialData && phase === 'TRIAL_BREATHING'"
             data-testid="finishing-trial-data"
-            class="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-center text-sm text-emerald-200"
+            class="mb-4 rounded-xl border border-sage/25 bg-sage/8 p-3 text-center text-sm text-sage"
             role="status"
             aria-live="polite"
           >
@@ -145,11 +141,11 @@
               :quality="sensorQuality"
               :sensor-type="selectedSensorMode === 'camera' ? 'ppg' : 'scg'"
             />
-            <div class="text-sm text-white/60 text-center">
+            <div class="text-sm text-secondary text-center">
               {{ sensorInstructions }}
             </div>
-            <div class="text-sm text-white/40">Follow the audio breathing cues</div>
-            <div class="text-2xl font-mono text-white">{{ formatTime(timer.currentTime.value) }}</div>
+            <div class="text-sm text-muted">Follow the audio breathing cues</div>
+            <div class="text-2xl font-mono text-primary">{{ formatTime(timer.currentTime.value) }}</div>
           </div>
 
           <!-- Breathing Visualizer (default / warmup / no sensor) -->
@@ -167,13 +163,13 @@
           <!-- Breathing Pattern Display -->
           <div class="mt-4 text-center">
             <div
-              class="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/50 rounded-xl text-slate-300 text-sm sm:text-base"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-surface-inset rounded-xl text-secondary text-sm sm:text-base"
             >
-              <span class="text-emerald-400 font-semibold">{{ timerConfig.inhaleTime }}s</span>
-              <span class="text-slate-500">&rarr;</span>
-              <span class="text-blue-400 font-semibold">{{ timerConfig.exhaleTime }}s</span>
-              <span class="text-slate-500 ml-2">&times;</span>
-              <span class="text-white font-semibold">{{ timerConfig.repetitions }} reps</span>
+              <span class="text-sage font-semibold">{{ timerConfig.inhaleTime }}s</span>
+              <span class="text-muted">&rarr;</span>
+              <span class="text-sand font-semibold">{{ timerConfig.exhaleTime }}s</span>
+              <span class="text-muted ml-2">&times;</span>
+              <span class="text-primary font-semibold">{{ timerConfig.repetitions }} reps</span>
             </div>
           </div>
 
@@ -198,18 +194,18 @@
           <h2
             ref="phaseHeadingRef"
             data-assessment-phase-heading
-            class="text-2xl sm:text-3xl font-bold text-white mb-4"
+            class="text-2xl sm:text-3xl font-bold text-primary mb-4"
             tabindex="-1"
             aria-live="polite"
           >
             Rest Quietly
           </h2>
 
-          <p class="text-5xl font-mono font-bold text-amber-400 mb-4 tabular-nums">
+          <p class="text-5xl font-mono font-bold text-sand mb-4 tabular-nums">
             {{ formatTime(restTimeRemaining) }}
           </p>
 
-          <p class="text-slate-400 mb-6">Next trial: {{ trials[currentTrialIndex + 1]?.rate }} BPM</p>
+          <p class="text-muted mb-6">Next trial: {{ trials[currentTrialIndex + 1]?.rate }} BPM</p>
 
           <!-- Controls -->
           <div class="flex flex-col sm:flex-row justify-center gap-3">
@@ -228,13 +224,13 @@
             <h2
               ref="phaseHeadingRef"
               data-assessment-phase-heading
-              class="text-2xl sm:text-3xl font-bold text-white mb-2"
+              class="text-2xl sm:text-3xl font-bold text-primary mb-2"
               tabindex="-1"
               aria-live="polite"
             >
               Rate Your Trials
             </h2>
-            <p class="text-sm text-slate-400 leading-relaxed">
+            <p class="text-sm text-muted leading-relaxed">
               If you used a heart rate monitor, rate the following based on what you observed. Skip these if you didn't
               use one.
             </p>
@@ -242,7 +238,7 @@
 
           <!-- Trial Cards -->
           <div v-for="(trial, index) in trials" :key="trial.rate" data-testid="trial-card" class="card-solid">
-            <h3 class="text-lg font-bold text-white mb-4">{{ trial.rate }} BPM</h3>
+            <h3 class="text-lg font-bold text-primary mb-4">{{ trial.rate }} BPM</h3>
 
             <!-- HRV Chart (when sensor data available) -->
             <div v-if="trialAnalyses[index]" class="mb-4">
@@ -256,32 +252,32 @@
                   :height="150"
                 />
                 <div class="mt-2 grid grid-cols-3 gap-2 text-center">
-                  <div class="bg-white/5 rounded-lg p-2">
-                    <div class="text-xs text-white/50">LF Peak Share</div>
-                    <div class="text-sm font-semibold text-blue-400">
+                  <div class="bg-surface-inset rounded-lg p-2">
+                    <div class="text-xs text-muted">LF Peak Share</div>
+                    <div class="text-sm font-semibold text-sand">
                       {{ resonanceValueAt(index)!.lfPeakAmplitude.toFixed(1) }}%
                     </div>
                   </div>
-                  <div class="bg-white/5 rounded-lg p-2">
-                    <div class="text-xs text-white/50">Amplitude</div>
-                    <div class="text-sm font-semibold text-amber-400">
+                  <div class="bg-surface-inset rounded-lg p-2">
+                    <div class="text-xs text-muted">Amplitude</div>
+                    <div class="text-sm font-semibold text-sand">
                       {{ resonanceValueAt(index)!.peakToTroughAmplitude.toFixed(1) }} BPM
                     </div>
                   </div>
-                  <div class="bg-white/5 rounded-lg p-2">
-                    <div class="text-xs text-white/50">Smoothness</div>
-                    <div class="text-sm font-semibold text-purple-400">
+                  <div class="bg-surface-inset rounded-lg p-2">
+                    <div class="text-xs text-muted">Smoothness</div>
+                    <div class="text-sm font-semibold text-clay">
                       {{ resonanceValueAt(index)!.waveformSmoothness.toFixed(2) }}
                     </div>
                   </div>
                 </div>
               </div>
-              <div v-else-if="expandedTrialHrv[index]" class="rounded-lg bg-amber-400/5 p-3 text-xs text-amber-200/70">
+              <div v-else-if="expandedTrialHrv[index]" class="rounded-lg bg-clay/8 p-3 text-xs text-sand">
                 Automatic breathing-response metrics were unavailable for this trial.
               </div>
               <button
                 @click="expandedTrialHrv[index] = !expandedTrialHrv[index]"
-                class="mt-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                class="mt-2 text-xs text-sage hover:text-primary transition-colors"
               >
                 {{ expandedTrialHrv[index] ? 'Hide pulse variability data' : 'Show pulse variability data' }}
               </button>
@@ -290,16 +286,17 @@
             <!-- Comfort Rating -->
             <div data-testid="comfort-rating" class="mb-4">
               <label class="form-label">Comfort (1 = uncomfortable, 5 = very comfortable)</label>
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-2">
                 <button
                   v-for="rating in 5"
                   :key="rating"
                   @click="trial.comfortRating = rating"
+                  :aria-pressed="trial.comfortRating === rating"
                   :class="[
                     'w-10 h-10 rounded-xl font-bold text-sm transition-all duration-200',
                     trial.comfortRating === rating
-                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10',
+                      ? 'bg-sage text-surface-page'
+                      : 'bg-surface-inset text-muted hover:bg-surface-raised border border-line-subtle',
                   ]"
                 >
                   {{ rating }}
@@ -315,11 +312,12 @@
                   v-for="symptom in symptomOptions"
                   :key="symptom.value"
                   @click="toggleSymptom(index, symptom.value)"
+                  :aria-pressed="trial.symptoms.includes(symptom.value)"
                   :class="[
                     'px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200',
                     trial.symptoms.includes(symptom.value)
-                      ? 'bg-red-500/20 text-red-300 border border-red-500/40'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10',
+                      ? 'bg-terracotta/12 text-danger border border-terracotta/40'
+                      : 'bg-surface-inset text-muted hover:bg-surface-raised border border-line-subtle',
                   ]"
                 >
                   {{ symptom.label }}
@@ -330,16 +328,17 @@
             <!-- HR Amplitude (optional) -->
             <div class="mb-4">
               <label class="form-label">HR Amplitude (optional)</label>
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-2">
                 <button
                   v-for="opt in hrAmplitudeOptions"
                   :key="opt.value"
                   @click="trial.hrAmplitude = trial.hrAmplitude === opt.value ? undefined : opt.value"
+                  :aria-pressed="trial.hrAmplitude === opt.value"
                   :class="[
                     'px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200',
                     trial.hrAmplitude === opt.value
-                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10',
+                      ? 'bg-sage/15 text-sage border border-sage/40'
+                      : 'bg-surface-inset text-muted hover:bg-surface-raised border border-line-subtle',
                   ]"
                 >
                   {{ opt.label }}
@@ -350,16 +349,17 @@
             <!-- Waveform Smoothness (optional) -->
             <div class="mb-4">
               <label class="form-label">Waveform Smoothness (optional)</label>
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-2">
                 <button
                   v-for="opt in smoothnessOptions"
                   :key="opt.value"
                   @click="trial.waveformSmoothness = trial.waveformSmoothness === opt.value ? undefined : opt.value"
+                  :aria-pressed="trial.waveformSmoothness === opt.value"
                   :class="[
                     'px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200',
                     trial.waveformSmoothness === opt.value
-                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/50 border border-white/10',
+                      ? 'bg-sand/15 text-sand border border-sand/40'
+                      : 'bg-surface-inset text-muted hover:bg-surface-raised border border-line-subtle',
                   ]"
                 >
                   {{ opt.label }}
@@ -384,7 +384,7 @@
             <button @click="calculateResult" :disabled="!allTrialsRated" class="btn-success btn-action">
               Calculate Result
             </button>
-            <p v-if="!allTrialsRated" class="text-sm text-slate-500 mt-2">Rate comfort for all 5 trials to continue</p>
+            <p v-if="!allTrialsRated" class="text-sm text-muted mt-2">Rate comfort for all 5 trials to continue</p>
           </div>
         </div>
       </template>
@@ -396,14 +396,14 @@
             <h2
               ref="phaseHeadingRef"
               data-assessment-phase-heading
-              class="text-2xl sm:text-3xl font-bold text-white mb-2"
+              class="text-2xl sm:text-3xl font-bold text-primary mb-2"
               tabindex="-1"
               aria-live="polite"
             >
               Suggested Rate
             </h2>
-            <p class="text-5xl font-bold text-emerald-400 mb-1">{{ selectedRate }} BPM</p>
-            <p class="text-sm text-slate-400">
+            <p class="text-5xl font-bold text-sage mb-1">{{ selectedRate }} BPM</p>
+            <p class="text-sm text-muted">
               Score: {{ trialScores.find((s) => s.rate === selectedRate)?.score ?? 0 }}
             </p>
           </div>
@@ -414,29 +414,32 @@
               v-for="ts in trialScores"
               :key="ts.rate"
               @click="selectedRate = ts.rate"
+              :disabled="isSavingResult"
               :class="[
                 'stat-card cursor-pointer transition-all duration-200',
                 selectedRate === ts.rate ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : '',
               ]"
             >
-              <div class="text-lg font-bold text-white">{{ ts.rate }} BPM</div>
-              <div class="text-sm text-slate-400">Score: {{ ts.score }}</div>
+              <div class="text-lg font-bold text-primary">{{ ts.rate }} BPM</div>
+              <div class="text-sm text-muted">Score: {{ ts.score }}</div>
             </button>
           </div>
 
           <!-- Guidance -->
           <div class="card-solid">
-            <p class="text-sm text-slate-400 leading-relaxed">
+            <p class="text-sm text-muted leading-relaxed">
               If two rates scored similarly, confirm by comparing adjacent &plusmn;0.5 BPM rates.
             </p>
           </div>
 
           <!-- Save Button -->
           <div class="text-center pb-4">
-            <p v-if="sensorStatusMessage" class="mb-3 text-sm text-amber-300" role="alert">
-              {{ sensorStatusMessage }}
+            <p v-if="resultSaveError" class="mb-3 text-sm text-danger" role="alert">
+              {{ resultSaveError }}
             </p>
-            <button @click="saveResult" class="btn-success btn-action">Save &amp; Create Preset</button>
+            <button @click="saveResult" class="btn-success btn-action" :disabled="isSavingResult">
+              Save &amp; Create Preset
+            </button>
           </div>
         </div>
       </template>
@@ -459,10 +462,10 @@
         class="card-solid max-w-md w-full animate-scale-in"
       >
         <div class="flex items-start gap-4">
-          <div class="p-3 rounded-xl bg-red-500/10">
+          <div class="p-3 rounded-xl bg-terracotta/10">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              class="w-6 h-6 text-red-400"
+              class="w-6 h-6 text-danger"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -476,8 +479,8 @@
             </svg>
           </div>
           <div class="flex-1">
-            <h3 id="cancel-assessment-title" class="text-xl font-bold text-white mb-2">Cancel assessment?</h3>
-            <p id="cancel-assessment-description" class="text-slate-300 mb-6">All progress will be lost.</p>
+            <h3 id="cancel-assessment-title" class="text-xl font-bold text-primary mb-2">Cancel assessment?</h3>
+            <p id="cancel-assessment-description" class="text-secondary mb-6">All progress will be lost.</p>
             <div class="flex gap-3 justify-end">
               <button ref="cancelSafeActionRef" @click="showCancelConfirm = false" class="btn-secondary">
                 Go Back
@@ -513,7 +516,7 @@ export function buildAssessmentTrials(
 </script>
 
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick, onUnmounted, watch } from 'vue';
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import BreathingVisualizer from './BreathingVisualizer.vue';
@@ -550,6 +553,7 @@ import { sensorFusionService } from '../services/sensorFusion';
 import type { FusedIBISample } from '../services/sensorFusion';
 import { MeasurementSession, type MeasurementStartOutcome } from '../services/measurementSession';
 import { getPermissionDeniedMessage, requestSensorPermissions } from '../services/permissionService';
+import { soundService } from '../services/soundService';
 import { ttsService } from '../services/ttsService';
 import { scoreTrial, findSuggestedRate } from '../utils/assessmentScoring';
 import { v4 as uuidv4 } from 'uuid';
@@ -670,7 +674,34 @@ const timerConfig = reactive<BreathingConfig>({
   ttsVoice: props.ttsVoice,
 });
 
+function syncAudioPreferences() {
+  timerConfig.soundEnabled = props.soundEnabled ?? true;
+  timerConfig.soundTheme = props.soundTheme ?? 'wood';
+  timerConfig.ttsEnabled = props.ttsEnabled ?? false;
+  timerConfig.ttsVoice = props.ttsVoice;
+  soundService.setEnabled(timerConfig.soundEnabled);
+  soundService.setTheme(timerConfig.soundTheme);
+  ttsService.setEnabled(timerConfig.ttsEnabled);
+  ttsService.setVoiceByUri(timerConfig.ttsVoice ?? '');
+}
+
+onMounted(syncAudioPreferences);
+watch(() => [props.soundEnabled, props.soundTheme, props.ttsEnabled, props.ttsVoice], syncAudioPreferences);
+
 const timer = useBreathingTimer(timerConfig, {
+  onPhaseChange: (breathingPhase, state) => {
+    if (phase.value !== 'WARMUP' && phase.value !== 'TRIAL_BREATHING') return;
+    if (breathingPhase !== 'INHALE' && breathingPhase !== 'EXHALE') return;
+
+    // The timer ticks at phase boundaries after this first cue.
+    if (timerConfig.soundEnabled && breathingPhase === 'INHALE' && state.currentRepetition === 1) {
+      soundService.playClick();
+    }
+    if (timerConfig.ttsEnabled) {
+      const phrase = breathingPhase === 'INHALE' ? 'Full Breath In' : 'Full Breath Out';
+      void ttsService.speak(phrase, { targetDurationSeconds: state.totalPhaseTime });
+    }
+  },
   onSessionComplete: () => handlePhaseComplete(),
 });
 
@@ -740,9 +771,12 @@ const sensorInstructions = computed(() => {
 function getHrDataForTrial(index: number) {
   const analysis = trialAnalyses.value[index];
   if (!analysis) return [];
-  return analysis.raw.timestamps.map((t, i) => ({
-    time: t,
-    hr: analysis.raw.instantaneousHR[i],
+  const { timestamps, instantaneousHR } = analysis.raw;
+  // Mapping an empty series produces no chart points.
+  const firstTimestamp = timestamps[0];
+  return timestamps.map((timestamp, index) => ({
+    time: (timestamp - firstTimestamp) / 1_000,
+    hr: instantaneousHR[index],
   }));
 }
 
@@ -967,8 +1001,8 @@ async function startAssessment() {
     timerConfig.inhaleTime = warmupTrial.inhaleTime;
     timerConfig.exhaleTime = warmupTrial.exhaleTime;
     timerConfig.repetitions = warmupReps;
+    syncAudioPreferences();
     phase.value = 'WARMUP';
-    ttsService.speak('Warmup starting');
     timer.start();
   } finally {
     if (generation === assessmentStartGeneration) isAssessmentStartPending.value = false;
@@ -1014,7 +1048,6 @@ async function startTrial(index: number) {
       ? trial.repetitions
       : Math.ceil(RESONANCE_CAPTURE_HARD_CAP_SECONDS / (trial.inhaleTime + trial.exhaleTime));
   phase.value = 'TRIAL_BREATHING';
-  ttsService.speak(`Trial ${index + 1} starting at ${trial.rate} breaths per minute`);
 
   // Start sensor for IBI collection
   const outcome = await startSensor();
@@ -1039,7 +1072,7 @@ async function startTrial(index: number) {
 function startRest() {
   phase.value = 'TRIAL_REST';
   restTimeRemaining.value = assessmentConfig.restDurationSeconds;
-  ttsService.speak('Rest quietly');
+  if (timerConfig.ttsEnabled) void ttsService.speak('Rest quietly');
   restIntervalId = setInterval(() => {
     if (isPaused.value) return;
     restTimeRemaining.value -= 1;
@@ -1073,6 +1106,7 @@ function togglePause() {
     if (isBreathingPhase.value) timer.resume();
   } else {
     isPaused.value = true;
+    ttsService.stop();
     if (isBreathingPhase.value) timer.pause();
   }
 }
@@ -1087,6 +1121,7 @@ function requestCancel() {
 
 function confirmCancel() {
   timer.stop();
+  ttsService.stop();
   clearRestInterval();
   clearFinishingDataTimeout();
   disableKeepAwake();
@@ -1103,6 +1138,7 @@ function interruptAssessment() {
   }
 
   timer.stop();
+  ttsService.stop();
   clearRestInterval();
   clearFinishingDataTimeout();
   void disableKeepAwake();
@@ -1151,6 +1187,9 @@ function toggleSymptom(trialIndex: number, symptom: AssessmentSymptom) {
 const storage = useStorage();
 const hrvStorage = useHrvStorage();
 const selectedRate = ref<number>(5.5);
+const resultSaveError = ref('');
+const isSavingResult = ref(false);
+let savedAssessment: AssessmentResult | undefined;
 
 function calculateResult() {
   const suggested = findSuggestedRate(trials.value);
@@ -1159,6 +1198,9 @@ function calculateResult() {
 }
 
 async function saveResult() {
+  if (isSavingResult.value) return;
+  isSavingResult.value = true;
+  resultSaveError.value = '';
   const selected = trials.value.find((t) => t.rate === selectedRate.value)!;
   const presetName = `My Resonance Frequency \u2014 ${selectedRate.value} BPM`;
   const presetInput = {
@@ -1179,30 +1221,35 @@ async function saveResult() {
   };
 
   const result: AssessmentResult = {
-    id: uuidv4(),
+    id: savedAssessment?.id ?? uuidv4(),
     trials: trials.value,
     selectedRate: selectedRate.value,
-    completedAt: new Date(),
+    completedAt: savedAssessment?.completedAt ?? new Date(),
     config: { ...assessmentConfig },
   };
 
+  let saveError = 'Your assessment could not be saved. Please try again.';
   try {
-    await hrvStorage.saveAssessment(result);
-  } catch {
-    sensorStatusMessage.value = 'Your assessment could not be saved. No practice preset was created; please try again.';
-    return;
-  }
+    // Save the assessment before mutating presets. Linking uses the same IndexedDB key,
+    // so a retry after either write fails cannot create a duplicate assessment.
+    if (savedAssessment?.selectedRate !== result.selectedRate) {
+      await hrvStorage.saveAssessment(result);
+      savedAssessment = result;
+    }
 
-  const existingConfigs = storage.getAllConfigs();
-  const existing = existingConfigs.find((c) => c.name.startsWith('My Resonance Frequency'));
-  let preset;
-  if (existing?.id) {
-    storage.updateConfig(existing.id, presetInput);
-    preset = storage.getConfig(existing.id)!;
-  } else {
-    preset = storage.createConfig(presetInput);
+    saveError = 'Your assessment was saved, but the practice preset could not be saved. Please try again.';
+    const existing = storage.getAllConfigs().find((config) => config.name.startsWith('My Resonance Frequency'));
+    const preset = existing?.id ? storage.updateConfig(existing.id, presetInput) : storage.createConfig(presetInput);
+    if (!preset?.id) throw new Error('Preset unavailable after saving');
+
+    saveError = 'Your preset was saved, but it could not be linked to the assessment. Please try again.';
+    await hrvStorage.saveAssessment({ ...result, createdPresetId: preset.id });
+    emit('complete', preset);
+  } catch {
+    resultSaveError.value = saveError;
+  } finally {
+    isSavingResult.value = false;
   }
-  emit('complete', preset);
 }
 
 // ======================== Testing Helper ========================
@@ -1243,6 +1290,8 @@ onUnmounted(() => {
   assessmentLifecycleGeneration += 1;
   assessmentStartGeneration += 1;
   timer.stop();
+  ttsService.stop();
+  ttsService.setEnabled(false);
   clearRestInterval();
   clearFinishingDataTimeout();
   disableKeepAwake();

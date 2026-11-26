@@ -1,5 +1,7 @@
 import { shallowMount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, describe, it, expect, vi } from 'vitest';
+import { Bar, Line } from 'vue-chartjs';
+import type { TooltipItem } from 'chart.js';
 // The project uses `HoldTimeChart.vue` as the time chart component.
 import HoldTimeChart from '@/components/charts/HoldTimeChart.vue';
 import SessionsPerWeekChart from '@/components/charts/SessionsPerWeekChart.vue';
@@ -103,13 +105,13 @@ describe('HoldTimeChart.vue', () => {
             completedRepetitions: 0,
             extendedHolds: [
               {
-                completedAt: new Date('2025-01-01T10:00:00Z').toISOString(),
+                completedAt: new Date(2025, 0, 1, 10).toISOString(),
                 actualDuration: 10,
                 type: 'INHALE',
                 mode: 'TIMED',
               },
               {
-                completedAt: new Date('2025-01-02T10:00:00Z').toISOString(),
+                completedAt: new Date(2025, 0, 1, 13).toISOString(),
                 actualDuration: 20,
                 type: 'EXHALE',
                 mode: 'TIMED',
@@ -121,7 +123,7 @@ describe('HoldTimeChart.vue', () => {
         ],
         targetSets: 1,
         completedSets: 1,
-        startedAt: new Date(),
+        startedAt: new Date(2025, 0, 1, 9),
         completedAt: new Date(),
       } as unknown as Session,
       {
@@ -135,7 +137,7 @@ describe('HoldTimeChart.vue', () => {
             completedRepetitions: 0,
             extendedHolds: [
               {
-                completedAt: new Date('2025-01-03T10:00:00Z').toISOString(),
+                completedAt: new Date(2025, 0, 3, 10).toISOString(),
                 actualDuration: 30,
                 type: 'INHALE',
                 mode: 'TIMED',
@@ -147,7 +149,7 @@ describe('HoldTimeChart.vue', () => {
         ],
         targetSets: 1,
         completedSets: 1,
-        startedAt: new Date(),
+        startedAt: new Date(2025, 0, 3, 9),
         completedAt: new Date(),
       } as unknown as Session,
     ];
@@ -163,6 +165,27 @@ describe('HoldTimeChart.vue', () => {
     expect(statValue(wrapper, 'Average')).toBe('20s');
     expect(statValue(wrapper, 'Best')).toBe('30s');
     expect(statValue(wrapper, 'Sessions')).toBe('2');
+    const chart = wrapper.getComponent(Line);
+    expect(chart.vm.$attrs.data).toMatchObject({
+      labels: ['Jan 1', 'Jan 1', 'Jan 3'],
+      datasets: [{ pointStyle: ['triangle', 'circle', 'triangle'] }],
+    });
+    expect(wrapper.get('figcaption').text()).toBe('Extended holds by session date');
+    expect(wrapper.get('[aria-label="Extended hold values"]').findAll('li').map((item) => item.text())).toEqual([
+      'Jan 1, 2025 · Inhale hold · 10 seconds',
+      'Jan 1, 2025 · Exhale hold · 20 seconds',
+      'Jan 3, 2025 · Inhale hold · 30 seconds',
+    ]);
+    const options = chart.vm.$attrs.options as {
+      plugins: { tooltip: { callbacks: { title: (items: TooltipItem<'line'>[]) => string } } };
+      scales: { x: { afterBuildTicks: (scale: { ticks: Array<{ value: number }> }) => void } };
+    };
+    const xScale = { ticks: [{ value: 0 }, { value: 1 }, { value: 2 }] };
+    options.scales.x.afterBuildTicks(xScale);
+    expect(xScale.ticks).toEqual([{ value: 0 }, { value: 2 }]);
+    const tooltipTitle = options.plugins.tooltip.callbacks.title;
+    expect(tooltipTitle([{ dataIndex: 1 } as TooltipItem<'line'>])).toBe('Jan 1, 2025 · Hold #2');
+    expect(tooltipTitle([{ dataIndex: 2 } as TooltipItem<'line'>])).toBe('Jan 3, 2025 · Hold #1');
   });
 
   it('displays improvement when enough data exists', () => {
@@ -228,17 +251,18 @@ describe('HoldTimeChart.vue', () => {
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions } });
     const text = wrapper.text();
 
-    expect(text).toContain('↑ 16.7s');
+    expect(wrapper.get('[role=img]').attributes('aria-label')).toBe('Increase');
+    expect(text).toContain('16.7s');
     expect(statValue(wrapper, 'Best')).toBe('30s');
   });
 
   it.each([
-    [[10, 20], '↑ 10.0s'],
-    [[20, 10], '↓ 10.0s'],
-    [[10, 10], '→ 0.0s'],
-    [[10, 15, 20], '↑ 10.0s'],
-    [[10, 20, 30, 40], '↑ 20.0s'],
-  ])('compares separate groups for hold durations %j', (durations, expected) => {
+    [[10, 20], '10.0s', 'Increase'],
+    [[20, 10], '10.0s', 'Decrease'],
+    [[10, 10], '0.0s', 'No change'],
+    [[10, 15, 20], '10.0s', 'Increase'],
+    [[10, 20, 30, 40], '20.0s', 'Increase'],
+  ])('compares separate groups for hold durations %j', (durations, expected, direction) => {
     const session = makeSession('holds', new Date('2026-01-01'));
     session.sets = [
       {
@@ -254,6 +278,7 @@ describe('HoldTimeChart.vue', () => {
       },
     ];
     const wrapper = shallowMount(HoldTimeChart, { props: { sessions: [session] } });
+    expect(wrapper.get('[role=img]').attributes('aria-label')).toBe(direction);
     expect(wrapper.text()).toContain(expected);
   });
 
@@ -344,7 +369,8 @@ describe('HoldTimeChart.vue', () => {
     expect(statValue(wrapper, 'Average')).toBe('23s');
     expect(statValue(wrapper, 'Best')).toBe('25s');
     expect(statValue(wrapper, 'Sessions')).toBe('1');
-    expect(text).toContain('↑ 5.0s');
+    expect(wrapper.get('[role=img]').attributes('aria-label')).toBe('Increase');
+    expect(text).toContain('5.0s');
   });
 
   it('displays improvement metrics when there are multiple holds', () => {
@@ -409,7 +435,8 @@ describe('HoldTimeChart.vue', () => {
     // Should show stats
     expect(text).toContain('Best');
     expect(text).toContain('Average');
-    expect(text).toContain('↑ 5.0s');
+    expect(wrapper.get('[role=img]').attributes('aria-label')).toBe('Increase');
+    expect(text).toContain('5.0s');
     expect(statValue(wrapper, 'Average')).toBe('23s');
     expect(statValue(wrapper, 'Best')).toBe('25s');
     expect(statValue(wrapper, 'Sessions')).toBe('2');
@@ -480,6 +507,19 @@ describe('SessionsPerWeekChart.vue', () => {
     expect(text).toContain('This Week');
     expect(text).toContain('0.4');
     expect(text).toContain('2');
+    const chart = wrapper.getComponent(Bar);
+    expect(chart.vm.$attrs.data).toMatchObject({
+      labels: expect.arrayContaining(['This week']),
+      datasets: [{ backgroundColor: ['#675e51', '#675e51', '#675e51', '#675e51', '#675e51', '#675e51', '#675e51', '#b1c8b5'] }],
+    });
+    const options = chart.vm.$attrs.options as {
+      scales: { x: { afterBuildTicks: (scale: { maxWidth: number; ticks: Array<{ value: number }> }) => void } };
+    };
+    for (const maxWidth of [280, 410]) {
+      const xScale = { maxWidth, ticks: Array.from({ length: 8 }, (_, value) => ({ value })) };
+      options.scales.x.afterBuildTicks(xScale);
+      expect(xScale.ticks.map(({ value }) => value)).toEqual([0, 2, 5, 7]);
+    }
   });
 });
 

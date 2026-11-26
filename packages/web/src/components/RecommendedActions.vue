@@ -1,7 +1,7 @@
 <template>
   <aside data-testid="recommended-actions" class="recommendation">
     <div class="recommendation-copy">
-      <p class="eyebrow">Recommended for you</p>
+      <p class="eyebrow">Recommended</p>
       <h2>{{ recommendation.title }}</h2>
       <p v-if="summary" class="recommendation-duration">{{ summary.duration }}</p>
     </div>
@@ -9,18 +9,30 @@
       <template v-if="hasRecommendedConfig">
         <button
           data-testid="start-recommended"
-          class="btn-secondary"
+          class="btn-secondary recommendation-start"
           aria-label="Start recommended session"
           @click="emitStart"
         >
-          Start session <span aria-hidden="true">→</span>
+          <span>Start<span class="hidden min-[390px]:inline"> session</span></span>
+          <svg
+            aria-hidden="true"
+            class="size-3.5 shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 12h15m-6-6 6 6-6 6" />
+          </svg>
         </button>
-        <button data-testid="adjust-recommended" class="btn-ghost" @click="emitAdjust">Adjust first</button>
+        <button data-testid="adjust-recommended" class="btn-ghost" @click="emitAdjust">Adjust</button>
       </template>
       <button
         v-else-if="recommendation.kind === 'lab'"
         data-testid="open-lab"
-        class="btn-secondary"
+        class="btn-secondary recommendation-start"
         @click="emitOpenLab"
       >
         Open the Lab
@@ -28,8 +40,8 @@
       <p v-else data-testid="recommended-fallback" class="muted-copy text-sm">
         Choose a routine in Presets to get started.
       </p>
-      <button v-if="lastSession" data-testid="repeat-last" class="btn-ghost" @click="emitRepeat">
-        Repeat last session
+      <button v-if="lastSession" data-testid="repeat-last" class="btn-ghost" aria-label="Repeat last session" @click="emitRepeat">
+        Repeat last<span class="hidden min-[480px]:inline"> session</span>
       </button>
     </div>
   </aside>

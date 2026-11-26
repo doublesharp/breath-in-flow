@@ -4,7 +4,12 @@ import ResonanceAssessment, {
   buildAssessmentTrials,
   RESONANCE_TRIAL_DURATION_SECONDS,
 } from '../../src/components/ResonanceAssessment.vue';
-import { ASSESSMENT_TRIALS, type HRVAnalysis } from '@breath-in-flow/shared';
+import { ASSESSMENT_TRIALS, DEFAULT_BREATHING_CONFIG, type HRVAnalysis } from '@breath-in-flow/shared';
+import HrOscillation from '../../src/components/hrv/HrOscillation.vue';
+import { resetStorageForTesting, useStorage } from '../../src/composables/useStorage';
+import { CONFIGS_STORAGE_KEY } from '../../src/constants/storageKeys';
+import { soundService } from '../../src/services/soundService';
+import { ttsService } from '../../src/services/ttsService';
 import { ppgService } from '../../src/services/ppgService';
 import type { IBISample } from '@breath-in-flow/shared';
 
@@ -42,7 +47,7 @@ vi.mock('@capacitor/core', () => ({
 }));
 
 vi.mock('../../src/services/ttsService', () => ({
-  ttsService: { speak: vi.fn(), setEnabled: vi.fn(), setVoiceByUri: vi.fn() },
+  ttsService: { speak: vi.fn(), stop: vi.fn(), setEnabled: vi.fn(), setVoiceByUri: vi.fn() },
 }));
 
 vi.mock('../../src/services/permissionService', () => ({
@@ -125,6 +130,9 @@ describe('ResonanceAssessment', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    resetStorageForTesting();
+    localStorage.clear();
+    saveAssessment.mockReset().mockResolvedValue(undefined);
     lastLifecycleOptions = undefined;
     requestSensorPermissions.mockResolvedValue({ camera: 'granted', motion: 'granted' });
     getPermissionDeniedMessage.mockReturnValue(null);
@@ -133,6 +141,75 @@ describe('ResonanceAssessment', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('restores guidance, cues camera-trial breathing, and stops the voice on unmount', async () => {
+    ttsService.setEnabled(false);
+    const wrapper = mount(ResonanceAssessment, {
+      props: { ttsEnabled: true, ttsVoice: 'kokoro:af_heart', soundTheme: 'water' },
+    });
+    expect(ttsService.setEnabled).toHaveBeenLastCalledWith(true);
+    expect(ttsService.setVoiceByUri).toHaveBeenLastCalledWith('kokoro:af_heart');
+    expect(soundService.setTheme).toHaveBeenLastCalledWith('water');
+
+    await wrapper.get('select').setValue('60');
+    vi.mocked(ttsService.setEnabled).mockClear();
+    await wrapper.get('[data-testid="start-btn"]').trigger('click');
+    await flushPromises();
+    expect(ttsService.setEnabled).toHaveBeenLastCalledWith(true);
+    expect(ttsService.speak).toHaveBeenCalledWith('Full Breath In', { targetDurationSeconds: expect.any(Number) });
+    const trial = ASSESSMENT_TRIALS[0];
+    vi.mocked(ttsService.speak).mockClear();
+    vi.mocked(soundService.playClick).mockClear();
+    vi.advanceTimersByTime(60_000);
+    await flushPromises();
+    expect(wrapper.text()).toContain('Follow the audio breathing cues');
+    expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(false);
+    expect(ttsService.speak).toHaveBeenLastCalledWith('Full Breath In', { targetDurationSeconds: trial.inhaleTime });
+    const clicksAtTrialStart = vi.mocked(soundService.playClick).mock.calls.length;
+    expect(clicksAtTrialStart).toBeGreaterThan(0);
+
+    vi.advanceTimersByTime(trial.inhaleTime * 1_000 + 100);
+    expect(ttsService.speak).toHaveBeenLastCalledWith('Full Breath Out', { targetDurationSeconds: trial.exhaleTime });
+    expect(vi.mocked(soundService.playClick).mock.calls.length).toBeGreaterThan(clicksAtTrialStart);
+
+    await wrapper.setProps({ ttsEnabled: false, ttsVoice: undefined, soundEnabled: false, soundTheme: 'wind' });
+    expect(ttsService.setEnabled).toHaveBeenLastCalledWith(false);
+    expect(ttsService.setVoiceByUri).toHaveBeenLastCalledWith('');
+    expect(soundService.setTheme).toHaveBeenLastCalledWith('wind');
+    expect(soundService.setEnabled).toHaveBeenLastCalledWith(false);
+    vi.mocked(ttsService.speak).mockClear();
+    vi.advanceTimersByTime(trial.exhaleTime * 1_000 + 100);
+    expect(ttsService.speak).not.toHaveBeenCalled();
+
+    await wrapper.setProps({ ttsEnabled: true });
+    wrapper.unmount();
+    expect(ttsService.stop).toHaveBeenCalledOnce();
+    expect(ttsService.setEnabled).toHaveBeenLastCalledWith(false);
+  });
+
+  it('plots raw heart-rate timestamps in elapsed seconds', async () => {
+    const wrapper = mount(ResonanceAssessment);
+    const analysis = resonanceAnalysis();
+    analysis.raw.timestamps = [45_000, 46_000, 46_980];
+    wrapper.vm.setTrialAnalysisForTesting(0, analysis);
+    wrapper.vm.setPhaseForTesting('SCORING');
+    await wrapper.vm.$nextTick();
+
+    const toggle = wrapper.findAll('button').find((button) => button.text() === 'Show pulse variability data');
+    expect(toggle).toBeDefined();
+    await toggle!.trigger('click');
+    expect(wrapper.getComponent(HrOscillation).props('hrData')).toEqual([
+      { time: 0, hr: 60 },
+      { time: 1, hr: 61.2 },
+      { time: 1.98, hr: 58.8 },
+    ]);
+
+    const emptyAnalysis = resonanceAnalysis();
+    emptyAnalysis.raw = { rrIntervals: [], timestamps: [], instantaneousHR: [] };
+    wrapper.vm.setTrialAnalysisForTesting(0, emptyAnalysis);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.getComponent(HrOscillation).props('hrData')).toEqual([]);
   });
 
   it('builds every configured trial to last at least two minutes', () => {
@@ -471,12 +548,12 @@ describe('ResonanceAssessment', () => {
       const wrapper = mount(ResonanceAssessment);
       const sensorSection = wrapper.find('[data-testid="sensor-selection"]');
       const buttons = sensorSection.findAll('button');
-      expect(buttons[0].classes()).toContain('border-emerald-500');
+      expect(buttons[0].classes()).toContain('border-sage');
       expect(buttons[0].attributes('aria-pressed')).toBe('true');
-      expect(buttons[1].classes()).not.toContain('border-emerald-500');
+      expect(buttons[1].classes()).not.toContain('border-sage');
       expect(buttons[1].attributes('aria-pressed')).toBe('false');
-      expect(buttons[2].classes()).not.toContain('border-emerald-500');
-      expect(buttons[3].classes()).not.toContain('border-emerald-500');
+      expect(buttons[2].classes()).not.toContain('border-sage');
+      expect(buttons[3].classes()).not.toContain('border-sage');
     });
   });
 
@@ -526,17 +603,17 @@ describe('ResonanceAssessment', () => {
 
       const dizziness = wrapper.findAll('button').find((button) => button.text() === 'Dizziness');
       await dizziness!.trigger('click');
-      expect(dizziness!.classes()).toContain('bg-red-500/20');
+      expect(dizziness!.classes()).toContain('bg-terracotta/12');
       await dizziness!.trigger('click');
-      expect(dizziness!.classes()).not.toContain('bg-red-500/20');
+      expect(dizziness!.classes()).not.toContain('bg-terracotta/12');
 
       const smallAmplitude = wrapper.findAll('button').find((button) => button.text() === 'Small');
       await smallAmplitude!.trigger('click');
-      expect(smallAmplitude!.classes()).toContain('bg-blue-500/20');
+      expect(smallAmplitude!.classes()).toContain('bg-sage/15');
 
       const smooth = wrapper.findAll('button').find((button) => button.text() === 'Very Smooth');
       await smooth!.trigger('click');
-      expect(smooth!.classes()).toContain('bg-purple-500/20');
+      expect(smooth!.classes()).toContain('bg-sand/15');
     });
 
     it('expands available pulse-variability details and explains unavailable analysis', async () => {
@@ -770,24 +847,96 @@ describe('ResonanceAssessment', () => {
       expect(wrapper.text()).toContain('Suggested Rate');
     });
 
-    it('persists completed assessments through the authoritative IndexedDB storage', async () => {
-      saveAssessment.mockResolvedValue(undefined);
+    async function rateTrialsAndShowResult() {
       const wrapper = mount(ResonanceAssessment);
-      await wrapper.vm.setPhaseForTesting('RESULT');
+      wrapper.vm.setPhaseForTesting('SCORING');
       await wrapper.vm.$nextTick();
+      for (const trial of wrapper.findAll('[data-testid="trial-card"]')) {
+        await trial.get('[data-testid="comfort-rating"] button').trigger('click');
+      }
+      const calculate = wrapper.findAll('button').find((button) => button.text() === 'Calculate Result');
+      expect(calculate).toBeDefined();
+      await calculate!.trigger('click');
+      const save = wrapper.findAll('button').find((button) => button.text() === 'Save & Create Preset');
+      expect(save).toBeDefined();
+      return { wrapper, save: save! };
+    }
 
-      await wrapper
-        .findAll('button')
-        .find((button) => button.text().includes('Save & Create Preset'))!
-        .trigger('click');
+    it.each(['create', 'update'])('links the assessment to a preset after a successful %s', async (operation) => {
+      const storage = useStorage();
+      const prior = operation === 'update'
+        ? storage.createConfig({ ...DEFAULT_BREATHING_CONFIG, name: 'My Resonance Frequency — old' })
+        : undefined;
+      const { wrapper, save } = await rateTrialsAndShowResult();
+      await save.trigger('click');
+      await flushPromises();
 
-      expect(saveAssessment).toHaveBeenCalledWith(
-        expect.objectContaining({ completedAt: expect.any(Date) })
-      );
+      const [preset] = storage.getAllConfigs();
+      expect(storage.getAllConfigs()).toHaveLength(1);
+      expect(preset.id).toBeDefined();
+      if (prior) expect(preset.id).toBe(prior.id);
+      expect(preset.name).toMatch(/^My Resonance Frequency — [\d.]+ BPM$/);
+      expect(saveAssessment).toHaveBeenCalledTimes(2);
+      const [assessment] = saveAssessment.mock.calls[0];
+      expect(saveAssessment).toHaveBeenLastCalledWith({
+        ...assessment,
+        createdPresetId: preset.id,
+      });
+      expect(wrapper.emitted('complete')).toEqual([[preset]]);
+    });
+
+    it.each(['create', 'update'])('shows an inline error when the preset %s fails and links on retry', async (operation) => {
+      const storage = useStorage();
+      if (operation === 'update') {
+        storage.createConfig({ ...DEFAULT_BREATHING_CONFIG, name: 'My Resonance Frequency — old' });
+      }
+      vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => { throw new Error('Storage full'); });
+      const { wrapper, save } = await rateTrialsAndShowResult();
+
+      await save.trigger('click');
+      await flushPromises();
+
+      expect(wrapper.get('[role="alert"]').text()).toContain('the practice preset could not be saved');
+      expect(wrapper.emitted('complete')).toBeUndefined();
+      expect(saveAssessment).toHaveBeenCalledOnce();
+      expect(storage.getAllConfigs()).toHaveLength(operation === 'create' ? 0 : 1);
+
+      await save.trigger('click');
+      await flushPromises();
+      expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+      expect(saveAssessment).toHaveBeenCalledTimes(2);
+      expect(saveAssessment).toHaveBeenLastCalledWith(expect.objectContaining({
+        id: saveAssessment.mock.calls[0][0].id,
+        createdPresetId: storage.getAllConfigs()[0].id,
+      }));
+    });
+
+    it('retries linking a saved preset without creating a second assessment or preset', async () => {
+      saveAssessment.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('IndexedDB unavailable'));
+      const { wrapper, save } = await rateTrialsAndShowResult();
+
+      await save.trigger('click');
+      await flushPromises();
+
+      const storage = useStorage();
+      const [preset] = storage.getAllConfigs();
+      expect(wrapper.get('[role="alert"]').text()).toContain('could not be linked to the assessment');
+      expect(wrapper.emitted('complete')).toBeUndefined();
+
+      await save.trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+      expect(storage.getAllConfigs()).toHaveLength(1);
+      expect(saveAssessment).toHaveBeenCalledTimes(3);
+      expect(saveAssessment).toHaveBeenLastCalledWith(expect.objectContaining({
+        id: saveAssessment.mock.calls[0][0].id,
+        createdPresetId: preset.id,
+      }));
     });
 
     it('does not create a practice preset when authoritative assessment persistence fails', async () => {
-      localStorage.removeItem('breath-in-flow-configs');
+      localStorage.removeItem(CONFIGS_STORAGE_KEY);
       let rejectAssessment!: (error: Error) => void;
       saveAssessment.mockReturnValueOnce(
         new Promise((_resolve, reject) => {
@@ -803,13 +952,13 @@ describe('ResonanceAssessment', () => {
         .find((button) => button.text().includes('Save & Create Preset'))!
         .trigger('click');
 
-      expect(localStorage.getItem('breath-in-flow-configs')).toBeNull();
+      expect(localStorage.getItem(CONFIGS_STORAGE_KEY)).toBeNull();
       expect(wrapper.emitted('complete')).toBeUndefined();
 
       rejectAssessment(new Error('IndexedDB unavailable'));
       await flushPromises();
       expect(wrapper.text()).toContain('could not be saved');
-      expect(localStorage.getItem('breath-in-flow-configs')).toBeNull();
+      expect(localStorage.getItem(CONFIGS_STORAGE_KEY)).toBeNull();
     });
   });
 }, 30_000);

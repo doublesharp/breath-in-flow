@@ -28,6 +28,7 @@
     "build:linux": "./scripts/build.sh linux",
     "build:desktop": "./scripts/build.sh desktop",
     "build:android": "./scripts/build.sh android",
+    "android:aab": "pnpm --filter @breath-in-flow/web build && pnpm --filter @breath-in-flow/web exec cap sync android && cd packages/web/android && ./gradlew bundleRelease",
     "build:ios": "./scripts/build.sh ios",
     "build:mobile": "./scripts/build.sh mobile",
     "build:web": "./scripts/build.sh web",

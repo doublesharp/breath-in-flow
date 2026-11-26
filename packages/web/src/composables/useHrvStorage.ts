@@ -657,7 +657,10 @@ async function replaceHrvState(snapshot: HrvStorageSnapshot): Promise<void> {
   // Finish migration before replacing data, or a later Lab initialization could
   // merge the stale localStorage source into the restored database.
   await migrateLegacyAssessments({ throwOnError: true });
+  await writeHrvState(measurements, assessments);
+}
 
+async function writeHrvState(measurements: HrvMeasurement[], assessments: AssessmentResult[]): Promise<void> {
   const db = await openDB();
   try {
     // One transaction spanning both stores makes the replacement atomic: an
@@ -681,6 +684,15 @@ async function replaceHrvState(snapshot: HrvStorageSnapshot): Promise<void> {
   } finally {
     db.close();
   }
+}
+
+async function clearHrvData(): Promise<void> {
+  // Finish any import already in flight and remove its source before clearing
+  // the database so old assessments cannot reappear the next time Lab opens.
+  await legacyMigration?.catch(() => {});
+  localStorage.removeItem(LEGACY_ASSESSMENTS_KEY);
+  localStorage.removeItem(ASSESSMENTS_MIGRATION_KEY);
+  await writeHrvState([], []);
 }
 
 async function initialize(): Promise<void> {
@@ -709,6 +721,7 @@ export function useHrvStorage() {
     // Backup repository operations
     exportHrvState,
     replaceHrvState,
+    clearHrvData,
     // Validated measurement parsing for the backup coordinator (no raw DB access).
     parseMeasurement: validateMeasurement,
 

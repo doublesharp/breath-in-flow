@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import HrvTrends from '../../src/components/HrvTrends.vue';
 import type { HrvMeasurement } from '../../src/composables/useHrvStorage';
 
@@ -122,11 +122,20 @@ describe('HrvTrends', () => {
     expect(wrapper.text()).not.toContain('Resting Heart Rate');
   });
 
-  it('renders without crashing with empty measurements', () => {
+  it('offers the Quick Check until a measurement is saved', async () => {
     const wrapper = mount(HrvTrends, {
       props: { measurements: [] },
     });
-    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.get('[data-testid="trends-empty"]').text()).toContain('2-minute Quick Check');
+    expect(wrapper.text()).toContain('Repeat it under similar conditions');
+    expect(wrapper.findAll('canvas')).toHaveLength(0);
+    expect(wrapper.find('[data-testid="range-btn-7d"]').exists()).toBe(false);
+
+    await wrapper.setProps({ measurements: [makeMeasurement()] });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="trends-empty"]').exists()).toBe(false);
+    const context = wrapper.get<HTMLCanvasElement>('[data-testid="rmssd-canvas"]').element.getContext('2d');
+    expect(context?.fillText).toHaveBeenCalled();
   });
 
   it('renders with sample measurement data', () => {
@@ -143,7 +152,7 @@ describe('HrvTrends', () => {
 
   it('renders time range buttons', () => {
     const wrapper = mount(HrvTrends, {
-      props: { measurements: [] },
+      props: { measurements: [makeMeasurement()] },
     });
     const selector = wrapper.find('[data-testid="time-range-selector"]');
     expect(selector.exists()).toBe(true);
@@ -239,14 +248,21 @@ describe('HrvTrends', () => {
     }
   });
 
-  it('shows "no data" message when filtered range has no measurements', () => {
+  it('shows one empty message per chart when the filtered range has no measurements', async () => {
     // Measurements from 60 days ago — won't appear in default 30-day view
     const measurements = [makeMeasurement({ daysAgo: 60 })];
     const wrapper = mount(HrvTrends, {
       props: { measurements },
     });
-    // The "No data in selected range" text should appear inside chart containers
-    expect(wrapper.text()).toContain('No data in selected range');
+    await flushPromises();
+    const charts = wrapper.findAll('[data-testid$="chart-container"]');
+    expect(charts).toHaveLength(3);
+    for (const chart of charts) {
+      expect(chart.text().match(/No data in selected range/g)).toHaveLength(1);
+    }
+    const context = wrapper.get('canvas').element.getContext('2d');
+    expect(context?.clearRect).toHaveBeenCalled();
+    expect(context?.fillText).not.toHaveBeenCalled();
   });
 
   it('switching time range filters data', async () => {

@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { enableAutoUnmount, flushPromises, mount, shallowMount } from '@vue/test-utils';
+import ResonanceAssessment from '@/components/ResonanceAssessment.vue';
+import { LAST_CONFIG_STORAGE_KEY } from '@/constants/storageKeys';
+import { resetStorageForTesting, useStorage } from '@/composables/useStorage';
 import LabTab from '@/components/LabTab.vue';
 import HrvTrends from '@/components/HrvTrends.vue';
 import LabInsights from '@/components/LabInsights.vue';
@@ -118,12 +121,21 @@ describe('LabTab.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     lastLifecycleOptions = undefined;
+    hrvStorageMock.saveMeasurement.mockResolvedValue(undefined);
     hrvStorageMock.initialize.mockResolvedValue(undefined);
     hrvStorageMock.getMeasurements.mockResolvedValue([]);
     hrvStorageMock.getLatestMeasurement.mockResolvedValue(null);
     hrvStorageMock.hasAnyMeasurements.mockResolvedValue(false);
     hrvStorageMock.getAssessments.mockResolvedValue([]);
     hrvStorageMock.getLatestAssessment.mockResolvedValue(null);
+  });
+
+  it('explains that pulse estimates are for general wellness and personal trends', () => {
+    const wrapper = shallowMount(LabTab);
+    const footnote = wrapper.get('p.text-muted:last-child');
+    expect(footnote.text()).toBe(
+      'Pulse estimates are for general wellness and personal trend tracking — not for medical diagnosis.'
+    );
   });
 
   it('awaits storage initialization before exposing a migrated legacy assessment', async () => {
@@ -332,6 +344,11 @@ describe('LabTab.vue', () => {
     expect(range.value).toBe('120');
     expect(range.getAttribute('aria-valuetext')).toBe('2 minutes');
 
+    range.value = '150';
+    range.dispatchEvent(new Event('input', { bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(range.getAttribute('aria-valuetext')).toBe('2 min 30 sec');
+
     wrapper.unmount();
   });
 
@@ -454,13 +471,29 @@ describe('LabTab.vue', () => {
     expect(vm.currentEligibility.eligible).toBe(true);
     expect(vm.currentEligibility.observedDurationSeconds).toBe(300);
 
-    Array.from(document.body.querySelectorAll('button'))
-      .find((button) => button.textContent?.trim() === 'Save')!
-      .click();
+    const dialog = document.body.querySelector<HTMLElement>('[data-testid="measurement-dialog"]')!;
+    const notes = dialog.querySelector<HTMLTextAreaElement>('textarea')!;
+    notes.value = 'Measured before practice';
+    notes.dispatchEvent(new Event('input', { bubbles: true }));
+    const save = Array.from(dialog.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Save');
+    expect(save).toBeDefined();
+
+    hrvStorageMock.saveMeasurement.mockRejectedValueOnce(new Error('IndexedDB unavailable'));
+    save!.click();
     await flushPromises();
-    expect(hrvStorageMock.saveMeasurement).toHaveBeenCalledWith(
-      expect.objectContaining({ durationSeconds: 300 })
+
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toContain('Your measurement could not be saved.');
+    expect(notes.value).toBe('Measured before practice');
+    expect(save!.disabled).toBe(false);
+    expect(dialog.isConnected).toBe(true);
+
+    save!.click();
+    await flushPromises();
+    expect(hrvStorageMock.saveMeasurement).toHaveBeenCalledTimes(2);
+    expect(hrvStorageMock.saveMeasurement).toHaveBeenLastCalledWith(
+      expect.objectContaining({ durationSeconds: 300, notes: 'Measured before practice' })
     );
+    expect(document.body.querySelector('[data-testid="measurement-dialog"]')).toBeNull();
 
     wrapper.unmount();
   });
@@ -663,22 +696,45 @@ describe('LabTab.vue', () => {
     expect(wrapper.text()).toContain('Estimate My Breathing Response');
   });
 
-  it('shows recent results section', () => {
+  it.each([
+    [JSON.stringify({ ttsVoice: 'kokoro:af_heart' }), 'kokoro:af_heart'],
+    [JSON.stringify({}), ''],
+    ['{invalid', ''],
+  ])('passes the sound theme and voice preference from %s to the assessment', async (lastConfig, voice) => {
+    const storage = useStorage();
+    storage.setSoundTheme('water');
+    localStorage.setItem(LAST_CONFIG_STORAGE_KEY, lastConfig);
+    const wrapper = mount(LabTab, {
+      attachTo: document.body,
+      global: { stubs: { ResonanceAssessment: true } },
+    });
+    try {
+      const start = wrapper.findAll('button').find((button) => button.text().includes('Estimate My Breathing Response'));
+      expect(start).toBeDefined();
+      await start!.trigger('click');
+      const assessment = wrapper.getComponent(ResonanceAssessment);
+      expect(assessment.props()).toMatchObject({ soundEnabled: true, soundTheme: 'water', ttsEnabled: true, ttsVoice: voice });
+      storage.setSoundTheme('wind');
+      await wrapper.vm.$nextTick();
+      expect(assessment.props('soundTheme')).toBe('wind');
+    } finally {
+      wrapper.unmount();
+      localStorage.clear();
+      resetStorageForTesting();
+    }
+  });
+
+  it('shows one first-use card and opens the Quick Check preparation dialog', async () => {
     const wrapper = shallowMount(LabTab, {
-      global: {
-        stubs: {
-          HrTachogram: true,
-          SignalQualityIndicator: true,
-          HrvMetricsDashboard: true,
-          FrequencySpectrum: true,
-          PoincarePlot: true,
-          ResonanceAssessment: true,
-        },
-      },
+      global: { stubs: { HrvTrends: false, Teleport: true } },
     });
 
-    expect(wrapper.text()).toContain('Recent Results');
-    expect(wrapper.text()).toContain('No measurements yet');
+    const emptyCard = wrapper.get('[data-testid="trends-empty"]');
+    expect(emptyCard.text()).toContain('Your pulse trends start here');
+    expect(wrapper.findComponent(LabInsights).exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Recent Results');
+    await emptyCard.get('button').trigger('click');
+    expect(wrapper.get('[data-testid="prep-dialog"]').text()).toContain('Quick Check');
   });
 
   it('loads full measurement history and mounts trends and insights', async () => {
@@ -699,9 +755,10 @@ describe('LabTab.vue', () => {
     expect(hrvStorageMock.getMeasurements).toHaveBeenCalledWith();
     expect(wrapper.findComponent(HrvTrends).props('measurements')).toHaveLength(7);
     expect(wrapper.findComponent(LabInsights).props('measurements')).toHaveLength(7);
+    expect(wrapper.text()).toContain('Recent Results');
   });
 
-  it('does not show the first-use measurement CTA when an assessment already exists', async () => {
+  it('keeps the assessment insight even before any standalone measurements', async () => {
     hrvStorageMock.getLatestAssessment.mockResolvedValueOnce({
       id: crypto.randomUUID(),
       trials: [],
@@ -713,8 +770,9 @@ describe('LabTab.vue', () => {
     const wrapper = shallowMount(LabTab);
     await flushPromises();
 
-    expect(wrapper.text()).not.toContain('No measurements yet. Start a measurement above');
-    expect(wrapper.text()).toContain('No standalone measurements yet');
+    expect(wrapper.text()).toContain('Suggested practice rate');
+    expect(wrapper.findComponent(LabInsights).props('showEmptyGuidance')).toBe(false);
+    expect(wrapper.text()).not.toContain('Recent Results');
   });
 
   it('collects only the fused beat in dual-sensor mode', async () => {

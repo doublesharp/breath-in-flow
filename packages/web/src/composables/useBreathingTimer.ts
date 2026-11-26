@@ -432,6 +432,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     currentSet,
     isRunning,
     isPaused,
+    pausedPhase,
     extendedHoldElapsed,
     isFirstExtendedHold,
     isRecoveryBreath,

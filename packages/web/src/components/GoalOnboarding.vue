@@ -9,43 +9,66 @@
   >
     <div
       data-testid="goal-onboarding-card"
-      class="card-solid my-auto max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg min-w-0 overflow-y-auto overscroll-contain animate-scale-in"
+      class="card-solid my-auto grid max-h-[calc(100dvh-2rem)] w-full max-w-lg min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden !p-0 animate-scale-in"
     >
-      <h2 id="goal-onboarding-title" ref="titleRef" tabindex="-1" class="text-2xl font-bold text-white">
-        What brings you here?
-      </h2>
-      <p class="mt-2 text-slate-400">Pick a starting goal. You can change it any time.</p>
-
-      <fieldset class="mt-6 space-y-3">
-        <legend class="sr-only">Choose a wellness goal</legend>
-        <label
-          v-for="choice in choices"
-          :key="choice.goal"
-          class="flex items-start gap-3 p-4 rounded-xl border border-white/[0.08] bg-white/[0.03] cursor-pointer transition-colors hover:border-white/20"
-          :class="selected === choice.goal ? 'border-amber-400/60 bg-amber-500/10' : ''"
+      <div class="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
+        <h2
+          id="goal-onboarding-title"
+          ref="titleRef"
+          tabindex="-1"
+          class="text-2xl font-bold text-primary focus:outline-none"
         >
-          <input
-            v-model="selected"
-            type="radio"
-            name="wellness-goal"
-            class="mt-1 h-4 w-4 accent-amber-400"
-            :value="choice.goal"
-            :data-testid="choice.testId"
-          />
-          <span>
-            <span class="block font-medium text-white">{{ choice.label }}</span>
-            <span class="block text-sm text-slate-400">{{ choice.description }}</span>
-          </span>
-        </label>
-      </fieldset>
+          What brings you here?
+        </h2>
+        <p class="mt-2 text-muted">Pick a starting goal. You can change it any time.</p>
 
-      <p v-if="saveError" role="alert" class="mt-4 text-sm text-red-300">{{ saveError }}</p>
+        <fieldset class="mt-4 space-y-2 sm:mt-6 sm:space-y-3">
+          <legend class="sr-only">Choose a wellness goal</legend>
+          <label
+            v-for="choice in choices"
+            :key="choice.goal"
+            class="selectable-row flex min-h-14 items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors hover:border-sage/60 sm:p-4"
+            :class="selected === choice.goal ? 'border-sage/70 bg-sage/12' : 'border-line-subtle bg-surface-inset'"
+          >
+            <input
+              v-model="selected"
+              type="radio"
+              name="wellness-goal"
+              class="selectable-row-input"
+              :value="choice.goal"
+              :data-testid="choice.testId"
+            />
+            <span
+              aria-hidden="true"
+              class="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border"
+              :class="selected === choice.goal ? 'border-sage' : 'border-muted'"
+            >
+              <span v-if="selected === choice.goal" class="size-2.5 rounded-full bg-sage"></span>
+            </span>
+            <span>
+              <span class="block font-medium text-primary">{{ choice.label }}</span>
+              <span class="block text-sm text-muted">{{ choice.description }}</span>
+            </span>
+          </label>
+        </fieldset>
+
+        <p v-if="saveError" role="alert" class="mt-4 text-sm text-danger">{{ saveError }}</p>
+      </div>
 
       <div
         data-testid="goal-onboarding-actions"
-        class="sticky bottom-0 z-10 -mx-6 -mb-6 mt-6 flex justify-end border-t border-white/[0.06] bg-[#2b241d]/95 px-6 py-4 backdrop-blur-sm"
+        class="sticky bottom-0 flex items-center justify-end gap-3 border-t border-line-subtle bg-surface-card px-4 py-3 sm:px-6"
       >
-        <button data-testid="save-goal" class="btn-primary" :disabled="selected === null" @click="save">
+        <p v-if="selected === null" id="goal-selection-hint" class="mr-auto text-sm text-sand">
+          Select a goal to continue
+        </p>
+        <button
+          data-testid="save-goal"
+          class="btn-primary disabled:opacity-45"
+          :disabled="selected === null"
+          :aria-describedby="selected === null ? 'goal-selection-hint' : undefined"
+          @click="save"
+        >
           Continue
         </button>
       </div>
@@ -84,7 +107,7 @@ const choices: Array<{ goal: UserGoal; testId: string; label: string; descriptio
     goal: 'EXPLORE_PULSE_VARIABILITY',
     testId: 'goal-pulse',
     label: 'Explore pulse variability',
-    description: 'Head to the Lab for an optional pulse-timing check.',
+    description: 'Head to Pulse Variability for an optional pulse-timing check.',
   },
 ];
 

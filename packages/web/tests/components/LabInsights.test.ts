@@ -108,6 +108,14 @@ describe('LabInsights', () => {
     expect(wrapper.find('[data-testid="no-data-card"]').exists()).toBe(true);
   });
 
+  it('shows the assessment insight without repeating first-use measurement guidance', () => {
+    const wrapper = mount(LabInsights, {
+      props: { measurements: [], latestAssessment: makeAssessment(), showEmptyGuidance: false },
+    });
+    expect(wrapper.get('[data-testid="insight-card-rf-recommendation"]').text()).toContain('5.5 BPM');
+    expect(wrapper.find('[data-testid="no-data-card"]').exists()).toBe(false);
+  });
+
   it('does not show "no data" card with 3 or more measurements', () => {
     const measurements = [
       makeMeasurement({ daysAgo: 1 }),
@@ -231,27 +239,12 @@ describe('LabInsights', () => {
   });
 
   it('does not show streak when days are not consecutive', () => {
-    // Measurements with a gap
-    const measurements = [
-      makeMeasurement({ daysAgo: 0 }),
-      makeMeasurement({ daysAgo: 1 }),
-      // gap on day 2
-      makeMeasurement({ daysAgo: 3 }),
-      makeMeasurement({ daysAgo: 4 }),
-    ];
-
+    const measurements = [0, 2, 4, 6].map((daysAgo) => makeMeasurement({ daysAgo }));
     const wrapper = mount(LabInsights, {
       props: { measurements, latestAssessment: null },
     });
 
-    // streak should only be 2 (today + yesterday), still shown
-    const card = wrapper.find('[data-testid="insight-card-measurement-streak"]');
-    if (card.exists()) {
-      // streak of 2 is still valid
-      expect(wrapper.text()).toContain('2 days in a row');
-    }
-    // OR no streak card if logic requires >2
-    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.find('[data-testid="insight-card-measurement-streak"]').exists()).toBe(false);
   });
 
   it('does not label the time with higher RMSSD as medically best', () => {
@@ -290,12 +283,12 @@ describe('LabInsights', () => {
     expect(wrapper.find('[data-testid="insight-card-best-time"]').exists()).toBe(false);
   });
 
-  it('renders without crashing when latestAssessment is null', () => {
+  it('shows the measurement streak without an assessment recommendation', () => {
     const measurements = Array.from({ length: 5 }, (_, i) => makeMeasurement({ daysAgo: i }));
     const wrapper = mount(LabInsights, {
       props: { measurements, latestAssessment: null },
     });
-    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.get('[data-testid="insight-card-measurement-streak"]').text()).toContain('5 days in a row');
     expect(wrapper.find('[data-testid="insight-card-rf-recommendation"]').exists()).toBe(false);
   });
 
@@ -334,9 +327,9 @@ describe('LabInsights', () => {
     });
 
     const card = wrapper.get('[data-testid="insight-card-rmssd-comparison"]');
-    expect(card.classes()).toContain('border-slate-500');
-    expect(card.html()).toContain('text-slate-400');
-    expect(card.html()).not.toContain('border-emerald-500');
-    expect(card.html()).not.toContain('border-amber-500');
+    expect(card.classes()).toContain('border-l-muted/50');
+    expect(card.html()).toContain('text-muted');
+    expect(card.html()).not.toContain('border-l-sage/50');
+    expect(card.html()).not.toContain('border-l-sand/50');
   });
 });

@@ -51,3 +51,26 @@ export function getPracticeSummary(config: BreathingConfig): PracticeSummary | n
 
   return { duration, detail: detailParts.join(' · ') };
 }
+
+export function formatSessionPattern({
+  inhaleTime,
+  inhaleHoldTime = 0,
+  exhaleTime,
+  exhaleHoldTime = 0,
+}: BreathingConfig): string {
+  const phases = [inhaleTime];
+  if (inhaleHoldTime > 0 || exhaleHoldTime > 0) phases.push(inhaleHoldTime);
+  phases.push(exhaleTime);
+  if (exhaleHoldTime > 0) phases.push(exhaleHoldTime);
+  return phases.map((seconds) => `${seconds}s`).join(' · ');
+}
+
+export function formatSessionDate(date: Date): string {
+  return new Date(date).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}

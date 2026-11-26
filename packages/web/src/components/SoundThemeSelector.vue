@@ -1,25 +1,25 @@
 <template>
   <div class="sound-theme-selector">
-    <label for="sound-theme" class="block text-sm font-medium text-slate-300 mb-2"> Sound Theme </label>
+    <label for="sound-theme" class="block text-sm font-medium text-secondary mb-2"> Sound Theme </label>
     <div class="flex flex-col sm:flex-row gap-2">
       <select
         id="sound-theme"
         v-model="selectedTheme"
         @change="onThemeChange"
-        class="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+        class="min-w-0 flex-1 rounded-lg border border-line-strong bg-surface-raised px-3 py-2 text-primary"
       >
-        <option value="wood">🥁 Woodblock</option>
-        <option value="water">💧 Water</option>
-        <option value="wind">🌬️ Wind</option>
-        <option value="subtle">✨ Subtle</option>
-        <option value="chimes">🔔 Chimes</option>
+        <option value="wood">Woodblock</option>
+        <option value="water">Water</option>
+        <option value="wind">Wind</option>
+        <option value="subtle">Subtle</option>
+        <option value="chimes">Chimes</option>
       </select>
       <button
         @click="testTheme"
-        class="px-4 py-2 text-sm font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-700 flex items-center justify-center gap-2 whitespace-nowrap"
+        class="btn-secondary flex shrink-0 items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="!soundEnabled"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -75,11 +75,3 @@ watch(
   }
 );
 </script>
-
-<style scoped>
-/* Dark theme for select dropdown options */
-select option {
-  background-color: #1e293b;
-  color: #e2e8f0;
-}
-</style>

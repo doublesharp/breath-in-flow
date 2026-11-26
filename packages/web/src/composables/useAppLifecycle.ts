@@ -1,13 +1,14 @@
 import { App } from '@capacitor/app';
-import type { PluginListenerHandle } from '@capacitor/core';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { onMounted, onUnmounted } from 'vue';
 
 interface AppLifecycleOptions {
   onInactive: () => void | Promise<void>;
   onActive: () => void | Promise<void>;
+  nativeOnly?: boolean;
 }
 
-export function useAppLifecycle({ onInactive, onActive }: AppLifecycleOptions) {
+export function useAppLifecycle({ onInactive, onActive, nativeOnly }: AppLifecycleOptions) {
   let documentActive = document.visibilityState !== 'hidden';
   let nativeActive: boolean | null = null;
   let active = documentActive;
@@ -36,6 +37,7 @@ export function useAppLifecycle({ onInactive, onActive }: AppLifecycleOptions) {
   };
 
   onMounted(() => {
+    if (nativeOnly && !Capacitor.isNativePlatform()) return;
     document.addEventListener('visibilitychange', handleVisibilityChange);
     nativeRegistration = App.addListener('appStateChange', ({ isActive }) => {
       nativeActive = isActive;

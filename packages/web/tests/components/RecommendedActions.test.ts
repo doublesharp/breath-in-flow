@@ -50,7 +50,7 @@ describe('RecommendedActions', () => {
     );
   });
 
-  it('emits an adjustable clone through Adjust first', async () => {
+  it('emits an adjustable clone through Adjust', async () => {
     const wrapper = mount(RecommendedActions, {
       props: { goal: 'RELAX', lastSession: null },
     });

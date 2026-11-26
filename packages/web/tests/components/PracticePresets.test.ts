@@ -1,4 +1,4 @@
-import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { DOMWrapper, enableAutoUnmount, mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { nextTick } from 'vue';
 import PracticePresets from '../../src/components/PracticePresets.vue';
@@ -46,6 +46,17 @@ describe('PracticePresets.vue', () => {
     await wrapper.get('[data-testid="create-preset"]').trigger('click');
     expect(wrapper.emitted('createConfig')).toEqual([[]]);
   });
+
+  it('offers direct editing for a saved preset without emitting a load', async () => {
+    const config = { id: 'saved', name: 'Evening calm', inhaleTime: 4, exhaleTime: 6 };
+    useStorageMock.mockReturnValue({ getAllConfigs: () => [config] });
+    const wrapper = mount(PracticePresets);
+
+    await wrapper.get('button[aria-label="Edit Evening calm"]').trigger('click');
+
+    expect(wrapper.emitted('edit-config')).toEqual([[config]]);
+    expect(wrapper.emitted('loadConfig')).toBeUndefined();
+  });
   it('shows empty state when no configs', async () => {
     useStorageMock.mockReturnValue({ getAllConfigs: () => [] });
 
@@ -54,11 +65,11 @@ describe('PracticePresets.vue', () => {
   });
 
   it('renders config details including hold lines and extended hold info', async () => {
-    const now = new Date();
+    const createdAt = new Date(2026, 10, 15, 12);
     const config = {
       id: 'c1',
       name: 'Test Config',
-      createdAt: now,
+      createdAt,
       inhaleTime: 4,
       inhaleHoldTime: 3,
       exhaleTime: 5,
@@ -80,6 +91,7 @@ describe('PracticePresets.vue', () => {
     const text = wrapper.text();
 
     expect(text).toContain('Test Config');
+    expect(text).toContain('Nov 15, 2026');
     const phases = wrapper.get('[data-testid="saved-routine"]').findAll('dl > div');
     expect(phases.map((phase) => phase.text())).toEqual([
       'Inhale4s',
@@ -130,7 +142,7 @@ describe('PracticePresets.vue', () => {
     wrapper.unmount();
   });
 
-  it('does not call deleteConfig when user cancels', async () => {
+  it('isolates the delete modal and cancels with Escape without removing the preset', async () => {
     const deleteMock = vi.fn();
     const config = {
       id: 'c1',
@@ -147,34 +159,36 @@ describe('PracticePresets.vue', () => {
 
     useStorageMock.mockReturnValue({ getAllConfigs: () => [config], deleteConfig: deleteMock });
 
-    const wrapper = mount(PracticePresets);
-
-    // Click delete button
-    const btn = wrapper.find('button[title="Delete configuration"]');
-    await btn.trigger('click');
-
-    expect(document.body.textContent).toContain('Are you sure you want to delete');
-    const cancel = Array.from(document.body.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Cancel'
-    );
-    expect(cancel).toBeDefined();
-    cancel!.click();
+    const wrapper = mount(PracticePresets, { attachTo: document.body });
+    const trigger = wrapper.get<HTMLButtonElement>('button[aria-label="Delete ToDelete"]');
+    trigger.element.focus();
+    await trigger.trigger('click');
     await nextTick();
-    expect(document.body.textContent).not.toContain('Are you sure you want to delete');
+
+    const page = new DOMWrapper(document.body);
+    const modalSelector = '[role="alertdialog"][aria-modal="true"][aria-labelledby="delete-preset-title"]';
+    const modal = page.get(modalSelector);
+    expect(modal.text()).toContain('Are you sure you want to delete');
+    const cancel = modal.get('button.btn-secondary');
+    expect(document.activeElement).toBe(cancel.element);
+    expect(trigger.element.closest('[inert]')).not.toBeNull();
+    await cancel.trigger('keydown', { key: 'Escape' });
+    expect(page.find(modalSelector).exists()).toBe(false);
+    expect(document.activeElement).toBe(trigger.element);
+    expect(trigger.element.closest('[inert]')).toBeNull();
     expect(deleteMock).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain('ToDelete');
   });
 
-  it('handles preset configurations loading', async () => {
+  it('lists built-in routines and their load actions when there are no saved presets', () => {
     useStorageMock.mockReturnValue({ getAllConfigs: () => [] });
-
     const wrapper = mount(PracticePresets);
 
-    // Should display preset section
     expect(wrapper.text()).toContain('Quick Presets');
-    // Should have preset buttons for built-in presets
-    const buttons = wrapper.findAll('button');
-    expect(buttons.length).toBeGreaterThan(0);
+    const coherentBreathing = wrapper.get('[data-testid="load-coherent-breathing"]');
+    expect(coherentBreathing.element.tagName).toBe('BUTTON');
+    expect(coherentBreathing.element.closest('article')?.querySelector('h4')?.textContent).toBe('Coherent Breathing');
+    expect(wrapper.findAll('[data-testid="saved-routine"]')).toHaveLength(0);
   });
 
   it('emits loadConfig when clicking load button on saved config', async () => {
@@ -232,8 +246,14 @@ describe('PracticePresets.vue', () => {
     await guidanceButton.trigger('click');
 
     expect(guidanceButton.attributes('aria-expanded')).toBe('true');
-    expect(wrapper.text()).toContain('Endurance');
-    expect(wrapper.text()).toContain('Strengthening');
+    const card = wrapper.findAll('article').find((article) =>
+      article.get('h4').text() === 'Diaphragm Resistance Training — Starter'
+    );
+    expect(card).toBeDefined();
+    expect(card!.findAll('h4')).toHaveLength(1);
+    expect(card!.findAll('h5').map((heading) => heading.text())).toEqual([
+      'Set up', 'Technique', 'Endurance', 'Strengthening', 'Precautions',
+    ]);
     expect(wrapper.text()).toContain('Stop for dizziness');
     expect(wrapper.text()).toContain('purpose-designed inspiratory resistance trainer');
 

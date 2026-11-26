@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_BREATHING_CONFIG, type BreathingConfig } from '@breath-in-flow/shared';
-import { getPracticeSummary } from '../../src/utils/practiceSummary';
+import { formatSessionPattern, getPracticeSummary } from '../../src/utils/practiceSummary';
 
 function config(overrides: Partial<BreathingConfig> = {}): BreathingConfig {
   return { ...DEFAULT_BREATHING_CONFIG, ...overrides } as BreathingConfig;
 }
+
+describe('formatSessionPattern', () => {
+  it.each([
+    [5, 0, 5, 0, '5s · 5s'],
+    [3, 5, 7, 0, '3s · 5s · 7s'],
+    [4, 4, 4, 4, '4s · 4s · 4s · 4s'],
+    [4, 0, 4, 2, '4s · 0s · 4s · 2s'],
+  ])('formats %ss / %ss / %ss / %ss as %s', (inhaleTime, inhaleHoldTime, exhaleTime, exhaleHoldTime, expected) => {
+    expect(formatSessionPattern(config({ inhaleTime, inhaleHoldTime, exhaleTime, exhaleHoldTime }))).toBe(expected);
+  });
+});
 
 describe('getPracticeSummary', () => {
   it('summarizes a finite routine from every scheduled breathing phase', () => {

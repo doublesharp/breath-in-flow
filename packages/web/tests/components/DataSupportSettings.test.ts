@@ -1,8 +1,13 @@
+import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import type { VueWrapper } from '@vue/test-utils';
 import DataSupportSettings from '../../src/components/DataSupportSettings.vue';
 import { usePreferences } from '../../src/composables';
+import { resetStorageForTesting, useStorage } from '@/composables/useStorage';
+import { useHrvStorage } from '@/composables/useHrvStorage';
+import * as storageKeys from '@/constants/storageKeys';
+import { DEFAULT_BREATHING_CONFIG } from '@breath-in-flow/shared';
 import { BackupRestoreError } from '../../src/services/backupService';
 
 enableAutoUnmount(afterEach);
@@ -56,10 +61,29 @@ function attachFile(wrapper: VueWrapper, contents = '{}') {
   return input;
 }
 
+async function withPulseStores(
+  mode: IDBTransactionMode,
+  run: (transaction: IDBTransaction) => void
+) {
+  await useHrvStorage().getMeasurements();
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open('breath-in-flow-hrv');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction(['measurements', 'assessments'], mode);
+      transaction.oncomplete = () => { db.close(); resolve(); };
+      transaction.onabort = () => { db.close(); reject(transaction.error); };
+      run(transaction);
+    };
+  });
+}
+
 describe('DataSupportSettings.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    resetStorageForTesting();
     usePreferences().clearGoal();
     supportMocks.sendSupportMessage.mockResolvedValue({ method: 'share' });
     supportMocks.shareBackupFile.mockResolvedValue({ method: 'download' });
@@ -69,6 +93,97 @@ describe('DataSupportSettings.vue', () => {
     });
     backupServiceMock.restoreBackup.mockResolvedValue(undefined);
     backupServiceMock.parseBackupFile.mockResolvedValue(parsedBackupFixture());
+  });
+
+  it('links to the privacy policy and explains on-device storage and breath-hold safety', () => {
+    const wrapper = mount(DataSupportSettings);
+    expect(wrapper.get('a[href="/privacy.html"]').attributes()).toMatchObject({
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    });
+    expect(wrapper.text()).toContain('localStorage and IndexedDB');
+    expect(wrapper.text()).toContain('while driving');
+  });
+
+  it('uses the cancel button as initial focus and dismisses with Escape without erasing', async () => {
+    usePreferences().setGoal('RELAX');
+    const wrapper = mount(DataSupportSettings, { attachTo: document.body });
+    const trigger = wrapper.get('[data-testid="erase-all-data"]');
+    (trigger.element as HTMLElement).focus();
+    await trigger.trigger('click');
+    await flushPromises();
+    const dialog = wrapper.get('[data-testid="erase-confirm-dialog"]');
+    const cancel = dialog.get('[data-testid="cancel-erase"]');
+    expect(dialog.attributes('role')).toBe('alertdialog');
+    expect(document.activeElement).toBe(cancel.element);
+    await cancel.trigger('keydown', { key: 'Escape' });
+    await flushPromises();
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(trigger.element);
+    expect(usePreferences().selectedGoal.value).toBe('RELAX');
+  });
+
+  it('erases saved data, legacy pulse data, and preferences, and permits a fresh backup', async () => {
+    const storage = useStorage();
+    const config = storage.createConfig({ ...DEFAULT_BREATHING_CONFIG, name: 'Evening' });
+    storage.createSession(config);
+    storage.setSoundTheme('water');
+    usePreferences().setGoal('RELAX');
+    localStorage.setItem(storageKeys.LAST_CONFIG_STORAGE_KEY, JSON.stringify(config));
+    localStorage.setItem(storageKeys.SKIP_CHECK_INS_STORAGE_KEY, 'true');
+    localStorage.setItem('lab-cta-dismissed', 'true');
+    localStorage.setItem('breath-in-flow-assessments', '[{"id":"old"}]');
+    localStorage.setItem('breath-in-flow-assessments-migration-v1', 'complete');
+    localStorage.setItem('unrelated', 'keep');
+    await withPulseStores('readwrite', (tx) => {
+      tx.objectStore('measurements').put({ id: 'saved-measurement' });
+      tx.objectStore('assessments').put({ id: 'saved-assessment' });
+    });
+
+    const wrapper = mount(DataSupportSettings);
+    await wrapper.get('[data-testid="erase-all-data"]').trigger('click');
+    await wrapper.get('[data-testid="confirm-erase"]').trigger('click');
+    await vi.waitFor(() => expect(wrapper.get('[data-testid="erase-status"]').text()).toBe('All local data was erased.'));
+
+    expect(storage.getAllConfigs()).toEqual([]);
+    expect(storage.getAllSessions()).toEqual([]);
+    expect(storage.soundTheme.value).toBe('wood');
+    expect(usePreferences().selectedGoal.value).toBeNull();
+    expect(Object.keys(localStorage)).toEqual(['unrelated']);
+    expect(localStorage.getItem('breath-in-flow-assessments')).toBeNull();
+    expect(localStorage.getItem('breath-in-flow-assessments-migration-v1')).toBeNull();
+    const counts: number[] = [];
+    await withPulseStores('readonly', (tx) => {
+      for (const store of ['measurements', 'assessments']) {
+        const request = tx.objectStore(store).count();
+        request.onsuccess = () => counts.push(request.result);
+      }
+    });
+    expect(counts).toEqual([0, 0]);
+    await wrapper.get('[data-testid="export-backup"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('[data-testid="export-status"]').text()).toBe('Backup downloaded.');
+  });
+
+  it('announces an erase failure and lets the user retry', async () => {
+    usePreferences().setGoal('RELAX');
+    const open = vi.spyOn(indexedDB, 'open').mockImplementationOnce(() => {
+      throw new Error('Storage unavailable');
+    });
+    const wrapper = mount(DataSupportSettings);
+    try {
+      await wrapper.get('[data-testid="erase-all-data"]').trigger('click');
+      await wrapper.get('[data-testid="confirm-erase"]').trigger('click');
+      await flushPromises();
+      expect(wrapper.get('[data-testid="erase-status"]').attributes('role')).toBe('alert');
+      expect(wrapper.get('[data-testid="erase-status"]').text()).toContain('try again');
+      expect(usePreferences().selectedGoal.value).toBe('RELAX');
+      await wrapper.get('[data-testid="erase-all-data"]').trigger('click');
+      await wrapper.get('[data-testid="confirm-erase"]').trigger('click');
+      await vi.waitFor(() => expect(wrapper.get('[data-testid="erase-status"]').attributes('role')).toBe('status'));
+    } finally {
+      open.mockRestore();
+    }
   });
 
   it('renders the selected goal', () => {

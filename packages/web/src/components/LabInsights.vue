@@ -2,15 +2,17 @@
   <div class="lab-insights space-y-3" data-testid="lab-insights">
     <!-- No data state -->
     <div
-      v-if="measurementInsights.length === 0"
-      class="glass rounded-xl p-4 border-l-4 border-blue-500"
+      v-if="showEmptyGuidance && measurementInsights.length === 0"
+      class="rounded-xl border border-line-subtle border-l-4 border-l-sand/50 bg-surface-inset p-4"
       data-testid="no-data-card"
     >
       <div class="flex items-start gap-3">
-        <span class="text-blue-400 text-lg">ℹ</span>
+        <svg aria-hidden="true" class="h-5 w-5 shrink-0 text-sand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path :d="infoIcon" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
         <div>
-          <p class="text-sm font-medium text-slate-200">Getting started</p>
-          <p class="text-sm text-slate-400 mt-0.5">
+          <p class="text-sm font-medium text-primary">Getting started</p>
+          <p class="text-sm text-muted mt-0.5">
             Complete at least three comparable Pulse Variability measurements using the same protocol, duration, sensor,
             and conditions.
           </p>
@@ -24,16 +26,24 @@
         v-for="insight in visibleInsights"
         :key="insight.id"
         :data-testid="`insight-card-${insight.id}`"
-        :class="['glass rounded-xl p-4 border-l-4 transition-all', borderColorClass(insight)]"
+        :class="['rounded-xl border border-line-subtle border-l-4 bg-surface-inset p-4', insightStyles[insight.type].borderColor]"
       >
         <div class="flex items-start justify-between gap-3">
           <div class="flex items-start gap-3 flex-1">
-            <span :class="['text-lg leading-none', iconColorClass(insight)]">
-              {{ insightIcon(insight) }}
-            </span>
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5 shrink-0"
+              :class="insightStyles[insight.type].iconColor"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path :d="insightIcon(insight)" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
             <div class="flex-1">
-              <p class="text-sm font-medium text-slate-200">{{ insight.title }}</p>
-              <p class="text-sm text-slate-400 mt-0.5">{{ insight.message }}</p>
+              <p class="text-sm font-medium text-primary">{{ insight.title }}</p>
+              <p class="text-sm text-muted mt-0.5">{{ insight.message }}</p>
             </div>
           </div>
 
@@ -41,11 +51,13 @@
           <button
             v-if="insight.dismissible"
             :data-testid="`dismiss-btn-${insight.id}`"
-            class="text-slate-500 hover:text-slate-300 transition-colors text-lg leading-none flex-shrink-0"
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-surface-raised hover:text-primary transition-colors"
             :aria-label="`Dismiss ${insight.title}`"
             @click="dismiss(insight.id)"
           >
-            ×
+            <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="m6 6 12 12M18 6 6 18" stroke-linecap="round" />
+            </svg>
           </button>
         </div>
       </div>
@@ -72,10 +84,11 @@ interface Insight {
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   measurements: HrvMeasurement[];
   latestAssessment: AssessmentResult | null;
-}>();
+  showEmptyGuidance?: boolean;
+}>(), { showEmptyGuidance: true });
 
 // ─── Dismissed state ─────────────────────────────────────────────────────────
 
@@ -152,48 +165,27 @@ const visibleInsights = computed(() => insights.value.filter((c) => !dismissed.v
 
 // ─── UI helpers ───────────────────────────────────────────────────────────────
 
-function borderColorClass(insight: Insight): string {
-  switch (insight.type) {
-    case 'recommendation':
-      return 'border-emerald-500';
-    case 'trend':
-      return 'border-slate-500';
-    case 'streak':
-      return 'border-emerald-500';
-    case 'info':
-      return 'border-blue-500';
-    default:
-      return 'border-slate-500';
-  }
-}
+const insightStyles = {
+  recommendation: { borderColor: 'border-l-sage/50', iconColor: 'text-sage' },
+  trend: { borderColor: 'border-l-muted/50', iconColor: 'text-muted' },
+  streak: { borderColor: 'border-l-sage/50', iconColor: 'text-sage' },
+  info: { borderColor: 'border-l-sand/50', iconColor: 'text-sand' },
+};
 
-function iconColorClass(insight: Insight): string {
-  switch (insight.type) {
-    case 'recommendation':
-      return 'text-emerald-400';
-    case 'trend':
-      return 'text-slate-400';
-    case 'streak':
-      return 'text-emerald-400';
-    case 'info':
-      return 'text-blue-400';
-    default:
-      return 'text-slate-400';
-  }
-}
+const infoIcon = 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 11v5m0-8h.01';
 
 function insightIcon(insight: Insight): string {
   switch (insight.type) {
     case 'recommendation':
-      return '★';
+      return 'M12 3 9 9l-6 1 4.5 4.5-1 6.5 5.5-3 5.5 3-1-6.5L21 10l-6-1-3-6Z';
     case 'trend':
-      return insight.direction === 'lower' ? '↓' : insight.direction === 'higher' ? '↑' : '→';
+      if (insight.direction === 'lower') return 'M5 7l14 10m-6 0h6v-6';
+      if (insight.direction === 'higher') return 'M5 17 19 7m-6 0h6v6';
+      return 'M5 12h14m-5-5 5 5-5 5';
     case 'streak':
-      return '🔥';
+      return 'M5 8h14v12H5zM5 11h14M9 4v4m6-4v4m-6 7 2 2 4-4';
     case 'info':
-      return 'ℹ';
-    default:
-      return '•';
+      return infoIcon;
   }
 }
 </script>

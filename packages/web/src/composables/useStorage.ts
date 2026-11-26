@@ -19,7 +19,10 @@ import {
 import { assertUniqueRecordIds, validateStoredArray } from '@/utils/storedRecordValidation';
 import {
   CONFIGS_STORAGE_KEY,
+  LAB_CTA_DISMISSED_STORAGE_KEY,
+  LAST_CONFIG_STORAGE_KEY,
   SESSIONS_STORAGE_KEY,
+  SKIP_CHECK_INS_STORAGE_KEY,
   SOUND_THEME_STORAGE_KEY,
 } from '@/constants/storageKeys';
 
@@ -41,6 +44,7 @@ export class PracticeStorageError extends Error {
 const configs = ref<BreathingConfig[]>([]);
 const sessions = ref<Session[]>([]);
 const soundTheme = ref<SoundTheme>('wood');
+const practiceResetVersion = ref(0);
 
 const STORAGE_DATE_FIELDS = ['startedAt', 'completedAt', 'createdAt', 'updatedAt'] as const;
 
@@ -361,6 +365,19 @@ export function useStorage() {
     });
   }
 
+  function clearPracticeData(): void {
+    localStorage.removeItem(CONFIGS_STORAGE_KEY);
+    configs.value = [];
+    localStorage.removeItem(SESSIONS_STORAGE_KEY);
+    sessions.value = [];
+    localStorage.removeItem(SOUND_THEME_STORAGE_KEY);
+    soundTheme.value = 'wood';
+    localStorage.removeItem(SKIP_CHECK_INS_STORAGE_KEY);
+    localStorage.removeItem(LAB_CTA_DISMISSED_STORAGE_KEY);
+    localStorage.removeItem(LAST_CONFIG_STORAGE_KEY);
+    practiceResetVersion.value += 1;
+  }
+
   // Stats
   const stats = computed(() => {
     const completedSessions = sessions.value.filter((s) => s.status === 'COMPLETED');
@@ -451,6 +468,8 @@ export function useStorage() {
     sessions,
     stats,
     soundTheme,
+    practiceResetVersion,
+    clearPracticeData,
 
     // Config operations
     createConfig,

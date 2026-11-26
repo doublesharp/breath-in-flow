@@ -3,13 +3,21 @@
     <!-- Delete Confirmation Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="showDeleteModal" class="modal-overlay" @click.self="cancelDelete">
+        <div
+          v-if="showDeleteModal"
+          ref="deleteDialogRef"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-session-title"
+          class="modal-overlay"
+          @click.self="cancelDelete"
+        >
           <div class="modal-content">
             <div class="modal-header">
-              <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+              <div class="w-12 h-12 rounded-full bg-terracotta/15 flex items-center justify-center">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="w-6 h-6 text-red-400"
+                  class="w-6 h-6 text-danger"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -22,19 +30,19 @@
                   />
                 </svg>
               </div>
-              <h3 class="text-lg font-semibold text-white mt-3">Delete Session</h3>
-              <div v-if="sessionToDelete" class="mt-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700/30">
-                <p class="text-slate-300 text-sm font-medium">
+              <h3 id="delete-session-title" class="text-lg font-semibold text-primary mt-3">Delete Session</h3>
+              <div v-if="sessionToDelete" class="mt-3 p-3 rounded-lg bg-surface-inset border border-line-subtle">
+                <p class="text-secondary text-sm font-medium">
                   {{ formatSessionForDelete(sessionToDelete) }}
                 </p>
               </div>
-              <p class="text-slate-400 text-sm mt-3">
+              <p class="text-muted text-sm mt-3">
                 Are you sure you want to delete this session? This action cannot be undone.
               </p>
             </div>
             <div class="modal-actions">
-              <button @click="cancelDelete" class="btn-secondary">Cancel</button>
-              <button @click="confirmDelete" class="btn-danger">Delete</button>
+              <button @click="cancelDelete" class="btn-secondary flex-1">Cancel</button>
+              <button @click="confirmDelete" class="btn-danger flex-1">Delete</button>
             </div>
           </div>
         </div>
@@ -44,13 +52,21 @@
     <!-- Clear All Confirmation Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="showDeleteAllModal" class="modal-overlay" @click.self="cancelDeleteAll">
+        <div
+          v-if="showDeleteAllModal"
+          ref="deleteAllDialogRef"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="clear-sessions-title"
+          class="modal-overlay"
+          @click.self="cancelDeleteAll"
+        >
           <div class="modal-content">
             <div class="modal-header">
-              <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+              <div class="w-12 h-12 rounded-full bg-terracotta/15 flex items-center justify-center">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="w-6 h-6 text-red-400"
+                  class="w-6 h-6 text-danger"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -63,14 +79,14 @@
                   />
                 </svg>
               </div>
-              <h3 class="text-lg font-semibold text-white mt-3">Clear All Sessions</h3>
-              <p class="text-slate-400 text-sm mt-1">
+              <h3 id="clear-sessions-title" class="text-lg font-semibold text-primary mt-3">Clear All Sessions</h3>
+              <p class="text-muted text-sm mt-1">
                 Are you sure you want to clear all {{ sessions.length }} sessions? This action cannot be undone.
               </p>
             </div>
             <div class="modal-actions">
-              <button @click="cancelDeleteAll" class="btn-secondary">Cancel</button>
-              <button @click="confirmDeleteAll" class="btn-danger">Clear All</button>
+              <button @click="cancelDeleteAll" class="btn-secondary flex-1">Cancel</button>
+              <button @click="confirmDeleteAll" class="btn-danger flex-1">Clear All</button>
             </div>
           </div>
         </div>
@@ -78,14 +94,14 @@
     </Teleport>
 
     <div class="card-solid animate-fade-in">
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div class="flex items-center gap-3">
           <div
-            class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center"
+            class="w-10 h-10 shrink-0 rounded-xl bg-surface-raised text-sage flex items-center justify-center"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              class="w-5 h-5 text-white"
+              class="w-5 h-5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -99,51 +115,51 @@
             </svg>
           </div>
           <div>
-            <h2 class="text-xl font-bold text-white">Session History</h2>
-            <p class="text-sm text-slate-400">Track your progress over time</p>
+            <h2 class="text-xl font-bold text-primary">Session History</h2>
+            <p class="text-sm text-muted">Track your progress over time</p>
           </div>
         </div>
         <button
           v-if="sessions.length > 0"
           @click="deleteAllSessions"
-          class="px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all font-medium text-sm border border-red-500/20 hover:border-red-500/30"
+          class="ml-auto min-h-11 shrink-0 whitespace-nowrap rounded-xl border border-terracotta/25 bg-terracotta/10 px-4 py-2 text-sm font-medium text-danger transition-all hover:border-terracotta/40 hover:bg-terracotta/16 hover:text-primary"
         >
           Clear All
         </button>
       </div>
 
       <!-- Stats Summary -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div class="stat-card bg-blue-500/10 border border-blue-500/20">
-          <div class="text-3xl font-bold text-blue-400">{{ stats.totalSessions }}</div>
-          <div class="text-sm text-slate-400 mt-1">Total Sessions</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="stat-card">
+          <div class="text-2xl font-semibold tabular-nums text-primary sm:text-3xl">{{ stats.totalSessions }}</div>
+          <div class="text-sm text-muted mt-1">Total Sessions</div>
         </div>
-        <div class="stat-card bg-emerald-500/10 border border-emerald-500/20">
-          <div class="text-3xl font-bold text-emerald-400">{{ stats.totalSets }}</div>
-          <div class="text-sm text-slate-400 mt-1">Total Sets</div>
+        <div class="stat-card">
+          <div class="text-2xl font-semibold tabular-nums text-primary sm:text-3xl">{{ stats.totalSets }}</div>
+          <div class="text-sm text-muted mt-1">Total Sets</div>
         </div>
-        <div class="stat-card bg-purple-500/10 border border-purple-500/20">
-          <div class="text-3xl font-bold text-purple-400">
+        <div class="stat-card">
+          <div class="text-2xl font-semibold tabular-nums text-primary sm:text-3xl">
             {{ formatTimeSimple(stats.avgHoldTime) }}
           </div>
-          <div class="text-sm text-slate-400 mt-1">Avg Hold Time</div>
+          <div class="text-sm text-muted mt-1">Avg Hold Time</div>
         </div>
-        <div class="stat-card bg-amber-500/10 border border-amber-500/20">
-          <div class="text-3xl font-bold text-amber-400">
+        <div class="stat-card">
+          <div class="text-2xl font-semibold tabular-nums text-sage sm:text-3xl">
             {{ formatTimeSimple(stats.maxHoldTime) }}
           </div>
-          <div class="text-sm text-slate-400 mt-1">Max Hold Time</div>
+          <div class="text-sm text-muted mt-1">Best Hold Time</div>
         </div>
       </div>
 
       <!-- Session List -->
-      <div v-if="sessions.length === 0" class="text-center py-12 glass rounded-xl">
+      <div v-if="sessions.length === 0" class="text-center py-12 px-4 bg-surface-inset border border-line-subtle rounded-xl">
         <div
-          class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center"
+          class="w-16 h-16 mx-auto mb-4 rounded-full bg-surface-raised text-sage flex items-center justify-center"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="w-8 h-8 text-white"
+            class="w-8 h-8"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -156,42 +172,32 @@
             />
           </svg>
         </div>
-        <p class="text-slate-400">No sessions recorded yet.</p>
-        <p class="text-slate-500 text-sm mt-1">Start your first breathing practice!</p>
+        <p class="text-muted">No sessions recorded yet.</p>
+        <p class="text-muted text-sm mt-1">Start your first breathing practice!</p>
       </div>
 
       <div v-else class="space-y-4">
         <div
           v-for="session in sessions"
           :key="session.id"
-          class="glass rounded-xl p-5 hover:bg-white/10 transition-all duration-300"
+          class="rounded-xl bg-surface-raised border border-line-subtle p-3 sm:p-5"
         >
-          <div class="flex items-start justify-between">
+          <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
             <div>
-              <div class="font-semibold text-white">
+              <div class="font-semibold text-primary wrap-anywhere">
                 {{ session.configSnapshot.name }}
               </div>
-              <div class="text-sm text-slate-400 mt-1">
-                {{ formatDate(session.startedAt) }}
+              <div class="text-sm text-muted mt-1">
+                {{ formatSessionDate(session.startedAt) }}
               </div>
             </div>
             <div class="flex items-center gap-3">
-              <span
-                :class="[
-                  'px-3 py-1.5 rounded-full text-xs font-semibold',
-                  session.status === 'COMPLETED'
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : session.status === 'CANCELLED'
-                      ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                      : 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
-                ]"
-              >
-                {{ session.status }}
-              </span>
+              <SessionStatusBadge :status="session.status" />
               <button
                 @click="deleteSession(session.id!)"
-                class="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all flex items-center justify-center"
+                class="w-11 h-11 shrink-0 rounded-lg bg-terracotta/10 text-danger hover:bg-terracotta/16 hover:text-primary transition-all flex items-center justify-center"
                 title="Delete session"
+                aria-label="Delete session"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path
@@ -205,20 +211,20 @@
           </div>
 
           <!-- Session Details -->
-          <div class="mt-4 grid grid-cols-3 gap-4">
-            <div class="bg-slate-800/50 rounded-lg p-3">
-              <div class="text-xs text-slate-500 uppercase tracking-wider">Sets</div>
-              <div class="text-lg font-semibold text-white mt-1">{{ session.completedSets }}</div>
+          <div class="mt-4 grid grid-cols-2 sm:grid-cols-[1fr_2fr_1fr] gap-2">
+            <div class="bg-surface-inset rounded-lg p-3">
+              <div class="text-xs text-muted uppercase tracking-wider">Sets</div>
+              <div class="text-base font-semibold tabular-nums text-primary mt-1">{{ session.completedSets }}</div>
             </div>
-            <div class="bg-slate-800/50 rounded-lg p-3">
-              <div class="text-xs text-slate-500 uppercase tracking-wider">Pattern</div>
-              <div class="text-lg font-semibold text-white mt-1">
-                {{ session.configSnapshot.inhaleTime }}s / {{ session.configSnapshot.exhaleTime }}s
+            <div class="col-span-2 sm:col-span-1 bg-surface-inset rounded-lg p-3 overflow-x-auto">
+              <div class="text-xs text-muted uppercase tracking-wider">Pattern</div>
+              <div class="text-base font-semibold tabular-nums text-primary mt-1 whitespace-nowrap">
+                {{ formatSessionPattern(session.configSnapshot) }}
               </div>
             </div>
-            <div class="bg-slate-800/50 rounded-lg p-3">
-              <div class="text-xs text-slate-500 uppercase tracking-wider">Reps</div>
-              <div class="text-lg font-semibold text-white mt-1">
+            <div class="col-start-2 row-start-1 sm:col-start-3 bg-surface-inset rounded-lg p-3">
+              <div class="text-xs text-muted uppercase tracking-wider">Reps</div>
+              <div class="text-base font-semibold tabular-nums text-primary mt-1">
                 {{ session.configSnapshot.repetitions }}
               </div>
             </div>
@@ -226,12 +232,12 @@
 
           <!-- Extended Holds -->
           <div v-if="getSessionHolds(session).length > 0" class="mt-4">
-            <div class="text-xs text-slate-500 uppercase tracking-wider mb-2">Extended Holds</div>
+            <div class="text-xs text-muted uppercase tracking-wider mb-2">Extended Holds</div>
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="(hold, index) in getSessionHolds(session)"
                 :key="index"
-                class="px-3 py-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg text-sm border border-indigo-500/30"
+                class="px-3 py-1.5 bg-clay/12 text-sand rounded-lg text-sm border border-clay/25"
               >
                 {{ hold.type }}: {{ formatTimeSimple(hold.actualDuration) }}
               </span>
@@ -239,31 +245,31 @@
           </div>
 
           <!-- Check-In -->
-          <div v-if="session.checkIn" data-testid="session-checkin" class="mt-4 p-3 bg-slate-800/30 rounded-lg">
-            <div class="text-xs text-slate-500 uppercase tracking-wider mb-2">Check-In</div>
+          <div v-if="session.checkIn" data-testid="session-checkin" class="mt-4 p-3 bg-surface-inset rounded-lg">
+            <div class="text-xs text-muted uppercase tracking-wider mb-2">Check-In</div>
             <div class="flex flex-wrap gap-2">
               <span
                 v-if="session.checkIn.before"
-                class="px-3 py-1.5 bg-slate-700/40 text-slate-300 rounded-lg text-sm border border-slate-600/40"
+                class="px-3 py-1.5 bg-surface-raised text-secondary rounded-lg text-sm border border-line-subtle"
               >
                 Before: {{ feelingLabel(session.checkIn.before) }}
               </span>
               <span
                 v-if="session.checkIn.after"
-                class="px-3 py-1.5 bg-slate-700/40 text-slate-300 rounded-lg text-sm border border-slate-600/40"
+                class="px-3 py-1.5 bg-surface-raised text-secondary rounded-lg text-sm border border-line-subtle"
               >
                 After: {{ feelingLabel(session.checkIn.after) }}
               </span>
             </div>
-            <p v-if="session.checkIn.comment" class="text-slate-300 text-sm italic mt-2">
+            <p v-if="session.checkIn.comment" class="text-secondary text-sm italic mt-2">
               "{{ session.checkIn.comment }}"
             </p>
           </div>
 
           <!-- Notes -->
-          <div v-if="session.notes" class="mt-4 p-3 bg-slate-800/30 rounded-lg">
-            <div class="text-xs text-slate-500 uppercase tracking-wider mb-1">Notes</div>
-            <p class="text-slate-300 text-sm italic">"{{ session.notes }}"</p>
+          <div v-if="session.notes" class="mt-4 p-3 bg-surface-inset rounded-lg">
+            <div class="text-xs text-muted uppercase tracking-wider mb-1">Notes</div>
+            <p class="text-secondary text-sm italic">"{{ session.notes }}"</p>
           </div>
         </div>
       </div>
@@ -273,6 +279,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useModalIsolation } from '../composables/useModalIsolation';
+import { formatSessionDate, formatSessionPattern } from '../utils/practiceSummary';
+import SessionStatusBadge from './SessionStatusBadge.vue';
 import { useStorage } from '../composables';
 import { formatTimeSimple, type FeelingScore, type Session, type ExtendedHoldRecord } from '@breath-in-flow/shared';
 
@@ -297,10 +306,11 @@ const stats = computed(() => storage.stats.value);
 const showDeleteModal = ref(false);
 const sessionToDelete = ref<string | null>(null);
 const showDeleteAllModal = ref(false);
+const deleteDialogRef = ref<HTMLElement | null>(null);
+const deleteAllDialogRef = ref<HTMLElement | null>(null);
 
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleString();
-}
+useModalIsolation(deleteDialogRef, showDeleteModal, { onEscape: cancelDelete });
+useModalIsolation(deleteAllDialogRef, showDeleteAllModal, { onEscape: cancelDeleteAll });
 
 function getSessionHolds(session: Session): ExtendedHoldRecord[] {
   return session.sets.flatMap((set) => set.extendedHolds);
@@ -356,13 +366,13 @@ function formatSessionForDelete(sessionId: string): string {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../style.css";
 .modal-overlay {
   @apply fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4;
 }
 
 .modal-content {
-  @apply bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-700/50 text-center;
+  @apply bg-surface-card rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-line-strong text-center;
 }
 
 .modal-header {
@@ -371,14 +381,6 @@ function formatSessionForDelete(sessionId: string): string {
 
 .modal-actions {
   @apply flex gap-3 mt-6;
-}
-
-.btn-secondary {
-  @apply flex-1 px-4 py-2.5 rounded-xl bg-slate-700 text-white font-medium hover:bg-slate-600 transition-all;
-}
-
-.btn-danger {
-  @apply flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-all;
 }
 
 /* Modal transitions */

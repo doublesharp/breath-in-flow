@@ -3,16 +3,8 @@
     <!-- Header -->
     <div class="card-solid animate-fade-in">
       <div class="flex items-center gap-3 mb-6">
-        <div
-          class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-5 h-5 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+        <div class="w-10 h-10 shrink-0 rounded-xl bg-surface-raised text-sage flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -22,32 +14,32 @@
           </svg>
         </div>
         <div>
-          <h2 class="text-xl font-bold text-white">Analytics Dashboard</h2>
-          <p class="text-sm text-slate-400">Track your breathing practice and biometrics</p>
+          <h2 class="text-xl font-bold text-primary">Analytics Dashboard</h2>
+          <p class="text-sm text-muted">Track your breathing practice and hold progress</p>
         </div>
       </div>
 
       <!-- Quick Stats -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="stat-card bg-blue-500/10 border border-blue-500/20">
-          <div class="text-3xl font-bold text-blue-400">{{ stats.totalSessions }}</div>
-          <div class="text-sm text-slate-400 mt-1">Total Sessions</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="stat-card">
+          <div class="text-2xl font-semibold tabular-nums text-primary sm:text-3xl">{{ stats.totalSessions }}</div>
+          <div class="text-sm text-muted mt-1">Total Sessions</div>
         </div>
-        <div class="stat-card bg-emerald-500/10 border border-emerald-500/20">
-          <div class="text-3xl font-bold text-emerald-400">{{ stats.totalSets }}</div>
-          <div class="text-sm text-slate-400 mt-1">Total Sets</div>
+        <div class="stat-card">
+          <div class="text-2xl font-semibold tabular-nums text-primary sm:text-3xl">{{ stats.totalSets }}</div>
+          <div class="text-sm text-muted mt-1">Total Sets</div>
         </div>
-        <div class="stat-card bg-purple-500/10 border border-purple-500/20">
-          <div class="text-3xl font-bold text-purple-400">
+        <div class="stat-card">
+          <div class="text-2xl font-semibold tabular-nums text-primary sm:text-3xl">
             {{ formatTime(stats.avgHoldTime) }}
           </div>
-          <div class="text-sm text-slate-400 mt-1">Avg Hold Time</div>
+          <div class="text-sm text-muted mt-1">Avg Hold Time</div>
         </div>
-        <div class="stat-card bg-amber-500/10 border border-amber-500/20">
-          <div class="text-3xl font-bold text-amber-400">
+        <div class="stat-card">
+          <div class="text-2xl font-semibold tabular-nums text-sage sm:text-3xl">
             {{ formatTime(stats.maxHoldTime) }}
           </div>
-          <div class="text-sm text-slate-400 mt-1">Best Hold Time</div>
+          <div class="text-sm text-muted mt-1">Best Hold Time</div>
         </div>
       </div>
     </div>
@@ -55,24 +47,15 @@
     <!-- Wearable Connection (hidden until server-side OAuth is implemented) -->
     <div v-if="ENABLE_WEARABLES" class="card-solid animate-fade-in">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold text-white">Wearable Devices</h3>
-        <button
-          v-if="!wearableConnected"
-          @click="connectWearable"
-          class="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all"
-        >
-          Connect Device
-        </button>
+        <h3 class="text-lg font-semibold text-primary">Wearable Devices</h3>
+        <button v-if="!wearableConnected" @click="connectWearable" class="btn-primary">Connect Device</button>
       </div>
 
-      <div
-        v-if="wearableConnected"
-        class="flex items-center gap-4 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl"
-      >
-        <div class="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
+      <div v-if="wearableConnected" class="flex items-center gap-4 p-4 bg-sage/10 border border-sage/20 rounded-xl">
+        <div class="w-12 h-12 rounded-full bg-sage/15 flex items-center justify-center">
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="w-6 h-6 text-emerald-400"
+            class="w-6 h-6 text-sage"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -86,12 +69,12 @@
           </svg>
         </div>
         <div class="flex-1">
-          <div class="font-semibold text-emerald-400">{{ connectedProvider?.name || 'Garmin' }} Connected</div>
-          <div class="text-sm text-slate-400">Last synced: {{ lastSyncTime }}</div>
+          <div class="font-semibold text-sage">{{ connectedProvider?.name || 'Garmin' }} Connected</div>
+          <div class="text-sm text-muted">Last synced: {{ lastSyncTime }}</div>
         </div>
         <button
           @click="disconnectWearable"
-          class="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all"
+          class="px-3 py-1.5 text-sm text-danger hover:text-danger hover:bg-terracotta/10 rounded-lg transition-all"
         >
           Disconnect
         </button>
@@ -105,10 +88,21 @@
           class="p-4 glass rounded-xl hover:bg-white/10 transition-all text-left group"
         >
           <div class="flex items-center gap-3">
-            <span class="text-2xl">{{ provider.icon }}</span>
+            <svg
+              aria-hidden="true"
+              class="size-6 shrink-0 text-sage"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path :d="provider.iconPath" />
+            </svg>
             <div>
-              <div class="font-medium text-white group-hover:text-blue-400 transition-colors">{{ provider.name }}</div>
-              <div class="text-xs text-slate-500">{{ provider.description }}</div>
+              <div class="font-medium text-primary group-hover:text-sage transition-colors">{{ provider.name }}</div>
+              <div class="text-xs text-muted">{{ provider.description }}</div>
             </div>
           </div>
         </button>
@@ -118,10 +112,10 @@
     <!-- Charts Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- Sessions per Week -->
-      <SessionsPerWeekChart :sessions="sessions" />
+      <SessionsPerWeekChart :sessions="completedSessions" />
 
       <!-- Hold Time Progress -->
-      <HoldTimeChart :sessions="sessions" />
+      <HoldTimeChart :sessions="completedSessions" />
 
       <!-- Stress Levels (if wearable connected) -->
       <div v-if="ENABLE_WEARABLES && wearableConnected && stressData" class="lg:col-span-2">
@@ -134,43 +128,34 @@
       </div>
     </div>
 
-    <!-- Recent Sessions with Biometrics -->
+    <!-- Recent Sessions -->
     <div v-if="sessions.length > 0" class="card-solid animate-fade-in">
-      <h3 class="text-lg font-semibold text-white mb-4">Recent Sessions</h3>
+      <h3 class="text-lg font-semibold text-primary mb-4">Recent Sessions</h3>
       <div class="space-y-3">
         <div
           v-for="session in recentSessions"
           :key="session.id"
-          class="glass rounded-xl p-4 hover:bg-white/10 transition-all"
+          class="rounded-xl border border-line-subtle bg-surface-inset p-3 sm:p-4"
         >
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="font-medium text-white">{{ session.configSnapshot.name }}</div>
-              <div class="text-sm text-slate-400">{{ formatDate(session.startedAt) }}</div>
+          <div
+            class="flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_3.5rem_10rem_7rem] sm:items-center sm:gap-4"
+          >
+            <div class="min-w-0 wrap-anywhere">
+              <div class="font-medium text-primary">{{ session.configSnapshot.name }}</div>
+              <div class="text-sm text-muted">{{ formatSessionDate(session.startedAt) }}</div>
             </div>
-            <div class="flex items-center gap-4">
-              <div class="text-right">
-                <div class="text-sm text-slate-400">Sets</div>
-                <div class="font-semibold text-white">{{ session.completedSets }}</div>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 sm:contents">
+              <div>
+                <div class="text-sm text-muted">Sets</div>
+                <div class="font-semibold tabular-nums text-primary">{{ session.completedSets }}</div>
               </div>
-              <div class="text-right">
-                <div class="text-sm text-slate-400">Pattern</div>
-                <div class="font-semibold text-white">
-                  {{ session.configSnapshot.inhaleTime }}-{{ session.configSnapshot.inhaleHoldTime || 0 }}-{{
-                    session.configSnapshot.exhaleTime
-                  }}-{{ session.configSnapshot.exhaleHoldTime || 0 }}
+              <div class="min-w-0 max-w-full">
+                <div class="text-sm text-muted">Pattern</div>
+                <div class="font-semibold tabular-nums text-primary">
+                  {{ formatSessionPattern(session.configSnapshot) }}
                 </div>
               </div>
-              <span
-                :class="[
-                  'px-3 py-1 rounded-full text-xs font-semibold',
-                  session.status === 'COMPLETED'
-                    ? 'bg-emerald-500/20 text-emerald-400'
-                    : 'bg-amber-500/20 text-amber-400',
-                ]"
-              >
-                {{ session.status }}
-              </span>
+              <SessionStatusBadge :status="session.status" class="ml-auto sm:m-0" />
             </div>
           </div>
         </div>
@@ -179,16 +164,8 @@
 
     <!-- Empty State -->
     <div v-if="sessions.length === 0" class="card-solid animate-fade-in text-center py-12">
-      <div
-        class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="w-8 h-8 text-white"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-surface-raised text-sage flex items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -197,15 +174,17 @@
           />
         </svg>
       </div>
-      <p class="text-slate-400">No session data yet.</p>
-      <p class="text-slate-500 text-sm mt-1">Complete some breathing exercises to see your analytics!</p>
+      <p class="text-muted">No session data yet.</p>
+      <p class="text-muted text-sm mt-1">Complete some breathing exercises to see your analytics!</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { formatSessionDate, formatSessionPattern } from '../utils/practiceSummary';
 import { useStorage } from '../composables';
+import SessionStatusBadge from './SessionStatusBadge.vue';
 import StressChart from './charts/StressChart.vue';
 import HoldTimeChart from './charts/HoldTimeChart.vue';
 import SessionsPerWeekChart from './charts/SessionsPerWeekChart.vue';
@@ -219,6 +198,7 @@ const storage = useStorage();
 const ENABLE_WEARABLES = false;
 
 const sessions = computed(() => storage.getAllSessions());
+const completedSessions = computed(() => sessions.value.filter((session) => session.status === 'COMPLETED'));
 const stats = computed(() => storage.stats.value);
 const recentSessions = computed(() => sessions.value.slice(0, 5));
 
@@ -237,9 +217,20 @@ const stressData = ref<{
 } | null>(null);
 
 const availableProviders = [
-  { id: 'garmin', name: 'Garmin Connect', icon: '⌚', description: 'Sync stress & HRV data' },
-  { id: 'apple', name: 'Apple Health', icon: '❤️', description: 'iOS HealthKit integration' },
-  { id: 'fitbit', name: 'Fitbit', icon: '📱', description: 'Heart rate & sleep data' },
+  {
+    id: 'garmin',
+    name: 'Garmin Connect',
+    iconPath:
+      'M9 6l1-4h4l1 4m-6 12 1 4h4l1-4M9 6h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3Zm3 3v3l2 1',
+    description: 'Sync stress & HRV data',
+  },
+  {
+    id: 'apple',
+    name: 'Apple Health',
+    iconPath: 'M20.8 5.6a5.1 5.1 0 0 0-7.2 0L12 7.2l-1.6-1.6a5.1 5.1 0 0 0-7.2 7.2L12 21l8.8-8.2a5.1 5.1 0 0 0 0-7.2Z',
+    description: 'iOS HealthKit integration',
+  },
+  { id: 'fitbit', name: 'Fitbit', iconPath: 'M3 12h4l2-6 4 12 2-6h6', description: 'Heart rate & sleep data' },
 ];
 
 // Load stress data when connected
@@ -299,16 +290,6 @@ function formatTime(seconds: number): string {
   const mins = Math.floor(roundedSeconds / 60);
   const secs = roundedSeconds % 60;
   return `${mins}m ${secs}s`;
-}
-
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 function connectWearable() {

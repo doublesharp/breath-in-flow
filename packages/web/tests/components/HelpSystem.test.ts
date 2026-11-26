@@ -42,27 +42,43 @@ function parsedBackupFixture() {
 }
 
 describe('HelpSystem.vue', () => {
-  it('opens and displays modal when help button clicked', async () => {
+  it('switches from the quick start to accurate phase colors and preset instructions', async () => {
     const wrapper = mount(HelpSystem);
+    await wrapper.get('button.help-trigger').trigger('click');
 
-    const trigger = wrapper.find('button.help-trigger');
-    expect(trigger.exists()).toBe(true);
+    const dialog = document.body.querySelector<HTMLElement>('[aria-labelledby="help-dialog-title"]')!;
+    expect(dialog.querySelector('h2')?.textContent).toBe('Help & Guide');
+    expect(dialog.textContent).toContain('Quick Start');
+    expect(dialog.textContent).toContain('Follow the phase label and the expanding and contracting circle.');
+    expect(dialog.textContent).toContain('Sage marks inhale, warm clay marks holds, and sand marks exhale.');
+    const tabs = Array.from(dialog.querySelectorAll<HTMLButtonElement>('.help-tab'));
+    const practice = tabs.find((button) => button.textContent?.trim() === 'Practice');
+    const data = tabs.find((button) => button.textContent?.trim() === 'Data');
+    expect(practice).toBeDefined();
+    expect(data).toBeDefined();
 
-    await trigger.trigger('click');
+    practice!.click();
     await wrapper.vm.$nextTick();
-
-    // Modal should be present
-    // happy-dom may render '&' as '&amp;' in innerHTML
-    const html = document.body.innerHTML;
-    expect(html.includes('Help & Guide') || html.includes('Help &amp; Guide')).toBe(true);
-
-    // Switch tab - click second tab button
-    const tabButtons = document.body.querySelectorAll('.help-tab');
-    if (tabButtons.length > 1) {
-      (tabButtons[1] as HTMLElement).click();
-      await wrapper.vm.$nextTick();
-      expect(document.body.querySelectorAll('.help-tab-active').length).toBeGreaterThanOrEqual(1);
+    expect(dialog.querySelector('.help-tab-active')).toBe(practice);
+    expect(dialog.textContent).not.toContain('Quick Start');
+    for (const [phase, color] of [
+      ['Inhale', 'bg-(--color-inhale)'],
+      ['Inhale Hold', 'bg-(--color-inhale-hold)'],
+      ['Exhale', 'bg-(--color-exhale)'],
+      ['Exhale Hold', 'bg-(--color-exhale-hold)'],
+    ]) {
+      const label = Array.from(dialog.querySelectorAll('strong')).find((element) => element.textContent === phase);
+      expect(label).toBeDefined();
+      expect(label!.parentElement?.previousElementSibling?.classList.contains(color)).toBe(true);
     }
+
+    data!.click();
+    await wrapper.vm.$nextTick();
+    expect(dialog.querySelector('.help-tab-active')).toBe(data);
+    expect(dialog.textContent).toContain('Enter a name in the "Preset name" field');
+    expect(dialog.textContent).toContain('Save Preset');
+    expect(dialog.textContent).toContain('Load routine');
+    expect(dialog.textContent).not.toContain('Modify the preset settings');
   });
 
   it('explains PRV limits, supported sensor instructions, and diaphragm safety', async () => {

@@ -1,7 +1,19 @@
 <template>
-  <div class="hrv-trends">
+  <div
+    v-if="measurements.length === 0"
+    class="rounded-xl border border-sand/25 bg-surface-card p-5"
+    data-testid="trends-empty"
+  >
+    <h3 class="font-semibold text-primary">Your pulse trends start here</h3>
+    <p class="mt-1 text-sm text-muted">
+      Take a 2-minute Quick Check to record your first reading. Repeat it under similar conditions to see how
+      your pulse variability changes over time.
+    </p>
+    <slot name="empty-action" />
+  </div>
+  <div v-else class="hrv-trends">
     <!-- Time range selector -->
-    <div class="flex gap-2 mb-4" data-testid="time-range-selector">
+    <div class="flex flex-wrap gap-2 mb-4" data-testid="time-range-selector">
       <button
         v-for="range in timeRanges"
         :key="range.days"
@@ -9,28 +21,29 @@
         :class="[
           'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
           selectedDays === range.days
-            ? 'bg-blue-600 text-white'
-            : 'bg-slate-700/60 text-slate-300 hover:bg-slate-600/60',
+            ? 'bg-sage text-surface-page'
+            : 'bg-surface-raised text-secondary hover:bg-surface-card',
         ]"
+        :aria-pressed="selectedDays === range.days"
         @click="selectedDays = range.days"
       >
         {{ range.label }}
       </button>
     </div>
 
-    <p class="mb-4 text-xs text-slate-400" data-testid="comparison-guidance">
+    <p class="mb-4 text-xs text-muted" data-testid="comparison-guidance">
       Compare readings collected with the same protocol, duration, sensor, and conditions.
     </p>
 
     <!-- Charts -->
     <div class="space-y-4">
       <!-- RMSSD Trend -->
-      <div class="glass rounded-xl p-4" data-testid="rmssd-chart-container">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">RMSSD Trend</h3>
-          <span class="text-xs text-slate-500">{{ rmssdMeasurements.length }} comparable readings</span>
+      <div class="rounded-xl border border-line-subtle bg-surface-card p-4" data-testid="rmssd-chart-container">
+        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-2">
+          <h3 class="text-sm font-semibold text-secondary uppercase tracking-wider">RMSSD Trend</h3>
+          <span class="text-xs text-muted">{{ rmssdMeasurements.length }} comparable readings</span>
         </div>
-        <div class="relative" style="height: 160px">
+        <div class="relative h-40 rounded-lg bg-surface-inset">
           <canvas
             ref="rmssdCanvas"
             class="w-full h-full"
@@ -39,7 +52,7 @@
           />
           <div
             v-if="rmssdMeasurements.length === 0"
-            class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
+            class="absolute inset-0 flex items-center justify-center px-3 text-center text-muted text-sm"
           >
             No data in selected range
           </div>
@@ -66,14 +79,14 @@
       </div>
 
       <!-- Normalized LF Power Trend -->
-      <div class="glass rounded-xl p-4" data-testid="lf-power-chart-container">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Normalized LF Trend</h3>
-          <span class="text-xs text-slate-500" data-testid="lf-comparable-count">
+      <div class="rounded-xl border border-line-subtle bg-surface-card p-4" data-testid="lf-power-chart-container">
+        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-2">
+          <h3 class="text-sm font-semibold text-secondary uppercase tracking-wider">Normalized LF Trend</h3>
+          <span class="text-xs text-muted" data-testid="lf-comparable-count">
             {{ lfPowerMeasurements.length }} comparable readings
           </span>
         </div>
-        <div class="relative" style="height: 160px">
+        <div class="relative h-40 rounded-lg bg-surface-inset">
           <canvas
             ref="lfPowerCanvas"
             class="w-full h-full"
@@ -82,7 +95,7 @@
           />
           <div
             v-if="lfPowerMeasurements.length === 0"
-            class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
+            class="absolute inset-0 flex items-center justify-center px-3 text-center text-muted text-sm"
           >
             No data in selected range
           </div>
@@ -109,16 +122,16 @@
       </div>
 
       <!-- Average pulse rate trend -->
-      <div class="glass rounded-xl p-4" data-testid="hr-chart-container">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Average Pulse Rate</h3>
-          <span class="text-xs text-slate-500">{{ pulseMeasurements.length }} comparable readings</span>
+      <div class="rounded-xl border border-line-subtle bg-surface-card p-4" data-testid="hr-chart-container">
+        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-2">
+          <h3 class="text-sm font-semibold text-secondary uppercase tracking-wider">Average Pulse Rate</h3>
+          <span class="text-xs text-muted">{{ pulseMeasurements.length }} comparable readings</span>
         </div>
-        <div class="relative" style="height: 160px">
+        <div class="relative h-40 rounded-lg bg-surface-inset">
           <canvas ref="hrCanvas" class="w-full h-full" data-testid="hr-canvas" aria-describedby="hr-trend-data" />
           <div
             v-if="pulseMeasurements.length === 0"
-            class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm"
+            class="absolute inset-0 flex items-center justify-center px-3 text-center text-muted text-sm"
           >
             No data in selected range
           </div>
@@ -145,14 +158,14 @@
       </div>
 
       <!-- Morning Readiness Score -->
-      <div v-if="morningReadinessData.length > 0" class="glass rounded-xl p-4" data-testid="readiness-chart-container">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Morning Protocol RMSSD</h3>
-          <span class="text-xs text-slate-500" data-testid="morning-comparable-count">
+      <div v-if="morningReadinessData.length > 0" class="rounded-xl border border-line-subtle bg-surface-card p-4" data-testid="readiness-chart-container">
+        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-2">
+          <h3 class="text-sm font-semibold text-secondary uppercase tracking-wider">Morning Protocol RMSSD</h3>
+          <span class="text-xs text-muted" data-testid="morning-comparable-count">
             {{ morningMeasurements.length }} comparable readings
           </span>
         </div>
-        <div class="relative" style="height: 160px">
+        <div class="relative h-40 rounded-lg bg-surface-inset">
           <canvas
             ref="readinessCanvas"
             class="w-full h-full"
@@ -185,6 +198,7 @@
 </template>
 
 <script setup lang="ts">
+import { chartColors } from './charts/chartColors';
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import type { HrvMeasurement } from '../composables/useHrvStorage';
 import { getLatestComparableMeasurements } from '../utils/measurementTrends';
@@ -334,18 +348,8 @@ function drawTrendChart(ctx: CanvasRenderingContext2D, options: TrendChartOption
   const plotW = width - padL - padR;
   const plotH = height - padT - padB;
 
-  // Clear
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
-  ctx.fillRect(0, 0, width, height);
-
-  if (data.length === 0) {
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('No data', width / 2, height / 2);
-    return;
-  }
+  if (data.length === 0) return;
 
   // Y range
   const values = data.map((d) => d.value);
@@ -388,7 +392,7 @@ function drawTrendChart(ctx: CanvasRenderingContext2D, options: TrendChartOption
   }
 
   // Grid lines (horizontal)
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.strokeStyle = chartColors.lineSubtle;
   ctx.lineWidth = 1;
   const yStep = computeNiceStep(yMax - yMin, 4);
   for (let v = Math.ceil(yMin / yStep) * yStep; v <= yMax; v += yStep) {
@@ -410,7 +414,7 @@ function drawTrendChart(ctx: CanvasRenderingContext2D, options: TrendChartOption
   // align to even boundary
   const alignedStart = Math.ceil(firstDay.getTime() / xStepMs) * xStepMs;
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.strokeStyle = chartColors.lineSubtle;
   for (let t = alignedStart; t <= xMax; t += xStepMs) {
     const x = toX(t);
     if (x < padL || x > padL + plotW) continue;
@@ -481,7 +485,7 @@ function drawTrendChart(ctx: CanvasRenderingContext2D, options: TrendChartOption
         ctx.lineTo(x, y);
       }
     }
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.strokeStyle = chartColors.sand;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 3]);
     ctx.stroke();
@@ -491,7 +495,7 @@ function drawTrendChart(ctx: CanvasRenderingContext2D, options: TrendChartOption
   ctx.restore();
 
   // Axes
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.strokeStyle = chartColors.lineStrong;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(padL, padT);
@@ -500,7 +504,7 @@ function drawTrendChart(ctx: CanvasRenderingContext2D, options: TrendChartOption
   ctx.stroke();
 
   // Y-axis labels
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillStyle = chartColors.muted;
   ctx.font = '10px sans-serif';
   ctx.textAlign = 'right';
   for (let v = Math.ceil(yMin / yStep) * yStep; v <= yMax; v += yStep) {
@@ -527,7 +531,7 @@ function drawTrendChart(ctx: CanvasRenderingContext2D, options: TrendChartOption
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.font = '10px sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillStyle = chartColors.muted;
     ctx.fillText(yLabel, 0, 0);
     ctx.restore();
   }
@@ -571,8 +575,8 @@ function drawAllCharts() {
         data: rmssdTrendData.value,
         width,
         height,
-        lineColor: '#4ade80',
-        fillColor: 'rgba(74, 222, 128, 0.15)',
+        lineColor: chartColors.sage,
+        fillColor: `${chartColors.sage}26`,
         showMovingAvg: true,
         movingAvgWindow: 7,
         yLabel: 'ms',
@@ -593,8 +597,8 @@ function drawAllCharts() {
         data: lfPowerTrendData.value,
         width,
         height,
-        lineColor: '#60a5fa',
-        fillColor: 'rgba(96, 165, 250, 0.15)',
+        lineColor: chartColors.sand,
+        fillColor: `${chartColors.sand}26`,
         showMovingAvg: true,
         movingAvgWindow: 7,
         yLabel: '%',
@@ -615,8 +619,8 @@ function drawAllCharts() {
         data: heartRateTrendData.value,
         width,
         height,
-        lineColor: '#f87171',
-        fillColor: 'rgba(248, 113, 113, 0.15)',
+        lineColor: chartColors.clay,
+        fillColor: `${chartColors.clay}26`,
         showMovingAvg: true,
         movingAvgWindow: 7,
         yLabel: 'BPM',
@@ -637,8 +641,8 @@ function drawAllCharts() {
         data: morningReadinessData.value,
         width,
         height,
-        lineColor: '#a78bfa',
-        fillColor: 'rgba(167, 139, 250, 0.15)',
+        lineColor: chartColors.terracotta,
+        fillColor: `${chartColors.terracotta}26`,
         yLabel: 'ms',
         formatValue: (v) => String(Math.round(v)),
       });

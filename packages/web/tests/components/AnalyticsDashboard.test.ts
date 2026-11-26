@@ -1,517 +1,161 @@
-import { mount, shallowMount } from '@vue/test-utils';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { nextTick } from 'vue';
+import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_BREATHING_CONFIG, type SessionStatus } from '@breath-in-flow/shared';
+import AnalyticsDashboard from '@/components/AnalyticsDashboard.vue';
+import SessionStatusBadge from '@/components/SessionStatusBadge.vue';
+import HoldTimeChart from '@/components/charts/HoldTimeChart.vue';
+import SessionsPerWeekChart from '@/components/charts/SessionsPerWeekChart.vue';
+import { resetStorageForTesting, useStorage } from '@/composables/useStorage';
+import type { SessionBiometrics } from '@/services/wearables/types';
+import { garminService } from '@/services/wearables/garmin';
 
-// Consolidated AnalyticsDashboard tests — each test sets up its own mocks
-describe('AnalyticsDashboard (consolidated)', () => {
+vi.mock('@/services/wearables/garmin', () => ({
+  garminService: { isConnected: vi.fn(), getSessionBiometrics: vi.fn() },
+}));
+
+enableAutoUnmount(afterEach);
+
+const storage = useStorage();
+const startedAt = new Date('2026-07-20T12:00:00Z');
+const completedAt = new Date('2026-07-20T12:05:00Z');
+
+function addSession(name: string, status: SessionStatus, holds: number[] = []) {
+  const session = storage.createSession({ ...DEFAULT_BREATHING_CONFIG, name });
+  holds.forEach((actualDuration, index) => {
+    storage.addSetToSession(session.id!, {
+      setNumber: index + 1,
+      completedRepetitions: 4,
+      extendedHolds: [{ type: 'EXHALE', mode: 'TOLERANCE', actualDuration, completedAt }],
+      startedAt,
+      completedAt,
+    });
+  });
+  return storage.updateSession(session.id!, {
+    status,
+    startedAt,
+    completedAt: status === 'IN_PROGRESS' ? undefined : completedAt,
+  })!;
+}
+
+function biometrics(sessionStart: Date, sessionEnd: Date): SessionBiometrics {
+  const empty = { stress: [], heartRate: [], hrv: [], spo2: [] };
+  return {
+    sessionId: 'session-biometrics',
+    sessionStart,
+    sessionEnd,
+    preSession: empty,
+    duringSession: { ...empty, stress: [{ timestamp: sessionStart, value: 25, source: 'garmin' }] },
+    postSession: empty,
+    averages: {},
+  };
+}
+
+describe('AnalyticsDashboard.vue', () => {
   beforeEach(() => {
+    localStorage.clear();
+    resetStorageForTesting();
     vi.resetAllMocks();
+    vi.mocked(garminService.isConnected).mockReturnValue(false);
   });
 
-  afterEach(() => {
-    vi.resetModules();
-  });
+  it('limits both charts and summary stats to completed sessions while listing all statuses', () => {
+    const completed = addSession('Completed routine', 'COMPLETED', [30, 90]);
+    addSession('Cancelled routine', 'CANCELLED', [250]);
+    addSession('Current routine', 'IN_PROGRESS');
 
-  it('renders basic stats from sessions', { timeout: 10_000 }, async () => {
-    const sampleSessions = [
-      {
-        id: 's1',
-        sets: 2,
-        duration: 60,
-        createdAt: new Date().toISOString(),
-        configSnapshot: {
-          name: 'C1',
-          inhaleTime: 3,
-          inhaleHoldTime: 0,
-          exhaleTime: 3,
-          exhaleHoldTime: 0,
-        },
-      },
-      {
-        id: 's2',
-        sets: 1,
-        duration: 30,
-        createdAt: new Date().toISOString(),
-        configSnapshot: {
-          name: 'C2',
-          inhaleTime: 4,
-          inhaleHoldTime: 0,
-          exhaleTime: 4,
-          exhaleHoldTime: 0,
-        },
-      },
-    ];
-
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => sampleSessions,
-        saveSession: vi.fn(),
-        stats: {
-          value: {
-            totalSessions: sampleSessions.length,
-            totalSets: 3,
-            avgHoldTime: 0,
-            maxHoldTime: 0,
-          },
-        },
-      }),
-    }));
-
-    // ensure wearable service is available but disconnected
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => false,
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-        getSessionBiometrics: async () => ({
-          preSession: { stress: [] },
-          duringSession: { stress: [] },
-          postSession: { stress: [] },
-        }),
-      },
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = mount(AnalyticsDashboard, {
-      global: {
-        stubs: ['TimeChart', 'WeekChart', 'StressChart', 'HoldTimeChart', 'SessionsPerWeekChart'],
-      },
-    } as Record<string, unknown>);
-
-    const text = wrapper.text();
-    expect(text).toContain('Sessions');
-    // total sessions should appear from the sample set (2)
-    expect(text).toContain('2');
-  });
-
-  it('renders quick stats from storage.stats and toggles wearable provider state', async () => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [],
-        stats: { value: { totalSessions: 5, totalSets: 10, avgHoldTime: 12, maxHoldTime: 30 } },
-      }),
-    }));
-
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => false,
-        connect: vi.fn(() => true),
-        disconnect: vi.fn(() => false),
-        getSessionBiometrics: async () => ({
-          preSession: { stress: [] },
-          duringSession: { stress: [] },
-          postSession: { stress: [] },
-        }),
-      },
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = mount(AnalyticsDashboard as unknown, {
-      global: {
-        stubs: ['TimeChart', 'WeekChart', 'StressChart', 'HoldTimeChart', 'SessionsPerWeekChart'],
-      },
+    const wrapper = shallowMount(AnalyticsDashboard, {
+      global: { stubs: { SessionStatusBadge: false } },
     });
+    expect(wrapper.getComponent(SessionsPerWeekChart).props('sessions')).toEqual([completed]);
+    expect(wrapper.getComponent(HoldTimeChart).props('sessions')).toEqual([completed]);
+    expect(wrapper.findAll('.stat-card').map((card) => card.text())).toEqual([
+      '1Total Sessions',
+      '2Total Sets',
+      '1m 0sAvg Hold Time',
+      '1m 30sBest Hold Time',
+    ]);
 
-    expect(wrapper.text()).toContain('Analytics Dashboard');
-    expect(wrapper.text()).toContain('Total Sessions');
-    expect(wrapper.text()).toContain('5');
-
-    // Use component methods to toggle wearable state; enable feature if necessary
-    const vm = wrapper.vm as unknown as Record<string, unknown>;
-    vm.ENABLE_WEARABLES = true;
-    // Initially disconnected
-    expect(vm.wearableConnected).toBe(false);
-
-    (vm.connectWearable as () => void)();
-    expect(vm.wearableConnected).toBe(true);
-    expect((vm.connectedProvider as Record<string, unknown>).name).toBeDefined();
-
-    (vm.disconnectWearable as () => void)();
-    expect(vm.wearableConnected).toBe(false);
-
-    (vm.selectProvider as (provider: string) => void)('apple');
-    expect(vm.wearableConnected).toBe(true);
-    expect((vm.connectedProvider as Record<string, unknown>).name).toContain('Apple');
+    const badges = wrapper.findAllComponents(SessionStatusBadge);
+    expect(badges.map((badge) => badge.text())).toEqual(['In progress', 'Cancelled', 'Completed']);
+    expect(badges.map((badge) => badge.attributes('data-status'))).toEqual([
+      'IN_PROGRESS',
+      'CANCELLED',
+      'COMPLETED',
+    ]);
+    const icons = badges.map((badge) => badge.get('svg[aria-hidden="true"] path').attributes('d'));
+    expect(new Set(icons).size).toBe(3);
+    expect(wrapper.text()).toContain('4s · 4s');
+    expect(wrapper.text()).toContain('Recent Sessions');
+    expect(wrapper.text()).toContain('Track your breathing practice and hold progress');
+    expect(wrapper.text()).toContain('Completed routine');
+    expect(wrapper.text()).toContain('Cancelled routine');
+    expect(wrapper.text()).toContain('Current routine');
+    expect(wrapper.text()).not.toContain('No session data yet.');
   });
 
-  it('loads stress data when garmin is connected and sessions exist', async () => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [
-          {
-            id: 's1',
-            configSnapshot: {},
-            startedAt: new Date().toISOString(),
-            completedAt: new Date().toISOString(),
-            completedSets: 1,
-            sets: [],
-            status: 'COMPLETED',
-          },
-        ],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 10, maxHoldTime: 12 } },
-      }),
-    }));
-
-    const getSessionBiometrics = vi.fn().mockResolvedValue({
-      preSession: { stress: [{ t: 1, v: 10 }] },
-      duringSession: { stress: [{ t: 2, v: 20 }] },
-      postSession: { stress: [{ t: 3, v: 5 }] },
-    });
-
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => true,
-        getSessionBiometrics,
-      },
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = shallowMount(AnalyticsDashboard as unknown, {
-      global: {
-        stubs: ['HoldTimeChart', 'SessionsPerWeekChart', 'StressChart', 'TimeChart', 'WeekChart'],
-      },
-    });
-    const vm = wrapper.vm as unknown as Record<string, unknown>;
-    vm.ENABLE_WEARABLES = true;
-    vm.wearableConnected = true;
-
-    await nextTick();
-    // Allow the async load to run
-    await Promise.resolve();
-
-    expect((wrapper.vm as unknown as Record<string, unknown>).stressData).not.toBeNull();
-    expect(getSessionBiometrics).toHaveBeenCalled();
-  });
-
-  it('falls back to demo stress data when no sessions exist', async () => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [],
-        stats: { value: { totalSessions: 0, totalSets: 0, avgHoldTime: 0, maxHoldTime: 0 } },
-      }),
-    }));
-
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => true,
-        getSessionBiometrics: async () => ({
-          preSession: { stress: [] },
-          duringSession: { stress: [] },
-          postSession: { stress: [] },
-        }),
-      },
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = mount(AnalyticsDashboard as unknown, {
-      global: {
-        stubs: ['TimeChart', 'WeekChart', 'StressChart', 'HoldTimeChart', 'SessionsPerWeekChart'],
-      },
-    });
-    await nextTick();
-    await Promise.resolve();
-
-    const vm = wrapper.vm as unknown as Record<string, unknown>;
-    expect(vm.stressData).toBeDefined();
-    const stressData = vm.stressData as Record<string, unknown>;
-    expect((stressData.during as unknown[]).length).toBeGreaterThanOrEqual(0);
-  });
-
-  it('handles empty biometrics gracefully', async () => {
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [
-          {
-            id: 's1',
-            configSnapshot: {},
-            startedAt: new Date().toISOString(),
-            completedAt: new Date().toISOString(),
-            completedSets: 1,
-            sets: [],
-            status: 'COMPLETED',
-          },
-        ],
-        stats: { value: { totalSessions: 1 } },
-      }),
-    }));
-
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => true,
-        getSessionBiometrics: vi.fn().mockResolvedValue({
-          preSession: { stress: [] },
-          duringSession: { stress: [] },
-          postSession: { stress: [] },
-        }),
-      },
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = shallowMount(AnalyticsDashboard as unknown, {
-      global: {
-        stubs: ['HoldTimeChart', 'SessionsPerWeekChart', 'StressChart', 'TimeChart', 'WeekChart'],
-      },
-    });
-
-    const vm = wrapper.vm as unknown as Record<string, unknown>;
-    vm.ENABLE_WEARABLES = true;
-    vm.wearableConnected = true;
-
-    await nextTick();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    // Should not crash and stressData should be set (likely empty arrays)
-    expect(vm.stressData).toBeDefined();
+  it('shows an empty history, empty charts, and zero stats for a new user', () => {
+    const wrapper = shallowMount(AnalyticsDashboard);
+    expect(wrapper.get('h2').text()).toBe('Analytics Dashboard');
+    expect(wrapper.text()).toContain('No session data yet.');
+    expect(wrapper.text()).not.toContain('Recent Sessions');
+    expect(wrapper.text()).not.toContain('Wearable Devices');
+    expect(wrapper.findAll('.stat-card').map((card) => card.text())).toEqual([
+      '0Total Sessions',
+      '0Total Sets',
+      '0sAvg Hold Time',
+      '0sBest Hold Time',
+    ]);
+    expect(wrapper.getComponent(SessionsPerWeekChart).props('sessions')).toEqual([]);
+    expect(wrapper.getComponent(HoldTimeChart).props('sessions')).toEqual([]);
+    expect(garminService.getSessionBiometrics).not.toHaveBeenCalled();
   });
 
   it.each([
-    [0, '0s'],
     [30.4, '30s'],
     [59.5, '1m 0s'],
-    [60, '1m 0s'],
     [119.5, '2m 0s'],
     [125.4, '2m 5s'],
-  ])('renders hold statistics of %s seconds as %s', async (duration, expected) => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [],
-        stats: {
-          value: {
-            totalSessions: 1,
-            totalSets: 1,
-            avgHoldTime: duration,
-            maxHoldTime: duration,
-          },
-        },
-      }),
-    }));
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: { isConnected: () => false },
-    }));
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
+  ])('formats a completed hold of %s seconds as %s', (duration, expected) => {
+    addSession('Timed hold', 'COMPLETED', [duration]);
+
     const wrapper = shallowMount(AnalyticsDashboard);
-    for (const label of ['Avg Hold Time', 'Best Hold Time']) {
-      const card = wrapper.findAll('.stat-card').find((card) => card.text().includes(label));
-      expect(card, `Missing ${label}`).toBeDefined();
-      expect(card!.find('.text-3xl').text()).toBe(expected);
+    expect(wrapper.findAll('.stat-card').slice(2).map((card) => card.get('.tabular-nums').text())).toEqual([
+      expected,
+      expected,
+    ]);
+  });
+
+  it.each([
+    ['COMPLETED', completedAt],
+    ['IN_PROGRESS', new Date('2026-07-20T12:10:00Z')],
+  ] as const)('requests biometrics with the stored start and expected end for a %s session', async (status, end) => {
+    addSession('Recent practice', status);
+    vi.mocked(garminService.isConnected).mockReturnValue(true);
+    vi.mocked(garminService.getSessionBiometrics).mockImplementation(async (start, end) => biometrics(start, end));
+
+    const wrapper = shallowMount(AnalyticsDashboard);
+    await flushPromises();
+
+    expect(garminService.getSessionBiometrics).toHaveBeenCalledExactlyOnceWith(startedAt, end);
+    expect(wrapper.text()).not.toContain('Stress Levels During Last Session');
+  });
+
+  it('uses the demo time window when the wearable is connected and history is empty', async () => {
+    vi.setSystemTime(startedAt);
+    try {
+      vi.mocked(garminService.isConnected).mockReturnValue(true);
+      vi.mocked(garminService.getSessionBiometrics).mockImplementation(async (start, end) => biometrics(start, end));
+
+      const wrapper = shallowMount(AnalyticsDashboard);
+      await flushPromises();
+
+      expect(garminService.getSessionBiometrics).toHaveBeenCalledExactlyOnceWith(
+        new Date('2026-07-20T11:30:00Z'),
+        new Date('2026-07-20T11:50:00Z')
+      );
+      expect(wrapper.text()).toContain('No session data yet.');
+    } finally {
+      vi.useRealTimers();
     }
-    wrapper.unmount();
-  });
-
-  it('handles chart stubs correctly when rendering', async () => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [],
-        stats: { value: { totalSessions: 0, totalSets: 0, avgHoldTime: 0, maxHoldTime: 0 } },
-      }),
-    }));
-
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => false,
-      },
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = mount(AnalyticsDashboard, {
-      global: {
-        stubs: ['HoldTimeChart', 'SessionsPerWeekChart', 'StressChart', 'TimeChart', 'WeekChart'],
-      },
-    });
-
-    expect(wrapper.exists()).toBe(true);
-    expect(wrapper.text()).toContain('Analytics Dashboard');
-  });
-
-  it('should handle no sessions without error', async () => {
-    vi.resetModules();
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [],
-        stats: { value: { totalSessions: 0, totalSets: 0, avgHoldTime: 0, maxHoldTime: 0 } },
-      }),
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = mount(AnalyticsDashboard, {
-      global: { stubs: ['HoldTimeChart', 'SessionsPerWeekChart', 'StressChart'] },
-    });
-
-    expect(wrapper.exists()).toBe(true);
-  });
-
-  it('should render without crashing when garmin returns empty biometrics', async () => {
-    vi.resetModules();
-    const mockSession = {
-      id: '1',
-      createdAt: new Date(),
-      completedAt: new Date(Date.now() + 60000),
-      config: {
-        inhaleTime: 4,
-        inhaleHoldTime: 0,
-        exhaleTime: 6,
-        exhaleHoldTime: 0,
-        repetitions: 5,
-      },
-      configSnapshot: 'Breathwork Session',
-      sets: [],
-      notes: '',
-    };
-
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSession],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
-      }),
-    }));
-
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => true,
-        getSessionBiometrics: async () => ({
-          preSession: { stress: [] },
-          duringSession: { stress: [] },
-          postSession: { stress: [] },
-        }),
-      },
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = mount(AnalyticsDashboard, {
-      global: { stubs: ['HoldTimeChart', 'SessionsPerWeekChart', 'StressChart'] },
-    });
-
-    await wrapper.vm.$nextTick();
-    expect(wrapper.exists()).toBe(true);
-  });
-
-  it('should handle session without completedAt date', async () => {
-    vi.resetModules();
-    const mockSession = {
-      id: '1',
-      createdAt: new Date(),
-      completedAt: null, // No completion date - tests the ternary operator
-      config: {
-        inhaleTime: 4,
-        inhaleHoldTime: 0,
-        exhaleTime: 6,
-        exhaleHoldTime: 0,
-        repetitions: 5,
-      },
-      configSnapshot: 'Breathwork Session',
-      sets: [],
-      notes: '',
-    };
-
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSession],
-        stats: { value: { totalSessions: 1, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
-      }),
-    }));
-
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => false,
-      },
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = mount(AnalyticsDashboard, {
-      global: { stubs: ['HoldTimeChart', 'SessionsPerWeekChart', 'StressChart'] },
-    });
-
-    await wrapper.vm.$nextTick();
-    expect(wrapper.exists()).toBe(true);
-  });
-
-  it('should handle session with various duration times for formatTime function coverage', async () => {
-    vi.resetModules();
-    // Test different session durations to exercise formatTime branches
-    const mockSession1 = {
-      id: '1',
-      createdAt: new Date(),
-      completedAt: new Date(Date.now() + 30000), // 30 seconds
-      config: {
-        inhaleTime: 4,
-        inhaleHoldTime: 0,
-        exhaleTime: 6,
-        exhaleHoldTime: 0,
-        repetitions: 5,
-      },
-      configSnapshot: 'Quick Session',
-      sets: [],
-      notes: '',
-    };
-
-    const mockSession2 = {
-      id: '2',
-      createdAt: new Date(),
-      completedAt: new Date(Date.now() + 125000), // 125 seconds (2m 5s)
-      config: {
-        inhaleTime: 4,
-        inhaleHoldTime: 0,
-        exhaleTime: 6,
-        exhaleHoldTime: 0,
-        repetitions: 5,
-      },
-      configSnapshot: 'Longer Session',
-      sets: [],
-      notes: '',
-    };
-
-    const mockSession3 = {
-      id: '3',
-      createdAt: new Date(),
-      completedAt: new Date(Date.now() + 0), // 0 seconds
-      config: {
-        inhaleTime: 4,
-        inhaleHoldTime: 0,
-        exhaleTime: 6,
-        exhaleHoldTime: 0,
-        repetitions: 5,
-      },
-      configSnapshot: 'Zero Duration',
-      sets: [],
-      notes: '',
-    };
-
-    vi.doMock('../../src/composables', () => ({
-      useStorage: () => ({
-        getAllSessions: () => [mockSession1, mockSession2, mockSession3],
-        stats: { value: { totalSessions: 3, totalSets: 1, avgHoldTime: 0, maxHoldTime: 0 } },
-      }),
-    }));
-
-    vi.doMock('../../src/services/wearables/garmin', () => ({
-      garminService: {
-        isConnected: () => false,
-      },
-    }));
-
-    const { default: AnalyticsDashboard } =
-      await import('../../src/components/AnalyticsDashboard.vue');
-    const wrapper = mount(AnalyticsDashboard, {
-      global: { stubs: ['HoldTimeChart', 'SessionsPerWeekChart', 'StressChart'] },
-    });
-
-    await wrapper.vm.$nextTick();
-    expect(wrapper.exists()).toBe(true);
   });
 });

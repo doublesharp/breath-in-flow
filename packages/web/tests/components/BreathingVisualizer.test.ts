@@ -62,8 +62,10 @@ describe('BreathingVisualizer', () => {
     const circle = wrapper.get('.breathing-circle');
     const activeTransform = circle.attributes('style');
 
-    await wrapper.setProps({ phase: 'PAUSED', scale: 0.8, isRunning: false });
+    await wrapper.setProps({ phase: 'PAUSED', pausedPhase: 'EXHALE', scale: 0.8, isRunning: false });
     expect(circle.attributes('style')).toBe(activeTransform);
+    expect(circle.classes()).toContain('breathing-circle-paused');
+    expect(wrapper.get('.phase-pill').text()).toBe('Exhale · Paused');
   });
 
   it('preserves the whole breathing circle scale with reduced motion', async () => {
@@ -246,7 +248,7 @@ describe('BreathingVisualizer', () => {
     expect(wrapper.find('[data-testid="phase-time"]').exists()).toBe(false);
   });
 
-  it('keeps phase label colors distinct from the pressure field palette', async () => {
+  it('uses the same sage, sand, and clay cues as the practice pattern', async () => {
     const wrapper = mount(BreathingVisualizer, {
       props: {
         phase: 'INHALE',
@@ -257,13 +259,16 @@ describe('BreathingVisualizer', () => {
       },
     });
 
-    expect(wrapper.get('.rounded-full').classes()).toContain('from-emerald-700');
+    expect(wrapper.get('.phase-pill').classes()).toContain('phase-pill-sage');
 
     await wrapper.setProps({ phase: 'EXHALE' });
-    expect(wrapper.get('.rounded-full').classes()).toContain('from-teal-700');
+    expect(wrapper.get('.phase-pill').classes()).toContain('phase-pill-sand');
 
     await wrapper.setProps({ phase: 'INHALE_HOLD' });
-    expect(wrapper.get('.rounded-full').classes()).toContain('from-amber-700');
+    expect(wrapper.get('.phase-pill').classes()).toContain('phase-pill-clay');
+
+    await wrapper.setProps({ phase: 'PAUSED' });
+    expect(wrapper.get('.phase-pill').classes()).toContain('phase-pill-paused');
   });
 
   describe('BreathingVisualizer phase classes', () => {

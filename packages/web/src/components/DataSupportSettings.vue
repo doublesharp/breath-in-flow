@@ -3,27 +3,31 @@
     <!-- Goal -->
     <div class="help-card">
       <h4 class="help-card-title">Your goal</h4>
-      <p class="text-sm text-slate-300">
+      <p class="text-sm text-secondary">
         Current goal:
-        <strong data-testid="selected-goal" class="text-white">{{ selectedGoalLabel }}</strong>
+        <strong data-testid="selected-goal" class="text-primary">{{ selectedGoalLabel }}</strong>
       </p>
       <fieldset class="mt-3 space-y-2">
         <legend class="sr-only">Change your wellness goal</legend>
         <label
           v-for="choice in goalChoices"
           :key="choice.goal"
-          class="flex items-start gap-3 p-3 rounded-xl border border-white/[0.08] bg-white/[0.03] cursor-pointer transition-colors hover:border-white/20"
-          :class="selectedGoal === choice.goal ? 'border-amber-400/60 bg-amber-500/10' : ''"
+          class="flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors"
+          :class="
+            selectedGoal === choice.goal
+              ? 'border-clay/60 bg-clay/10'
+              : 'border-line-subtle bg-surface-raised hover:border-line-strong'
+          "
         >
           <input
             v-model="goalModel"
             type="radio"
             name="data-support-goal"
-            class="mt-1 h-4 w-4 accent-amber-400"
+            class="mt-1 h-4 w-4 shrink-0 accent-sage"
             :value="choice.goal"
             :data-testid="choice.testId"
           />
-          <span class="block text-sm font-medium text-white">{{ choice.label }}</span>
+          <span class="block text-sm font-medium text-primary">{{ choice.label }}</span>
         </label>
       </fieldset>
     </div>
@@ -31,7 +35,7 @@
     <!-- Backup -->
     <div class="help-card">
       <h4 class="help-card-title">Backup</h4>
-      <p class="text-sm text-slate-300 mb-3">
+      <p class="text-sm text-secondary mb-3">
         Export a private copy of your data, or restore one on a new device. Backups stay on your device unless you share
         them.
       </p>
@@ -40,18 +44,19 @@
           type="button"
           data-testid="export-backup"
           class="btn-primary"
-          :disabled="exporting"
+          :disabled="exporting || erasing"
           @click="handleExport"
         >
           Export backup
         </button>
-        <label class="btn-secondary cursor-pointer">
+        <label class="btn-secondary inline-flex min-h-11 items-center cursor-pointer focus-within:outline-2 focus-within:outline-offset-4 focus-within:outline-sage">
           Restore backup
           <input
             data-testid="import-backup-input"
             type="file"
             accept="application/json,.json"
             class="sr-only"
+            :disabled="erasing || readingBackup"
             @change="handleFileChange"
           />
         </label>
@@ -60,7 +65,7 @@
         v-if="exportStatus"
         data-testid="export-status"
         class="mt-2 text-sm"
-        :class="exportStatus.ok ? 'text-emerald-400' : 'text-rose-400'"
+        :class="exportStatus.ok ? 'text-sage' : 'text-danger'"
       >
         {{ exportStatus.text }}
       </p>
@@ -68,17 +73,102 @@
         v-if="restoreStatus"
         data-testid="restore-status"
         class="mt-2 text-sm"
-        :class="restoreStatus.ok ? 'text-emerald-400' : 'text-rose-400'"
+        :class="restoreStatus.ok ? 'text-sage' : 'text-danger'"
       >
         {{ restoreStatus.text }}
       </p>
     </div>
 
+    <section class="help-card" aria-labelledby="privacy-wellness-title">
+      <h4 id="privacy-wellness-title" class="help-card-title">Privacy &amp; Wellness</h4>
+      <p class="text-sm text-secondary">
+        Sessions, presets, preferences, and optional pulse readings stay on this device in localStorage and IndexedDB.
+        Breath in Flow has no accounts, cloud sync, analytics, or ads.
+      </p>
+      <a
+        :href="privacyPolicyUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex min-h-11 items-center text-sm font-medium text-sage underline underline-offset-4"
+        @click="openPrivacyPolicy"
+      >
+        Read the privacy policy
+      </a>
+      <p class="text-sm text-secondary">
+        Breath in Flow is for general wellness and relaxation. It is not a medical device and is not intended to
+        diagnose, treat, cure, or prevent any condition. Never practice extended breath holds in water, while driving,
+        or if you feel dizzy or lightheaded.
+      </p>
+    </section>
+
+    <section class="help-card" aria-labelledby="reset-data-title">
+      <h4 id="reset-data-title" class="help-card-title">Reset &amp; Erase Data</h4>
+      <button
+        type="button"
+        data-testid="erase-all-data"
+        class="practice-stop min-h-11 !border-terracotta"
+        :disabled="erasing || exporting || readingBackup || confirmOpen"
+        @click="openErase"
+      >
+        Erase all local data
+      </button>
+      <p
+        v-if="eraseStatus"
+        data-testid="erase-status"
+        :role="eraseStatus.ok ? 'status' : 'alert'"
+        class="mt-2 text-sm"
+        :class="eraseStatus.ok ? 'text-sage' : 'text-danger'"
+      >
+        {{ eraseStatus.text }}
+      </p>
+    </section>
+
+    <div
+      v-if="eraseOpen"
+      ref="eraseDialogRef"
+      data-testid="erase-confirm-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="erase-confirm-title"
+      aria-describedby="erase-confirm-description"
+      tabindex="-1"
+      class="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm safe-area-top safe-area-bottom"
+    >
+      <div class="card-solid max-h-full w-full max-w-md overflow-y-auto">
+        <h2 id="erase-confirm-title" class="text-xl font-bold text-primary">Erase all local data?</h2>
+        <p id="erase-confirm-description" class="mt-2 text-sm text-muted">
+          This permanently removes all sessions, presets, pulse variability readings, assessments, and saved preferences
+          on this device. You can keep a copy by exporting a backup before you erase.
+        </p>
+        <div class="mt-6 flex flex-wrap justify-end gap-2">
+          <button
+            ref="cancelEraseRef"
+            type="button"
+            data-testid="cancel-erase"
+            class="btn-secondary !border-muted/65"
+            :disabled="erasing"
+            @click="cancelErase"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-testid="confirm-erase"
+            class="btn-danger !border-terracotta"
+            :disabled="erasing"
+            @click="confirmErase"
+          >
+            {{ erasing ? 'Erasing…' : 'Erase data' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Feedback -->
     <div class="help-card">
       <h4 class="help-card-title">Send feedback</h4>
-      <p class="text-sm text-slate-300 mb-3">
-        Share a note with the team. We only include your app and device details — never your practice data.
+      <p class="text-sm text-secondary mb-3">
+        Share a note with the team. Messages include only your app and device details, never your practice data.
       </p>
       <button
         type="button"
@@ -89,7 +179,7 @@
       >
         Send feedback
       </button>
-      <p v-if="feedbackStatus" data-testid="feedback-status" class="mt-2 text-sm text-slate-300">
+      <p v-if="feedbackStatus" data-testid="feedback-status" class="mt-2 text-sm text-secondary">
         {{ feedbackStatus }}
       </p>
     </div>
@@ -107,14 +197,14 @@
       class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm safe-area-top safe-area-bottom"
     >
       <div class="card-solid max-w-md w-full">
-        <h2 id="restore-confirm-title" ref="confirmTitleRef" tabindex="-1" class="text-xl font-bold text-white">
+        <h2 id="restore-confirm-title" ref="confirmTitleRef" tabindex="-1" class="text-xl font-bold text-primary">
           Restore this backup?
         </h2>
-        <p class="mt-2 text-sm text-slate-400">
+        <p class="mt-2 text-sm text-muted">
           This replaces all data currently on this device. This cannot be undone.
         </p>
 
-        <div data-testid="backup-preview" class="mt-4 rounded-xl bg-white/[0.03] p-3 text-sm text-slate-300">
+        <div data-testid="backup-preview" class="mt-4 rounded-xl bg-surface-inset p-3 text-sm text-secondary">
           <p>Exported {{ formattedExportedAt }}</p>
           <ul class="mt-2 space-y-1">
             <li>{{ previewCounts.sessions }} sessions</li>
@@ -151,14 +241,25 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { Capacitor } from '@capacitor/core';
 import type { UserGoal } from '@breath-in-flow/shared';
 import { usePreferences } from '@/composables/usePreferences';
+import { useHrvStorage } from '@/composables/useHrvStorage';
+import { useStorage } from '@/composables/useStorage';
 import { useModalIsolation } from '@/composables/useModalIsolation';
 import { createDefaultBackupService } from '@/services/appBackupService';
 import { BackupRestoreError, type ParsedBackup } from '@/services/backupService';
 import { sendSupportMessage, shareBackupFile } from '@/services/supportService';
 
-const { selectedGoal, setGoal } = usePreferences();
+const { selectedGoal, setGoal, replacePreferences } = usePreferences();
+const privacyPolicyUrl = `${import.meta.env.BASE_URL}privacy.html`;
+
+function openPrivacyPolicy(event: MouseEvent) {
+  // The bundled WebViews cannot open their local asset URLs in an external tab.
+  if (!Capacitor.isNativePlatform() && window.location.protocol !== 'file:') return;
+  event.preventDefault();
+  window.location.assign(privacyPolicyUrl);
+}
 
 // Built once; wiring is lazy, so no storage/native work happens until an action runs.
 const backupService = createDefaultBackupService();
@@ -207,6 +308,7 @@ async function handleExport() {
 
 // --- Restore ---
 const pendingRestore = ref<ParsedBackup | null>(null);
+const readingBackup = ref(false);
 const restoring = ref(false);
 const restoreStatus = ref<{ ok: boolean; text: string } | null>(null);
 
@@ -255,10 +357,13 @@ async function handleFileChange(event: Event) {
   input.value = '';
   if (!file) return;
 
+  readingBackup.value = true;
   try {
     pendingRestore.value = await backupService.parseBackupFile(file);
   } catch (error) {
     restoreStatus.value = { ok: false, text: restoreErrorMessage(error) };
+  } finally {
+    readingBackup.value = false;
   }
 }
 
@@ -281,6 +386,42 @@ async function confirmRestore() {
 
 function cancelRestore() {
   pendingRestore.value = null;
+}
+
+const eraseOpen = ref(false);
+const erasing = ref(false);
+const eraseStatus = ref<{ ok: boolean; text: string } | null>(null);
+const eraseDialogRef = ref<HTMLElement | null>(null);
+const cancelEraseRef = ref<HTMLButtonElement | null>(null);
+useModalIsolation(eraseDialogRef, eraseOpen, {
+  initialFocus: () => cancelEraseRef.value,
+  canEscape: () => !erasing.value,
+  onEscape: cancelErase,
+});
+
+function openErase() {
+  eraseStatus.value = null;
+  eraseOpen.value = true;
+}
+
+function cancelErase() {
+  eraseOpen.value = false;
+}
+
+async function confirmErase() {
+  if (erasing.value) return;
+  erasing.value = true;
+  try {
+    await useHrvStorage().clearHrvData();
+    useStorage().clearPracticeData();
+    replacePreferences(null);
+    eraseStatus.value = { ok: true, text: 'All local data was erased.' };
+  } catch {
+    eraseStatus.value = { ok: false, text: 'Some local data could not be erased. Please try again.' };
+  } finally {
+    erasing.value = false;
+    eraseOpen.value = false;
+  }
 }
 
 // --- Feedback ---
@@ -308,18 +449,3 @@ async function handleFeedback() {
   }
 }
 </script>
-
-<style scoped>
-@reference "tailwindcss";
-.help-card {
-  @apply bg-slate-800/50 rounded-xl p-4 border border-slate-700/30;
-}
-
-.help-card-title {
-  @apply font-semibold text-white mb-2;
-}
-
-.btn-secondary {
-  @apply inline-flex items-center gap-2 min-h-11 px-4 py-2 rounded-lg text-sm font-medium text-slate-200 bg-white/[0.06] border border-white/10 hover:bg-white/10 transition-all;
-}
-</style>

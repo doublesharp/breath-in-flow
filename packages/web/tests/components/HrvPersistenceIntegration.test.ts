@@ -6,7 +6,7 @@ import type { HRVAnalysis, MeasurementEligibility, SampleProvenance } from '@bre
 import LabTab from '@/components/LabTab.vue';
 import ResonanceAssessment from '@/components/ResonanceAssessment.vue';
 import { useHrvStorage } from '@/composables/useHrvStorage';
-import { resetStorageForTesting } from '@/composables/useStorage';
+import { resetStorageForTesting, useStorage } from '@/composables/useStorage';
 
 enableAutoUnmount(afterEach);
 
@@ -119,7 +119,7 @@ describe('pulse variability component persistence integration', () => {
     });
   });
 
-  it('persists ResonanceAssessment nested reactive trials before creating its practice preset', async () => {
+  it('persists reactive assessment trials and links the practice preset through real IndexedDB', async () => {
     const wrapper = mount(ResonanceAssessment, {
       global: {
         stubs: {
@@ -149,7 +149,9 @@ describe('pulse variability component persistence integration', () => {
       .findAll('button')
       .find((button) => button.text().includes('Save & Create Preset'))!
       .trigger('click');
-    await flushPromises();
+    await vi.waitFor(() => {
+      expect(wrapper.emitted('complete'), wrapper.text()).toHaveLength(1);
+    });
 
     const stored = await useHrvStorage().getAssessments();
     expect(stored).toHaveLength(1);
@@ -159,6 +161,9 @@ describe('pulse variability component persistence integration', () => {
       comfortRating: 4,
       notes: 'Comfortable and steady.',
     });
-    expect(localStorage.getItem('breath-in-flow-configs')).not.toBeNull();
+    const [preset] = useStorage().getAllConfigs();
+    expect(preset.id).toBeDefined();
+    expect(stored[0].createdPresetId).toBe(preset.id);
+    expect(wrapper.emitted('complete')).toEqual([[preset]]);
   });
 });

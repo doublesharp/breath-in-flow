@@ -1,24 +1,26 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-4 sm:space-y-6">
     <!-- Section A: Standalone HRV Measurement -->
-    <div class="space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-bold text-white">Pulse Variability</h2>
-        <div class="flex gap-1">
+    <div class="card-solid !p-3 sm:!p-6 space-y-3 sm:space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <h2 class="text-base font-bold text-primary sm:text-lg">Pulse Variability</h2>
+        <div class="flex shrink-0 gap-1">
           <button
             @click="mode = 'guided'"
+            :aria-pressed="mode === 'guided'"
             :class="[
-              'px-3 py-1 rounded-lg text-xs font-medium transition-all',
-              mode === 'guided' ? 'text-white bg-emerald-600' : 'text-white/40 bg-white/5',
+              'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
+              mode === 'guided' ? 'text-surface-page bg-sage' : 'text-secondary bg-surface-inset hover:bg-surface-raised',
             ]"
           >
             Guided
           </button>
           <button
             @click="mode = 'freeform'"
+            :aria-pressed="mode === 'freeform'"
             :class="[
-              'px-3 py-1 rounded-lg text-xs font-medium transition-all',
-              mode === 'freeform' ? 'text-white bg-emerald-600' : 'text-white/40 bg-white/5',
+              'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
+              mode === 'freeform' ? 'text-surface-page bg-sage' : 'text-secondary bg-surface-inset hover:bg-surface-raised',
             ]"
           >
             Freeform
@@ -37,34 +39,34 @@
           :class="[
             'min-h-11 px-2 py-2 rounded-lg border text-center text-xs font-medium transition-all',
             selectedSensor === s.value
-              ? 'border-emerald-500 bg-emerald-500/10 text-white'
-              : 'border-white/10 bg-white/5 text-white/50',
+              ? 'border-sage bg-sage/10 text-primary'
+              : 'border-line-subtle bg-surface-inset text-muted',
           ]"
         >
           <span class="block">{{ s.label }}</span>
-          <span v-if="s.badge" class="mt-0.5 block text-[9px] uppercase tracking-wide text-emerald-300/80">
+          <span v-if="s.badge" class="mt-0.5 block text-[9px] uppercase tracking-wide text-sage">
             {{ s.badge }}
           </span>
         </button>
       </div>
 
       <!-- Permission error -->
-      <div v-if="permissionError" class="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-xs text-red-400">
+      <div v-if="permissionError" class="rounded-lg bg-terracotta/10 border border-terracotta/30 p-2 text-xs text-danger">
         {{ permissionError }}
       </div>
       <div
         v-if="measurementNotice"
-        class="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-xs text-amber-300"
+        class="rounded-lg bg-clay/10 border border-clay/25 p-2 text-xs text-sand"
         role="status"
       >
         {{ measurementNotice }}
       </div>
-      <div v-if="showRecoveryActions" class="rounded-xl border border-amber-400/20 bg-amber-500/5 p-3" role="alert">
-        <p class="text-sm text-amber-100">Choose how you want to continue.</p>
+      <div v-if="showRecoveryActions" class="rounded-xl border border-clay/25 bg-clay/8 p-3" role="alert">
+        <p class="text-sm text-sand">Choose how you want to continue.</p>
         <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <button class="btn-primary min-h-11 rounded-lg px-3" @click="retryMeasurement">Retry</button>
           <button class="btn-secondary min-h-11 rounded-lg px-3" @click="chooseAnotherSensor">Change sensor</button>
-          <button class="min-h-11 rounded-lg px-3 text-white/60 hover:bg-white/5" @click="dismissRecovery">
+          <button class="min-h-11 rounded-lg px-3 text-secondary hover:bg-surface-inset" @click="dismissRecovery">
             Cancel
           </button>
         </div>
@@ -77,16 +79,30 @@
           :key="p.id"
           :data-testid="`protocol-${p.id}`"
           @click="showPrepScreen(p)"
-          class="flex items-center gap-3 w-full p-3 rounded-xl text-left transition-all bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/30 active:scale-[0.98]"
+          class="flex items-center gap-2 sm:gap-3 w-full p-2.5 sm:p-3 rounded-xl text-left transition-colors bg-surface-inset hover:bg-surface-raised border border-line-subtle hover:border-sage/30 active:scale-[0.98]"
         >
-          <span class="text-xl shrink-0">{{ p.icon }}</span>
+          <svg
+            aria-hidden="true"
+            class="w-5 h-5 shrink-0 text-sage"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path :d="p.iconPath" />
+          </svg>
           <div class="flex-1 min-w-0">
-            <div class="font-semibold text-white text-sm">{{ p.name }}</div>
-            <div :data-testid="`protocol-description-${p.id}`" class="mt-0.5 text-xs leading-relaxed text-white/45">
+            <div class="font-semibold text-primary text-sm">{{ p.name }}</div>
+            <div :data-testid="`protocol-description-${p.id}`" class="mt-0.5 text-xs leading-relaxed text-muted">
               {{ p.description }}
             </div>
           </div>
-          <span class="text-xs text-white/30 shrink-0">{{ formatDuration(p.duration) }}</span>
+          <span class="flex shrink-0 items-center gap-2 text-xs text-secondary tabular-nums">
+            {{ formatDuration(p.duration) }}
+            <span aria-hidden="true" class="text-xl leading-none text-sage">›</span>
+          </span>
         </button>
       </div>
 
@@ -108,27 +124,38 @@
         aria-modal="true"
         aria-labelledby="pulse-prep-dialog-title"
         tabindex="-1"
-        class="fixed inset-0 z-50 bg-slate-950 flex flex-col safe-area-top safe-area-bottom"
+        class="fixed inset-0 z-50 bg-surface-page flex flex-col overflow-y-auto safe-area-top safe-area-bottom"
       >
         <div
           data-testid="prep-content"
           :inert="isStartPending || undefined"
-          class="flex-1 flex flex-col justify-center items-center px-6 text-center"
+          class="flex-1 flex flex-col justify-center items-center px-6 py-5 text-center"
         >
           <!-- Protocol info -->
-          <div class="text-4xl mb-4">{{ prepProtocol?.icon || '📊' }}</div>
-          <h2 id="pulse-prep-dialog-title" class="text-xl font-bold text-white mb-1">
+          <svg
+            aria-hidden="true"
+            class="w-9 h-9 mb-4 shrink-0 text-sage"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path :d="prepProtocol?.iconPath ?? 'M3 12h4l2-6 4 12 2-6h6'" />
+          </svg>
+          <h2 id="pulse-prep-dialog-title" class="text-xl font-bold text-primary mb-1">
             {{ prepProtocol?.name || 'Freeform Measurement' }}
           </h2>
 
           <!-- Duration slider -->
           <div v-if="prepProtocol" class="w-full max-w-xs mb-6">
-            <label for="measurement-duration" class="mb-2 block text-xs font-medium text-white/60">
+            <label for="measurement-duration" class="mb-2 block text-xs font-medium text-secondary">
               Analyzed duration
             </label>
             <div class="flex justify-between items-baseline mb-1">
-              <span class="text-lg font-bold text-white">{{ formatDuration(customDuration) }}</span>
-              <span v-if="customDuration < 60" class="text-[10px] text-amber-400/70">Longer = more accurate</span>
+              <span class="text-lg font-bold text-primary">{{ formatDuration(customDuration) }}</span>
+              <span v-if="customDuration < 60" class="text-[10px] text-sand">Longer = more accurate</span>
             </div>
             <input
               id="measurement-duration"
@@ -140,39 +167,39 @@
               step="30"
               aria-label="Analyzed duration"
               :aria-valuetext="formatDuration(customDuration)"
-              class="w-full h-1.5 rounded-full appearance-none bg-white/10 accent-emerald-500"
+              class="w-full h-1.5 rounded-full appearance-none bg-surface-raised accent-sage"
             />
-            <div class="flex justify-between text-[9px] text-white/20 mt-1">
+            <div class="flex justify-between text-[9px] text-muted mt-1">
               <span>{{ formatDuration(minimumProtocolDuration) }}</span>
               <span>{{ formatDuration(prepProtocol.id === 'full-analysis' ? 600 : 300) }}</span>
             </div>
-            <p class="mt-2 text-[11px] text-white/45">
+            <p class="mt-2 text-[11px] text-muted">
               Analyzes {{ formatTimer(customDuration) }} after {{ formatTimer(captureDurationSeconds) }}–{{
                 formatTimer(maxCaptureDurationSeconds)
               }}
               of sensor capture.
             </p>
           </div>
-          <p v-else class="text-sm text-white/50 mb-6">Manual stop</p>
+          <p v-else class="text-sm text-muted mb-6">Manual stop</p>
 
           <!-- Sensor-specific instructions -->
-          <div class="rounded-2xl bg-white/5 border border-white/10 p-5 mb-6 max-w-sm">
-            <h3 class="text-sm font-semibold text-emerald-400 mb-3">How to get a good reading</h3>
-            <div v-if="selectedSensor === 'camera'" class="space-y-2 text-sm text-white/70 text-left">
-              <p>1. Place your <strong class="text-white">fingertip</strong> gently over the rear camera lens</p>
+          <div class="rounded-2xl bg-surface-inset border border-line-subtle p-5 mb-6 max-w-sm">
+            <h3 class="text-sm font-semibold text-sage mb-3">How to get a good reading</h3>
+            <div v-if="selectedSensor === 'camera'" class="space-y-2 text-sm text-secondary text-left">
+              <p>1. Place your <strong class="text-primary">fingertip</strong> gently over the rear camera lens</p>
               <p>2. The flash will turn on to illuminate your finger</p>
               <p>3. Press firmly but don't squeeze — stay relaxed</p>
               <p>4. Keep completely still during the measurement</p>
             </div>
-            <div v-else-if="selectedSensor === 'accelerometer'" class="space-y-2 text-sm text-white/70 text-left">
+            <div v-else-if="selectedSensor === 'accelerometer'" class="space-y-2 text-sm text-secondary text-left">
               <p>1. Lie down or recline comfortably</p>
-              <p>2. Place the phone <strong class="text-white">flat on your chest</strong> (sternum area)</p>
+              <p>2. Place the phone <strong class="text-primary">flat on your chest</strong> (sternum area)</p>
               <p>3. Screen can face up — just keep the phone stable</p>
               <p>4. Breathe normally and stay as still as possible</p>
             </div>
-            <div v-else class="space-y-2 text-sm text-white/70 text-left">
-              <p>1. Place phone <strong class="text-white">screen-down on your chest</strong></p>
-              <p>2. Cover the rear camera with your <strong class="text-white">fingertip</strong></p>
+            <div v-else class="space-y-2 text-sm text-secondary text-left">
+              <p>1. Place phone <strong class="text-primary">screen-down on your chest</strong></p>
+              <p>2. Cover the rear camera with your <strong class="text-primary">fingertip</strong></p>
               <p>3. The flash will illuminate your finger from below</p>
               <p>4. Stay still — follow audio cues for breathing</p>
             </div>
@@ -182,10 +209,10 @@
           <div v-if="selectedSensor === 'camera' || selectedSensor === 'dual'" class="w-full max-w-sm space-y-3 mb-6">
             <!-- Camera picker -->
             <div v-if="availableCameras.length > 1" class="text-left">
-              <label class="text-xs font-medium text-white/50 block mb-1">Camera</label>
+              <label class="text-xs font-medium text-muted block mb-1">Camera</label>
               <select
                 v-model="selectedCameraId"
-                class="w-full py-2 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-white"
+                class="w-full py-2 px-3 rounded-lg bg-surface-inset border border-line-subtle text-sm text-primary"
               >
                 <option value="">Default (rear)</option>
                 <option v-for="cam in availableCameras" :key="cam.deviceId" :value="cam.deviceId">
@@ -196,20 +223,22 @@
 
             <!-- Torch toggle -->
             <div class="flex items-center justify-between">
-              <span class="text-sm text-white/60">Flash / Torch</span>
+              <span class="text-sm text-secondary">Flash / Torch</span>
               <button
                 @click="useTorch = !useTorch"
+                aria-label="Flash / Torch"
+                :aria-pressed="useTorch"
                 :class="[
-                  'relative w-11 h-6 rounded-full transition-colors',
-                  useTorch ? 'bg-emerald-500' : 'bg-white/10',
+                  'relative w-11 rounded-lg',
+                  useTorch ? 'text-sage' : 'text-muted',
                 ]"
               >
-                <span
-                  :class="[
-                    'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform',
-                    useTorch ? 'translate-x-5' : '',
-                  ]"
-                />
+                <span class="block h-6 rounded-full border border-current" aria-hidden="true">
+                  <span
+                    class="absolute top-1/2 left-1 size-4 -translate-y-1/2 rounded-full bg-current transition-transform"
+                    :class="{ 'translate-x-5': useTorch }"
+                  />
+                </span>
               </button>
             </div>
           </div>
@@ -217,7 +246,7 @@
           <!-- Permission error -->
           <div
             v-if="permissionError"
-            class="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400 mb-4 max-w-sm"
+            class="rounded-xl bg-terracotta/10 border border-terracotta/30 p-3 text-sm text-danger mb-4 max-w-sm"
           >
             {{ permissionError }}
           </div>
@@ -235,7 +264,7 @@
           </button>
           <button
             @click="cancelPendingStart"
-            class="w-full py-3 rounded-xl font-medium text-white/40 hover:text-white/60"
+            class="w-full py-3 rounded-xl font-medium text-muted hover:text-secondary"
           >
             Cancel
           </button>
@@ -253,7 +282,7 @@
         aria-modal="true"
         aria-labelledby="pulse-measurement-dialog-title"
         tabindex="-1"
-        class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom"
+        class="fixed inset-0 z-50 bg-surface-page overflow-y-auto safe-area-top safe-area-bottom"
       >
         <!-- Measuring view -->
         <div v-if="isMeasuring" class="flex flex-col h-full p-4">
@@ -270,10 +299,10 @@
           <!-- Header -->
           <div class="flex items-center justify-between mb-4">
             <div>
-              <div class="text-xs text-white/50">{{ selectedProtocol ? selectedProtocol.name : 'Freeform' }}</div>
-              <div class="text-2xl font-bold text-white font-mono">
+              <div class="text-xs text-muted">{{ selectedProtocol ? selectedProtocol.name : 'Freeform' }}</div>
+              <div class="text-2xl font-bold text-primary font-mono">
                 {{ formatTimer(elapsedSeconds) }}
-                <span v-if="selectedProtocol" class="text-white/30 text-base"
+                <span v-if="selectedProtocol" class="text-muted text-base"
                   >/ {{ formatTimer(captureDurationSeconds) }}</span
                 >
               </div>
@@ -286,16 +315,16 @@
           </div>
 
           <!-- Progress bar -->
-          <div v-if="selectedProtocol" class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-3">
+          <div v-if="selectedProtocol" class="w-full h-1.5 rounded-full bg-surface-raised overflow-hidden mb-3">
             <div
               data-testid="measurement-progress"
-              class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-1000"
+              class="h-full rounded-full bg-sage transition-all duration-1000"
               :style="{ width: `${Math.min(100, (elapsedSeconds / captureDurationSeconds) * 100)}%` }"
             />
           </div>
 
           <!-- Sensor instructions -->
-          <p class="text-xs text-white/40 mb-3">
+          <p class="text-xs text-muted mb-3">
             {{
               selectedSensor === 'camera'
                 ? 'Finger on rear camera lens. Keep still.'
@@ -309,34 +338,34 @@
           <div class="flex-1 space-y-3 min-h-0 overflow-y-auto">
             <!-- HR tachogram -->
             <div v-if="hrDataPoints.length > 0">
-              <div class="text-xs text-white/40 mb-1">Heart Rate</div>
+              <div class="text-xs text-muted mb-1">Heart Rate</div>
               <HrTachogram
                 :hr-data="hrDataPoints"
                 :duration="Math.min(60, Math.max(15, elapsedSeconds))"
                 :height="100"
               />
             </div>
-            <div v-else class="min-h-20 rounded-xl bg-white/5 p-4 text-center text-sm text-white/50" role="status">
+            <div v-else class="min-h-20 rounded-xl bg-surface-inset p-4 text-center text-sm text-muted" role="status">
               {{ signalGuidance }}
             </div>
 
             <!-- Raw sensor signal -->
             <div>
-              <div class="text-xs text-white/40 mb-1">Raw Sensor Signal</div>
-              <canvas ref="rawSignalCanvas" class="w-full rounded-lg bg-slate-900/50" height="80" />
+              <div class="text-xs text-muted mb-1">Raw Sensor Signal</div>
+              <canvas ref="rawSignalCanvas" class="w-full rounded-lg bg-surface-inset" height="80" />
             </div>
 
             <!-- Debug toggle + log -->
             <button
               v-if="debugControlsEnabled"
               @click="showDebug = !showDebug"
-              class="text-[10px] text-white/15 hover:text-white/30 w-full text-center"
+              class="text-[10px] text-muted hover:text-muted w-full text-center"
             >
               {{ showDebug ? 'Hide' : 'Show' }} Debug
             </button>
             <div
               v-if="debugControlsEnabled && showDebug"
-              class="rounded-lg bg-black/50 border border-white/5 p-2 max-h-32 overflow-y-auto font-mono text-[9px] text-white/40 space-y-px"
+              class="rounded-lg bg-black/50 border border-line-subtle p-2 max-h-32 overflow-y-auto font-mono text-[9px] text-muted space-y-px"
             >
               <div v-for="(line, i) in debugLog" :key="i">{{ line }}</div>
             </div>
@@ -357,7 +386,7 @@
             id="pulse-measurement-dialog-title"
             ref="measurementPhaseHeadingRef"
             data-testid="measurement-phase-heading"
-            class="text-lg font-bold text-white"
+            class="text-lg font-bold text-primary"
             tabindex="-1"
             aria-live="polite"
           >
@@ -367,14 +396,14 @@
           <section
             v-if="currentEligibility"
             data-testid="measurement-quality"
-            class="rounded-xl border border-white/10 bg-white/[0.04] p-4"
+            class="rounded-xl border border-line-subtle bg-surface-inset p-4"
             aria-labelledby="measurement-quality-title"
           >
-            <h3 id="measurement-quality-title" class="font-semibold text-white">Measurement quality</h3>
+            <h3 id="measurement-quality-title" class="font-semibold text-primary">Measurement quality</h3>
             <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
               <div>
-                <dt class="text-white/60">Time covered</dt>
-                <dd class="font-semibold text-white">
+                <dt class="text-secondary">Time covered</dt>
+                <dd class="font-semibold text-primary">
                   {{
                     currentEligibility.coveragePercentage === undefined
                       ? 'Not recorded'
@@ -383,8 +412,8 @@
                 </dd>
               </div>
               <div>
-                <dt class="text-white/60">Longest sample gap</dt>
-                <dd class="font-semibold text-white">
+                <dt class="text-secondary">Longest sample gap</dt>
+                <dd class="font-semibold text-primary">
                   {{
                     currentEligibility.maximumGapSeconds === undefined
                       ? 'Not recorded'
@@ -393,23 +422,23 @@
                 </dd>
               </div>
               <div>
-                <dt class="text-white/60">Corrected beats</dt>
-                <dd class="font-semibold text-white">{{ currentEligibility.artifactPercentage.toFixed(1) }}%</dd>
+                <dt class="text-secondary">Corrected beats</dt>
+                <dd class="font-semibold text-primary">{{ currentEligibility.artifactPercentage.toFixed(1) }}%</dd>
               </div>
               <div>
-                <dt class="text-white/60">Average signal quality</dt>
-                <dd class="font-semibold text-white">{{ (currentEligibility.meanQuality * 100).toFixed(0) }}%</dd>
+                <dt class="text-secondary">Average signal quality</dt>
+                <dd class="font-semibold text-primary">{{ (currentEligibility.meanQuality * 100).toFixed(0) }}%</dd>
               </div>
             </dl>
             <ul
               v-if="currentEligibility.warnings.length > 0"
-              class="mt-3 space-y-2 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] p-3 text-sm text-amber-100"
+              class="mt-3 space-y-2 rounded-lg border border-clay/25 bg-clay/8 p-3 text-sm text-sand"
             >
               <li v-for="warning in currentEligibility.warnings" :key="warning">
                 {{ eligibilityWarningMessage(warning) }}
               </li>
             </ul>
-            <p class="mt-3 text-xs leading-relaxed text-white/60">
+            <p class="mt-3 text-xs leading-relaxed text-secondary">
               This is a phone-derived wellness estimate, not a medical measurement. Results with limited coverage or
               elevated corrections remain in your history but are not used for trend comparisons.
             </p>
@@ -424,17 +453,17 @@
           <div
             v-else
             data-testid="poincare-unavailable"
-            class="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-white/60"
+            class="rounded-xl border border-clay/25 bg-clay/8 p-3 text-sm text-secondary"
             role="status"
           >
-            <div class="font-medium text-amber-300">Poincaré plot unavailable</div>
+            <div class="font-medium text-sand">Poincaré plot unavailable</div>
             <div class="mt-1 text-xs">
               {{ poincareUnavailableMessage(currentAnalysis.poincare.reason) }}
             </div>
           </div>
 
           <div class="card-solid !p-4">
-            <label class="text-sm font-medium text-white/80 block mb-2">Notes</label>
+            <label class="text-sm font-medium text-secondary block mb-2">Notes</label>
             <textarea
               v-model="measurementNotes"
               rows="2"
@@ -443,9 +472,10 @@
             />
           </div>
 
+          <p v-if="measurementSaveError" class="text-sm text-danger" role="alert">{{ measurementSaveError }}</p>
           <div class="flex gap-3">
-            <button @click="saveResults" class="flex-1 btn-primary py-3 rounded-xl font-semibold">Save</button>
-            <button @click="discardResults" class="flex-1 btn-secondary py-3 rounded-xl font-semibold">Discard</button>
+            <button @click="saveResults" class="flex-1 btn-primary py-3 rounded-xl font-semibold" :disabled="isSavingMeasurement">Save</button>
+            <button @click="discardResults" class="flex-1 btn-secondary py-3 rounded-xl font-semibold" :disabled="isSavingMeasurement">Discard</button>
           </div>
         </div>
       </div>
@@ -453,29 +483,43 @@
 
     <!-- Section B: Resonance Frequency Assessment -->
     <div class="space-y-3">
-      <h2 class="text-lg font-bold text-white">Estimated Breathing Response</h2>
+      <h2 class="text-lg font-bold text-primary">Estimated Breathing Response</h2>
 
       <!-- Latest assessment summary -->
-      <div v-if="latestAssessment" class="rounded-xl p-3 bg-white/5 border border-white/5">
+      <div v-if="latestAssessment" class="rounded-xl p-3 bg-surface-inset border border-line-subtle">
         <div class="flex items-center justify-between">
           <div>
-            <div class="text-xs text-white/60">Suggested practice rate</div>
-            <div class="text-lg font-bold text-emerald-400">{{ latestAssessment.selectedRate.toFixed(1) }} BPM</div>
+            <div class="text-xs text-secondary">Suggested practice rate</div>
+            <div class="text-lg font-bold text-sage">{{ latestAssessment.selectedRate.toFixed(1) }} BPM</div>
           </div>
-          <div class="text-xs text-white/30">{{ formatDate(latestAssessment.completedAt) }}</div>
+          <div class="text-xs text-muted">{{ formatDate(latestAssessment.completedAt) }}</div>
         </div>
       </div>
 
       <button
-        @click="showAssessment = true"
-        class="flex items-center gap-3 w-full p-3 rounded-xl text-left transition-all bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/30 active:scale-[0.98]"
+        @click="startAssessment"
+        class="flex items-center gap-3 w-full p-3 rounded-xl text-left transition-colors bg-surface-inset hover:bg-surface-raised border border-line-subtle hover:border-sage/30 active:scale-[0.98]"
       >
-        <span class="text-xl">🎯</span>
-        <div class="flex-1">
-          <div class="font-semibold text-white text-sm">Estimate My Breathing Response</div>
-          <div class="text-xs text-white/60">5 breathing trials to suggest a practice rate</div>
+        <svg
+          aria-hidden="true"
+          class="w-5 h-5 shrink-0 text-sage"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM12 12h.01" />
+        </svg>
+        <div class="min-w-0 flex-1">
+          <div class="font-semibold text-primary text-sm">Estimate My Breathing Response</div>
+          <div class="text-xs text-secondary">5 breathing trials to suggest a practice rate</div>
         </div>
-        <span class="text-xs text-white/30">~25 min</span>
+        <span class="flex shrink-0 items-center gap-2 text-xs text-secondary">
+          ~25 min
+          <span aria-hidden="true" class="text-xl leading-none text-sage">›</span>
+        </span>
       </button>
     </div>
 
@@ -488,13 +532,14 @@
         aria-modal="true"
         aria-labelledby="resonance-assessment-dialog-title"
         tabindex="-1"
-        class="fixed inset-0 z-50 bg-slate-950 overflow-y-auto safe-area-top safe-area-bottom"
+        class="fixed inset-0 z-50 bg-surface-page overflow-y-auto safe-area-top safe-area-bottom"
       >
         <h2 id="resonance-assessment-dialog-title" class="sr-only">Resonance frequency assessment</h2>
         <ResonanceAssessment
           :sound-enabled="true"
-          :sound-theme="'wood'"
+          :sound-theme="storage.soundTheme.value"
           :tts-enabled="true"
+          :tts-voice="assessmentVoice"
           @cancel="showAssessment = false"
           @complete="onAssessmentComplete"
         />
@@ -503,45 +548,52 @@
 
     <!-- Section C: Trends and Insights -->
     <div class="space-y-3">
-      <h2 class="text-xl font-bold text-white">Trends</h2>
-      <HrvTrends :measurements="measurements" />
+      <h2 class="text-xl font-bold text-primary" :class="{ 'sr-only': !measurements.length }">Trends</h2>
+      <HrvTrends :measurements="measurements">
+        <template #empty-action>
+          <button class="btn-primary mt-4" @click="showPrepScreen(quickCheckProtocol)">
+            Start Quick Check
+          </button>
+        </template>
+      </HrvTrends>
     </div>
 
-    <div class="space-y-3">
-      <h2 class="text-xl font-bold text-white">Insights</h2>
-      <LabInsights :measurements="measurements" :latest-assessment="latestAssessment" />
+    <div v-if="measurements.length || latestAssessment" class="space-y-3">
+      <h2 class="text-xl font-bold text-primary">Insights</h2>
+      <LabInsights
+        :measurements="measurements"
+        :latest-assessment="latestAssessment"
+        :show-empty-guidance="measurements.length > 0"
+      />
     </div>
 
     <!-- Section D: Recent Results -->
-    <div class="space-y-3">
-      <h2 class="text-xl font-bold text-white">Recent Results</h2>
-
-      <div v-if="recentMeasurements.length === 0" class="text-sm text-white/30 py-4 text-center">
-        <template v-if="latestAssessment"
-          >No standalone measurements yet. Your resonance assessment appears above.</template
-        >
-        <template v-else>No measurements yet. Start a measurement above to see results here.</template>
-      </div>
+    <div v-if="recentMeasurements.length" class="space-y-3">
+      <h2 class="text-xl font-bold text-primary">Recent Results</h2>
 
       <div
         v-for="m in recentMeasurements"
         :key="m.id"
-        class="flex justify-between items-center p-3 rounded-xl bg-white/5"
+        class="flex justify-between items-center p-3 rounded-xl bg-surface-inset"
       >
         <div>
-          <div class="text-sm font-medium text-white">{{ formatType(m.type) }}</div>
-          <div class="text-xs text-white/50">{{ formatDate(m.completedAt) }}</div>
+          <div class="text-sm font-medium text-primary">{{ formatType(m.type) }}</div>
+          <div class="text-xs text-muted">{{ formatDate(m.completedAt) }}</div>
         </div>
         <div class="text-right">
-          <div class="text-sm text-white">Pulse {{ m.analysis.timeDomain.meanHR.toFixed(0) }} BPM</div>
-          <div class="text-xs text-white/50">RMSSD {{ m.analysis.timeDomain.rmssd.toFixed(1) }}ms</div>
+          <div class="text-sm text-primary">Pulse {{ m.analysis.timeDomain.meanHR.toFixed(0) }} BPM</div>
+          <div class="text-xs text-muted">RMSSD {{ m.analysis.timeDomain.rmssd.toFixed(1) }}ms</div>
         </div>
       </div>
     </div>
+    <p class="text-sm text-muted">
+      Pulse estimates are for general wellness and personal trend tracking — not for medical diagnosis.
+    </p>
   </div>
 </template>
 
 <script setup lang="ts">
+import { chartColors } from './charts/chartColors';
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
@@ -560,7 +612,9 @@ import { scgService } from '../services/scgService';
 import { sensorFusionService } from '../services/sensorFusion';
 import { MeasurementSession, type MeasurementStartOutcome } from '../services/measurementSession';
 import { requestSensorPermissions, getPermissionDeniedMessage } from '../services/permissionService';
-import { analyzeHRV, finalizeMeasurement, MAX_PLAUSIBLE_IBI_MS } from '@breath-in-flow/shared';
+import { BreathingConfigSchema, analyzeHRV, finalizeMeasurement, MAX_PLAUSIBLE_IBI_MS } from '@breath-in-flow/shared';
+import { LAST_CONFIG_STORAGE_KEY } from '../constants/storageKeys';
+import { useStorage } from '../composables/useStorage';
 import { useHrvStorage, type HrvMeasurement } from '../composables/useHrvStorage';
 import { useAppLifecycle } from '../composables/useAppLifecycle';
 import { useModalIsolation } from '../composables/useModalIsolation';
@@ -580,30 +634,32 @@ interface Protocol {
   name: string;
   duration: number;
   description: string;
-  icon: string;
+  iconPath: string;
 }
 
+const quickCheckProtocol: Protocol = {
+  id: 'quick-check',
+  name: 'Quick Check',
+  duration: 120,
+  description: 'Short pulse-variability trend with time-domain metrics when enough clean beats are detected',
+  iconPath: 'M13 3 5 14h6l-1 7 9-11h-6l1-7Z',
+};
+
 const protocols: Protocol[] = [
-  {
-    id: 'quick-check',
-    name: 'Quick Check',
-    duration: 120,
-    description: 'Short pulse-variability trend with time-domain metrics when enough clean beats are detected',
-    icon: '\u26A1',
-  },
+  quickCheckProtocol,
   {
     id: 'full-analysis',
     name: 'Full Analysis',
     duration: 300,
     description: 'Five-minute protocol for time, frequency, and Poincar\u00E9 metrics when the signal supports them',
-    icon: '\uD83D\uDD2C',
+    iconPath: 'M8 3h8m-7 0v7l-5 8a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-8V3m-8 12h10',
   },
   {
     id: 'morning-readiness',
     name: 'Morning Readiness',
     duration: 180,
     description: 'Repeatable three-minute pulse-variability baseline for personal trend tracking',
-    icon: '\u2600\uFE0F',
+    iconPath: 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19m0-14-1.4 1.4M6.4 17.6 5 19',
   },
 ];
 
@@ -614,6 +670,19 @@ const sensorOptions = [
 ];
 
 const hrvStorage = useHrvStorage();
+const storage = useStorage();
+const assessmentVoice = ref('');
+
+function startAssessment() {
+  try {
+    const lastConfig = JSON.parse(localStorage.getItem(LAST_CONFIG_STORAGE_KEY) ?? 'null');
+    const voice = BreathingConfigSchema.shape.ttsVoice.safeParse(lastConfig?.ttsVoice);
+    assessmentVoice.value = voice.success ? voice.data ?? '' : '';
+  } catch {
+    assessmentVoice.value = '';
+  }
+  showAssessment.value = true;
+}
 
 // State
 const mode = ref<'guided' | 'freeform'>('guided');
@@ -637,6 +706,8 @@ const useTorch = ref(true);
 const customDuration = ref(120); // seconds, adjustable in prep screen
 const collectedIBIs = ref<IBISample[]>([]);
 const measurementNotes = ref('');
+const measurementSaveError = ref('');
+const isSavingMeasurement = ref(false);
 const measurementStartTime = ref<Date>(new Date());
 const currentEligibility = ref<MeasurementEligibility | null>(null);
 const currentSampleProvenance = ref<SampleProvenance[]>([]);
@@ -886,7 +957,7 @@ function drawRawSignal() {
   ctx.clearRect(0, 0, w, h);
 
   if (data.length < 2) {
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillStyle = chartColors.muted;
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Waiting for sensor data...', w / 2, h / 2);
@@ -938,8 +1009,8 @@ function drawRawSignal() {
 
   // Gradient fill under curve
   const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-  bgGrad.addColorStop(0, 'rgba(52, 211, 153, 0.06)');
-  bgGrad.addColorStop(1, 'rgba(52, 211, 153, 0)');
+  bgGrad.addColorStop(0, `${chartColors.sage}0f`);
+  bgGrad.addColorStop(1, 'transparent');
   ctx.beginPath();
   ctx.moveTo(0, h);
   for (let i = 0; i < smoothed.length; i++) {
@@ -952,7 +1023,7 @@ function drawRawSignal() {
 
   // Draw smoothed signal line
   ctx.beginPath();
-  ctx.strokeStyle = 'rgba(52, 211, 153, 0.85)';
+  ctx.strokeStyle = chartColors.sage;
   ctx.lineWidth = 1.5;
   for (let i = 0; i < smoothed.length; i++) {
     const x = (i / (smoothed.length - 1)) * w;
@@ -969,7 +1040,7 @@ function drawRawSignal() {
     });
 
     // Show beat markers as vertical ticks at the top of the chart
-    ctx.fillStyle = 'rgba(251, 191, 36, 0.7)'; // amber
+    ctx.fillStyle = `${chartColors.sand}b3`;
     for (const beat of recentBeats) {
       // Map beat time to X position (approximate — beats are in seconds, chart is in ms)
       const beatMs = beat.time * 1000;
@@ -986,7 +1057,7 @@ function drawRawSignal() {
     // Show live BPM in top-right
     const lastBeat = hrDataPoints.value[hrDataPoints.value.length - 1];
     if (lastBeat) {
-      ctx.fillStyle = 'rgba(251, 191, 36, 0.9)';
+      ctx.fillStyle = chartColors.sand;
       ctx.font = 'bold 12px sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(`${lastBeat.hr.toFixed(0)} BPM`, w - 4, 14);
@@ -996,7 +1067,7 @@ function drawRawSignal() {
   // Subtle center line
   const centerY = h / 2;
   ctx.beginPath();
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.strokeStyle = chartColors.lineSubtle;
   ctx.lineWidth = 0.5;
   ctx.setLineDash([3, 3]);
   ctx.moveTo(0, centerY);
@@ -1145,6 +1216,7 @@ async function startProtocol(protocol: Protocol) {
   elapsedSeconds.value = 0;
   sensorQuality.value = 0;
   measurementNotes.value = '';
+  measurementSaveError.value = '';
   measurementStartTime.value = new Date();
   currentEligibility.value = null;
   currentSampleProvenance.value = [];
@@ -1179,6 +1251,7 @@ async function startFreeform() {
   elapsedSeconds.value = 0;
   sensorQuality.value = 0;
   measurementNotes.value = '';
+  measurementSaveError.value = '';
   measurementStartTime.value = new Date();
   currentEligibility.value = null;
   currentSampleProvenance.value = [];
@@ -1329,30 +1402,40 @@ function poincareUnavailableMessage(reason: PoincareUnavailableReason): string {
 }
 
 async function saveResults() {
-  if (!currentAnalysis.value) return;
-  await hrvStorage.saveMeasurement({
-    id: crypto.randomUUID(),
-    type: (selectedProtocol.value?.id as 'quick-check' | 'full-analysis' | 'morning-readiness') ?? 'freeform',
-    startedAt: measurementStartTime.value,
-    completedAt: new Date(),
-    durationSeconds: currentEligibility.value?.observedDurationSeconds ?? elapsedSeconds.value,
-    sensorMode: selectedSensor.value,
-    acquisitionSources: currentAcquisitionSources.value.length > 0 ? [...currentAcquisitionSources.value] : undefined,
-    analysis: currentAnalysis.value,
-    algorithmVersion: 2,
-    eligibility: currentEligibility.value ?? undefined,
-    sampleProvenance: {
-      sources: [...new Set(currentSampleProvenance.value.map((item) => item.source))],
-      detectionMethods: [...new Set(currentSampleProvenance.value.map((item) => item.method))],
-    },
-    notes: measurementNotes.value || undefined,
-  });
+  if (!currentAnalysis.value || isSavingMeasurement.value) return;
+  isSavingMeasurement.value = true;
+  measurementSaveError.value = '';
+  try {
+    await hrvStorage.saveMeasurement({
+      id: crypto.randomUUID(),
+      type: (selectedProtocol.value?.id as 'quick-check' | 'full-analysis' | 'morning-readiness') ?? 'freeform',
+      startedAt: measurementStartTime.value,
+      completedAt: new Date(),
+      durationSeconds: currentEligibility.value?.observedDurationSeconds ?? elapsedSeconds.value,
+      sensorMode: selectedSensor.value,
+      acquisitionSources: currentAcquisitionSources.value.length > 0 ? [...currentAcquisitionSources.value] : undefined,
+      analysis: currentAnalysis.value,
+      algorithmVersion: 2,
+      eligibility: currentEligibility.value ?? undefined,
+      sampleProvenance: {
+        sources: [...new Set(currentSampleProvenance.value.map((item) => item.source))],
+        detectionMethods: [...new Set(currentSampleProvenance.value.map((item) => item.method))],
+      },
+      notes: measurementNotes.value || undefined,
+    });
+  } catch {
+    measurementSaveError.value = 'Your measurement could not be saved. Please try again.';
+    return;
+  } finally {
+    isSavingMeasurement.value = false;
+  }
   showResults.value = false;
   currentAnalysis.value = null;
   await loadRecentResults();
 }
 
 function discardResults() {
+  measurementSaveError.value = '';
   showResults.value = false;
   currentAnalysis.value = null;
 }
@@ -1381,8 +1464,10 @@ async function loadLatestAssessment() {
 
 // Formatting helpers
 function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  return m === 1 ? '1 minute' : `${m} minutes`;
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
+  if (remaining === 0) return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+  return minutes === 0 ? `${remaining} sec` : `${minutes} min ${remaining} sec`;
 }
 
 function formatTimer(seconds: number): string {
@@ -1442,24 +1527,3 @@ onUnmounted(() => {
   }
 });
 </script>
-
-<style scoped>
-@reference "tailwindcss";
-
-.btn-primary {
-  @apply bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg hover:shadow-xl transition-all;
-}
-
-.btn-secondary {
-  @apply bg-white/10 text-white hover:bg-white/15 transition-all;
-}
-
-.btn-danger {
-  @apply bg-red-600/80 text-white hover:bg-red-600 transition-all;
-}
-
-.card-solid {
-  @apply rounded-2xl p-6 border border-white/5;
-  background: linear-gradient(135deg, rgba(70, 60, 52, 0.4) 0%, rgba(47, 40, 34, 0.6) 100%);
-}
-</style>

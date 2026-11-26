@@ -2,7 +2,13 @@
   <div>
     <!-- Help Button (Fixed position on desktop, in header on mobile) -->
     <button @click="showHelp = true" class="help-trigger" aria-label="Open help">
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="w-[1.1em] h-[1.1em] shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
         <path
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -29,12 +35,10 @@
             <!-- Header -->
             <div class="help-header">
               <div class="flex items-center gap-3">
-                <div
-                  class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center"
-                >
+                <div class="help-section-icon">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    class="w-5 h-5 text-white"
+                    class="w-5 h-5"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -48,8 +52,8 @@
                   </svg>
                 </div>
                 <div>
-                  <h2 id="help-dialog-title" class="text-xl font-bold text-white">Help & Guide</h2>
-                  <p class="text-sm text-slate-400">Learn how to use {{ AppConfig.appName }}</p>
+                  <h2 id="help-dialog-title" class="text-xl font-bold text-primary">Help & Guide</h2>
+                  <p class="text-sm text-muted">Learn how to use {{ AppConfig.appName }}</p>
                 </div>
               </div>
               <button ref="closeButtonRef" @click="showHelp = false" class="help-close-btn" aria-label="Close help">
@@ -66,15 +70,51 @@
             </div>
 
             <!-- Navigation Tabs -->
-            <div class="help-tabs">
+            <div class="help-tab-strip" :class="{ 'help-tab-strip-overflow': moreTabsToRight }">
+              <div ref="tabsRef" class="help-tabs" @scroll.passive="updateTabOverflow">
+                <button
+                  v-for="tab in tabs"
+                  :key="tab.id"
+                  @click="activeSection = tab.id"
+                  @focus="revealTab"
+                  :class="['help-tab', { 'help-tab-active': activeSection === tab.id }]"
+                  :aria-pressed="activeSection === tab.id"
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="w-4 h-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path :d="tab.path" />
+                  </svg>
+                  <span>{{ tab.label }}</span>
+                </button>
+              </div>
               <button
-                v-for="tab in tabs"
-                :key="tab.id"
-                @click="activeSection = tab.id"
-                :class="['help-tab', activeSection === tab.id ? 'help-tab-active' : '']"
+                ref="scrollTopicsRightRef"
+                type="button"
+                aria-label="Scroll help topics right"
+                class="help-scroll-right min-h-[44px] min-w-[44px]"
+                :class="{ invisible: !moreTabsToRight }"
+                @click="scrollTopicsRight"
               >
-                <component :is="tab.icon" class="w-4 h-4" />
-                <span>{{ tab.label }}</span>
+                <svg
+                  aria-hidden="true"
+                  class="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 5 7 7-7 7" />
+                </svg>
               </button>
             </div>
 
@@ -83,7 +123,7 @@
               <!-- Getting Started -->
               <div v-if="activeSection === 'start'" class="help-section">
                 <h3 class="help-section-title">
-                  <span class="help-section-icon bg-emerald-500/20 text-emerald-400">
+                  <span class="help-section-icon" aria-hidden="true">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="w-5 h-5"
@@ -105,23 +145,33 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Quick Start</h4>
                   <ol class="help-list">
-                    <li>Go to the <strong>Practice</strong> tab</li>
-                    <li>The default pattern is ready to use - just tap <strong>Start Practice</strong></li>
-                    <li>Follow the visual breathing guide - the circle expands and contracts</li>
-                    <li>The color indicates the current phase (blue = inhale, green = exhale)</li>
+                    <li>
+                      <span>Open the <strong>Practice</strong> tab.</span>
+                    </li>
+                    <li>
+                      <span>Tap <strong>Start Practice</strong> to begin with the active routine.</span>
+                    </li>
+                    <li>Get comfortable and breathe gently at your own pace.</li>
+                    <li>
+                      <span
+                        >Follow the phase label and the expanding and contracting circle. Sage marks inhale, warm clay
+                        marks holds, and sand marks exhale.</span
+                      >
+                    </li>
                   </ol>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Navigation</h4>
                   <ul class="help-list">
-                    <li><strong>Practice</strong> - Main breathing practice area</li>
+                    <li><strong>Practice:</strong> Run guided breathing sessions and adjust timing.</li>
                     <li>
-                      <strong>Pulse Variability</strong> - Optional pulse-timing measurements and resonance training
+                      <strong>Pulse Variability:</strong> Measure optional pulse timing and estimate a comfortable
+                      breathing rate.
                     </li>
-                    <li><strong>History</strong> - View your past sessions</li>
-                    <li><strong>Presets</strong> - Save and load breathing patterns</li>
-                    <li><strong>Analytics</strong> - Track your progress with charts</li>
+                    <li><strong>History:</strong> Review completed sessions, holds, check-ins, and notes.</li>
+                    <li><strong>Presets:</strong> Load, edit, or save breathing routines.</li>
+                    <li><strong>Analytics:</strong> Track weekly sessions and breath-hold trends.</li>
                   </ul>
                 </div>
               </div>
@@ -129,7 +179,7 @@
               <!-- Practice Guide -->
               <div v-if="activeSection === 'practice'" class="help-section">
                 <h3 class="help-section-title">
-                  <span class="help-section-icon bg-blue-500/20 text-blue-400">
+                  <span class="help-section-icon" aria-hidden="true">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="w-5 h-5"
@@ -152,20 +202,20 @@
                   <h4 class="help-card-title">Breathing Phases</h4>
                   <div class="space-y-3">
                     <div class="flex items-center gap-3">
-                      <span class="w-3 h-3 rounded-full bg-blue-500"></span>
-                      <span><strong>Inhale</strong> - Breathe in slowly through your nose</span>
+                      <span class="w-3 h-3 shrink-0 rounded-full bg-(--color-inhale)" aria-hidden="true"></span>
+                      <span><strong>Inhale</strong>: Breathe in slowly through your nose.</span>
                     </div>
                     <div class="flex items-center gap-3">
-                      <span class="w-3 h-3 rounded-full bg-purple-500"></span>
-                      <span><strong>Inhale Hold</strong> - Hold your breath with lungs full</span>
+                      <span class="w-3 h-3 shrink-0 rounded-full bg-(--color-inhale-hold)" aria-hidden="true"></span>
+                      <span><strong>Inhale Hold</strong>: Hold comfortably with lungs full.</span>
                     </div>
                     <div class="flex items-center gap-3">
-                      <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
-                      <span><strong>Exhale</strong> - Breathe out slowly through your mouth</span>
+                      <span class="w-3 h-3 shrink-0 rounded-full bg-(--color-exhale)" aria-hidden="true"></span>
+                      <span><strong>Exhale</strong>: Breathe out slowly and evenly.</span>
                     </div>
                     <div class="flex items-center gap-3">
-                      <span class="w-3 h-3 rounded-full bg-amber-500"></span>
-                      <span><strong>Exhale Hold</strong> - Hold with lungs empty</span>
+                      <span class="w-3 h-3 shrink-0 rounded-full bg-(--color-exhale-hold)" aria-hidden="true"></span>
+                      <span><strong>Exhale Hold</strong>: Pause comfortably with lungs empty.</span>
                     </div>
                   </div>
                 </div>
@@ -173,18 +223,20 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Controls</h4>
                   <ul class="help-list">
-                    <li><strong>Start</strong> - Begin the breathing practice</li>
-                    <li><strong>Pause/Resume</strong> - Temporarily stop or continue</li>
-                    <li><strong>Stop</strong> - End the current session</li>
-                    <li><strong>Release Hold</strong> - End an extended breath hold early</li>
+                    <li><strong>Start Practice:</strong> Begin the active breathing routine.</li>
+                    <li><strong>Pause / Resume:</strong> Hold the timer and audio cues, then pick up where you left off.</li>
+                    <li><strong>Stop:</strong> End the session early with a confirmation prompt.</li>
+                    <li>
+                      <strong>Release Hold:</strong> End an active extended hold (or press Space or Enter on desktop).
+                    </li>
                   </ul>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Visual Guide</h4>
-                  <p class="text-slate-300 text-sm">
-                    The breathing circle shows your progress through each phase. Watch the circle expand during inhale
-                    and contract during exhale. The countdown timer shows seconds remaining in the current phase.
+                  <p class="text-secondary text-sm">
+                    The circle expands on inhale and contracts on exhale while the countdown shows seconds left in the
+                    current phase. On iOS and Android, active sessions pause automatically if you switch apps.
                   </p>
                 </div>
               </div>
@@ -192,7 +244,7 @@
               <!-- Configuration -->
               <div v-if="activeSection === 'config'" class="help-section">
                 <h3 class="help-section-title">
-                  <span class="help-section-icon bg-purple-500/20 text-purple-400">
+                  <span class="help-section-icon" aria-hidden="true">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="w-5 h-5"
@@ -220,34 +272,33 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Breathing Timing</h4>
                   <ul class="help-list">
-                    <li><strong>Inhale Time</strong> - Duration for breathing in (1-60 seconds)</li>
-                    <li><strong>Inhale Hold</strong> - Optional pause after inhaling (0-60 seconds)</li>
-                    <li><strong>Exhale Time</strong> - Duration for breathing out (1-60 seconds)</li>
-                    <li><strong>Exhale Hold</strong> - Optional pause after exhaling (0-60 seconds)</li>
-                    <li><strong>Repetitions</strong> - How many breath cycles per set</li>
+                    <li><strong>Inhale (sec)</strong> is the time spent breathing in, from 1 to 60 seconds.</li>
+                    <li><strong>Inhale Hold (sec)</strong> is an optional pause after inhaling, up to 60 seconds.</li>
+                    <li><strong>Exhale (sec)</strong> is the time spent breathing out, from 1 to 60 seconds.</li>
+                    <li><strong>Exhale Hold (sec)</strong> is an optional pause after exhaling, up to 60 seconds.</li>
+                    <li><strong>Repetitions per Set</strong> is the number of breath cycles in a set.</li>
                   </ul>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Extended Holds</h4>
-                  <p class="text-slate-300 text-sm mb-3">
-                    Extended holds are longer breath holds performed at the end of each set. They're great for building
-                    breath tolerance.
+                  <p class="text-secondary text-sm mb-3">
+                    Extended holds follow the final repetition of each set so you can practice longer breath holds at
+                    your own pace.
                   </p>
                   <ul class="help-list">
-                    <li><strong>Hold Type</strong> - Choose inhale hold or exhale hold</li>
-                    <li><strong>Tolerance Mode</strong> - Timer counts up; release when ready</li>
-                    <li><strong>Timed Mode</strong> - Set a specific duration to hold</li>
-                    <li><strong>Second Hold</strong> - Optionally add another extended hold</li>
+                    <li><strong>Hold Type:</strong> Choose an inhale hold or an exhale hold.</li>
+                    <li><strong>Tolerance Mode:</strong> The timer counts up until you tap Release Hold.</li>
+                    <li><strong>Timed Mode:</strong> Hold for a fixed target duration in seconds.</li>
+                    <li><strong>Second Hold:</strong> Add an optional second extended hold with its own mode and duration.</li>
                   </ul>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Sets</h4>
-                  <p class="text-slate-300 text-sm">
-                    A set consists of your repetitions plus any extended holds. Set a
-                    <strong>Target Sets</strong> number or leave at 0 to go indefinitely. After each set, choose to
-                    continue or finish your session.
+                  <p class="text-secondary text-sm">
+                    Each set combines your repetitions and any extended holds. Enter a <strong>Target Sets</strong>
+                    count, or leave it at 0 to decide after each set whether to continue or finish.
                   </p>
                 </div>
               </div>
@@ -255,13 +306,17 @@
               <!-- Lab & Measurements -->
               <div v-if="activeSection === 'lab'" class="help-section">
                 <h3 class="help-section-title">
-                  <span class="help-section-icon bg-emerald-500/20 text-emerald-400">♥</span>
+                  <span class="help-section-icon" aria-hidden="true">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l2-6 4 12 2-6h6" />
+                    </svg>
+                  </span>
                   Pulse Variability & Measurements
                 </h3>
 
                 <div class="help-card">
                   <h4 class="help-card-title">What the camera measures</h4>
-                  <p class="text-slate-300 text-sm">
+                  <p class="text-secondary text-sm">
                     The camera estimates pulse timing from fingertip color changes and reports pulse-rate variability
                     (PRV). PRV is related to, but not interchangeable with, ECG-derived HRV; this is not an ECG or a
                     medical measurement. Compare trends only when posture, time of day, sensor placement, and protocol
@@ -273,26 +328,25 @@
                   <h4 class="help-card-title">Sensor choices</h4>
                   <ul class="help-list">
                     <li>
-                      <strong>Camera Pulse</strong> - Recommended phone-only option; cover the rear lens gently and keep
-                      still.
+                      <strong>Camera Pulse:</strong> Cover the rear lens lightly with one fingertip and stay still.
                     </li>
                     <li>
-                      <strong>Chest Motion</strong> - Place the phone flat on your chest and remain still; other phone
-                      motion can be mistaken for pulse timing.
+                      <strong>Chest Motion:</strong> Rest the phone flat on your chest and stay still so movement does
+                      not mask pulse timing.
                     </li>
                     <li>
-                      <strong>Camera + Chest</strong> - Keep the phone steady and your fingertip over the rear camera so
-                      both signals remain clean.
+                      <strong>Camera + Chest:</strong> Keep the phone steady on your chest with a fingertip over the
+                      rear lens so both signals stay clean.
                     </li>
                   </ul>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Why duration matters</h4>
-                  <p class="text-slate-300 text-sm">
-                    Short protocols can support basic time-domain trend metrics when enough clean beats are detected.
-                    Frequency-domain results require the full five minutes and appear as unavailable when the recording
-                    is too short or too noisy. The app never fills missing metrics with made-up values.
+                  <p class="text-secondary text-sm">
+                    Short recordings support basic time-domain metrics once enough clean beats are detected.
+                    Frequency-domain metrics require the full five minutes and stay hidden when a recording is too short
+                    or noisy. Missing metrics are left blank instead of estimated.
                   </p>
                 </div>
 
@@ -307,7 +361,7 @@
               <!-- Techniques -->
               <div v-if="activeSection === 'techniques'" class="help-section">
                 <h3 class="help-section-title">
-                  <span class="help-section-icon bg-amber-500/20 text-amber-400">
+                  <span class="help-section-icon" aria-hidden="true">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="w-5 h-5"
@@ -328,46 +382,46 @@
 
                 <div class="help-card">
                   <h4 class="help-card-title">Box Breathing (4-4-4-4)</h4>
-                  <p class="text-slate-400 text-sm mb-2">Used by Navy SEALs for stress relief</p>
+                  <p class="text-muted text-sm mb-2">Equal four-second phases for steady pacing</p>
                   <div class="help-pattern">
-                    <span class="text-blue-400">4s inhale</span>
-                    <span class="text-slate-500">→</span>
-                    <span class="text-purple-400">4s hold</span>
-                    <span class="text-slate-500">→</span>
-                    <span class="text-emerald-400">4s exhale</span>
-                    <span class="text-slate-500">→</span>
-                    <span class="text-amber-400">4s hold</span>
+                    <span class="text-sage">4s inhale</span>
+                    <span class="text-muted">→</span>
+                    <span class="text-clay">4s hold</span>
+                    <span class="text-muted">→</span>
+                    <span class="text-sand">4s exhale</span>
+                    <span class="text-muted">→</span>
+                    <span class="text-clay">4s hold</span>
                   </div>
-                  <p class="text-slate-300 text-sm mt-2">Great for: Focus, anxiety relief, grounding</p>
+                  <p class="text-secondary text-sm mt-2">Useful for focus, grounding, and stress relief.</p>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">4-7-8 Relaxation</h4>
-                  <p class="text-slate-400 text-sm mb-2">Dr. Andrew Weil's relaxation technique</p>
+                  <p class="text-muted text-sm mb-2">Extended exhale pattern for winding down</p>
                   <div class="help-pattern">
-                    <span class="text-blue-400">4s inhale</span>
-                    <span class="text-slate-500">→</span>
-                    <span class="text-purple-400">7s hold</span>
-                    <span class="text-slate-500">→</span>
-                    <span class="text-emerald-400">8s exhale</span>
+                    <span class="text-sage">4s inhale</span>
+                    <span class="text-muted">→</span>
+                    <span class="text-clay">7s hold</span>
+                    <span class="text-muted">→</span>
+                    <span class="text-sand">8s exhale</span>
                   </div>
-                  <p class="text-slate-300 text-sm mt-2">Great for: Sleep, deep relaxation, calming</p>
+                  <p class="text-secondary text-sm mt-2">Useful before sleep or during an evening reset.</p>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Coherent Breathing (5-5)</h4>
-                  <p class="text-slate-400 text-sm mb-2">Even-paced breathing for a calm, steady practice</p>
+                  <p class="text-muted text-sm mb-2">Even five-second breaths with no holds</p>
                   <div class="help-pattern">
-                    <span class="text-blue-400">5s inhale</span>
-                    <span class="text-slate-500">→</span>
-                    <span class="text-emerald-400">5s exhale</span>
+                    <span class="text-sage">5s inhale</span>
+                    <span class="text-muted">→</span>
+                    <span class="text-sand">5s exhale</span>
                   </div>
-                  <p class="text-slate-300 text-sm mt-2">Great for: Heart coherence, balance, daily practice</p>
+                  <p class="text-secondary text-sm mt-2">Useful for daily practice and calm, steady pacing.</p>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Diaphragm Resistance Training</h4>
-                  <p class="text-slate-300 text-sm">
+                  <p class="text-secondary text-sm">
                     Use the guided starter preset with a purpose-designed inspiratory resistance trainer. Begin with
                     light resistance and controlled technique. Endurance work adds comfortable repetitions or sets;
                     strengthening uses higher resistance only after technique is consistent.
@@ -381,21 +435,23 @@
 
                 <div class="help-card">
                   <h4 class="help-card-title">Cyclic Hyperventilation Method</h4>
-                  <p class="text-slate-400 text-sm mb-2">Power breathing with extended holds</p>
+                  <p class="text-muted text-sm mb-2">Fast-paced breathing followed by recovery holds</p>
                   <div class="help-pattern">
-                    <span class="text-blue-400">2s inhale</span>
-                    <span class="text-slate-500">→</span>
-                    <span class="text-emerald-400">2s exhale</span>
-                    <span class="text-slate-500">× 30 reps</span>
+                    <span class="text-sage">2s inhale</span>
+                    <span class="text-muted">→</span>
+                    <span class="text-sand">2s exhale</span>
+                    <span class="text-muted">× 30 reps</span>
                   </div>
-                  <p class="text-slate-300 text-sm mt-2">Then: Extended exhale hold + recovery breath</p>
-                  <p class="text-slate-300 text-sm">Great for: Energy, cold tolerance, breath control</p>
+                  <p class="text-secondary text-sm mt-2">
+                    Followed by an extended exhale hold and a timed recovery inhale hold. Always practice seated or
+                    lying down, never in water or while driving.
+                  </p>
                 </div>
 
                 <div class="help-tip">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    class="w-5 h-5 text-amber-400 flex-shrink-0"
+                    class="w-5 h-5 text-sand flex-shrink-0"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -414,7 +470,7 @@
               <!-- Presets & History -->
               <div v-if="activeSection === 'data'" class="help-section">
                 <h3 class="help-section-title">
-                  <span class="help-section-icon bg-indigo-500/20 text-indigo-400">
+                  <span class="help-section-icon" aria-hidden="true">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="w-5 h-5"
@@ -436,45 +492,47 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Saving Presets</h4>
                   <ol class="help-list">
-                    <li>Configure your breathing pattern in the Practice tab</li>
-                    <li>Enter a name in the "Configuration name" field</li>
-                    <li>Tap <strong>Save Configuration</strong></li>
-                    <li>Access your saved presets in the Presets tab</li>
+                    <li>Open <strong>Configure</strong> in the Practice tab and adjust your pattern.</li>
+                    <li>Enter a name in the "Preset name" field.</li>
+                    <li>Tap <strong>Save Preset</strong>.</li>
+                    <li>Open the <strong>Presets</strong> tab to load or edit it later.</li>
                   </ol>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Using Presets</h4>
                   <ul class="help-list">
-                    <li><strong>Load</strong> - Apply the preset to the Practice tab</li>
-                    <li><strong>Edit</strong> - Modify the preset settings</li>
-                    <li><strong>Delete</strong> - Remove the preset</li>
+                    <li><strong>Load routine:</strong> Apply the preset to the Practice tab.</li>
+                    <li><strong>Edit:</strong> Open a saved preset in Configure Practice to update its settings.</li>
+                    <li><strong>Delete:</strong> Remove a saved preset after confirming.</li>
                   </ul>
-                  <p class="text-slate-300 text-sm mt-2">
-                    Built-in templates (Box Breathing, 4-7-8, etc.) are available as quick-start options.
+                  <p class="text-secondary text-sm mt-2">
+                    Built-in routines (Box Breathing, 4-7-8 Relaxation, Coherent Breathing, and more) are ready to use
+                    any time.
                   </p>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Session History</h4>
-                  <p class="text-slate-300 text-sm mb-2">
-                    Every completed session is automatically saved. View your history to:
+                  <p class="text-secondary text-sm mb-2">
+                    Sessions save automatically to this device. Open <strong>History</strong> to:
                   </p>
                   <ul class="help-list">
-                    <li>See your breathing pattern for each session</li>
-                    <li>Review extended hold times and tolerance</li>
-                    <li>Track your progress over time</li>
-                    <li>Delete old sessions you no longer need</li>
+                    <li>Review each session's breathing pattern, sets, and repetitions.</li>
+                    <li>Check recorded extended hold times, check-ins, and notes.</li>
+                    <li>Remove individual sessions or clear old records.</li>
                   </ul>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Analytics Dashboard</h4>
-                  <p class="text-slate-300 text-sm">The Analytics tab shows your progress with visual charts:</p>
+                  <p class="text-secondary text-sm">
+                    Open <strong>Analytics</strong> to see trends across completed sessions:
+                  </p>
                   <ul class="help-list">
-                    <li><strong>Hold Time Chart</strong> - Track breath hold improvements</li>
-                    <li><strong>Sessions Per Week</strong> - Monitor practice consistency</li>
-                    <li><strong>Quick Stats</strong> - Total sessions, sets, and averages</li>
+                    <li><strong>Sessions per Week:</strong> Track weekly practice consistency.</li>
+                    <li><strong>Breath Hold Progress:</strong> Follow inhale and exhale hold times over time.</li>
+                    <li><strong>Summary Stats:</strong> Review total sessions, total sets, average hold, and best hold.</li>
                   </ul>
                 </div>
 
@@ -485,7 +543,7 @@
               <!-- Tips -->
               <div v-if="activeSection === 'tips'" class="help-section">
                 <h3 class="help-section-title">
-                  <span class="help-section-icon bg-rose-500/20 text-rose-400">
+                  <span class="help-section-icon" aria-hidden="true">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       class="w-5 h-5"
@@ -507,39 +565,39 @@
                 <div class="help-card">
                   <h4 class="help-card-title">Before You Start</h4>
                   <ul class="help-list">
-                    <li>Find a quiet, comfortable place to sit or lie down</li>
-                    <li>Loosen any tight clothing</li>
-                    <li>Sit with good posture - spine straight, shoulders relaxed</li>
-                    <li>Close your eyes or soften your gaze</li>
+                    <li>Find a quiet, comfortable place to sit or lie down.</li>
+                    <li>Loosen tight clothing around your chest or waist.</li>
+                    <li>Keep your spine tall and your shoulders relaxed.</li>
+                    <li>Close your eyes or soften your gaze.</li>
                   </ul>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">During Practice</h4>
                   <ul class="help-list">
-                    <li>Breathe through your nose when possible</li>
-                    <li>Let your belly expand on inhale (diaphragmatic breathing)</li>
-                    <li>Keep your jaw and shoulders relaxed</li>
-                    <li>If you feel dizzy, stop and breathe normally</li>
-                    <li>Don't force - let the breath flow naturally</li>
+                    <li>Breathe through your nose when comfortable.</li>
+                    <li>Let your belly and lower ribs expand gently on inhale.</li>
+                    <li>Keep your jaw, neck, and shoulders soft.</li>
+                    <li>Stop and breathe normally if you feel dizzy or strained.</li>
+                    <li>Let the breath move smoothly without forcing volume or hold time.</li>
                   </ul>
                 </div>
 
                 <div class="help-card">
                   <h4 class="help-card-title">Building Your Practice</h4>
                   <ul class="help-list">
-                    <li>Start with shorter sessions (3-5 minutes)</li>
-                    <li>Practice consistently - daily is ideal</li>
-                    <li>Gradually increase hold times as you improve</li>
-                    <li>Track your progress using the Analytics tab</li>
-                    <li>Save your favorite patterns as presets</li>
+                    <li>Begin with short three-to-five-minute sessions.</li>
+                    <li>Practice consistently, aiming for a few minutes most days.</li>
+                    <li>Increase hold durations gradually as comfort grows.</li>
+                    <li>Review weekly consistency in the Analytics tab.</li>
+                    <li>Save favorite adjustments as custom presets.</li>
                   </ul>
                 </div>
 
                 <div class="help-tip warning">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    class="w-5 h-5 text-amber-400 flex-shrink-0"
+                    class="w-5 h-5 text-sand flex-shrink-0"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -552,10 +610,11 @@
                     />
                   </svg>
                   <div>
-                    <p class="font-medium text-amber-400">Safety Note</p>
+                    <p class="font-medium text-sand">Safety Note</p>
                     <p class="text-sm">
-                      Consult a healthcare provider before starting breathwork if you have respiratory conditions,
-                      cardiovascular issues, or are pregnant. Stop immediately if you feel unwell.
+                      Consult a healthcare provider before starting breathwork if you have a respiratory or
+                      cardiovascular condition, or if you are pregnant. Never practice breath holds in water or while
+                      driving, and stop immediately if you feel unwell.
                     </p>
                   </div>
                 </div>
@@ -564,7 +623,7 @@
 
             <!-- Footer -->
             <div class="help-footer">
-              <p class="text-slate-500 text-sm">{{ AppConfig.appName }} • Breathing exercises for everyone</p>
+              <p class="text-muted text-sm">{{ AppConfig.appName }} • Breathing exercises for everyone</p>
             </div>
           </div>
         </div>
@@ -575,14 +634,46 @@
 
 <script setup lang="ts">
 import { AppConfig } from '@breath-in-flow/shared';
-import { ref, h } from 'vue';
+import { ref, watchPostEffect } from 'vue';
 import { useModalIsolation } from '../composables/useModalIsolation';
 import DataSupportSettings from './DataSupportSettings.vue';
 
-const showHelp = ref(false);
+const showHelp = defineModel<boolean>('open', { default: false });
 const activeSection = ref('start');
 const helpDialogRef = ref<HTMLElement | null>(null);
 const closeButtonRef = ref<HTMLElement | null>(null);
+const tabsRef = ref<HTMLElement | null>(null);
+const scrollTopicsRightRef = ref<HTMLButtonElement | null>(null);
+const moreTabsToRight = ref(false);
+
+function updateTabOverflow() {
+  const strip = tabsRef.value;
+  moreTabsToRight.value = !!strip && strip.scrollWidth - strip.clientWidth - strip.scrollLeft > 1;
+  if (!moreTabsToRight.value && scrollTopicsRightRef.value === document.activeElement) {
+    (strip?.lastElementChild as HTMLButtonElement | null)?.focus({ preventScroll: true });
+  }
+}
+
+function scrollTopicsRight() {
+  const strip = tabsRef.value;
+  if (strip) strip.scrollBy({ left: Math.max(44, strip.clientWidth - 60) });
+}
+
+function revealTab(event: FocusEvent) {
+  const tab = event.currentTarget as HTMLElement;
+  tab.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+}
+
+watchPostEffect((onCleanup) => {
+  const strip = tabsRef.value;
+  if (!strip) return;
+  updateTabOverflow();
+
+  const observer = new ResizeObserver(updateTabOverflow);
+  observer.observe(strip);
+  for (const tab of strip.children) observer.observe(tab);
+  onCleanup(() => observer.disconnect());
+});
 
 useModalIsolation(helpDialogRef, showHelp, {
   initialFocus: () => closeButtonRef.value,
@@ -591,188 +682,29 @@ useModalIsolation(helpDialogRef, showHelp, {
   },
 });
 
-// Tab configuration with inline icon components
 const tabs = [
-  {
-    id: 'start',
-    label: 'Start',
-    icon: {
-      render: () =>
-        h(
-          'svg',
-          {
-            xmlns: 'http://www.w3.org/2000/svg',
-            class: 'w-4 h-4',
-            fill: 'none',
-            viewBox: '0 0 24 24',
-            stroke: 'currentColor',
-          },
-          [
-            h('path', {
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              'stroke-width': '2',
-              d: 'M13 10V3L4 14h7v7l9-11h-7z',
-            }),
-          ]
-        ),
-    },
-  },
-  {
-    id: 'practice',
-    label: 'Practice',
-    icon: {
-      render: () =>
-        h(
-          'svg',
-          {
-            xmlns: 'http://www.w3.org/2000/svg',
-            class: 'w-4 h-4',
-            fill: 'none',
-            viewBox: '0 0 24 24',
-            stroke: 'currentColor',
-          },
-          [
-            h('path', {
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              'stroke-width': '2',
-              d: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-            }),
-          ]
-        ),
-    },
-  },
+  { id: 'start', label: 'Start', path: 'M13 10V3L4 14h7v7l9-11h-7z' },
+  { id: 'practice', label: 'Practice', path: 'M3 12c3-8 6-8 9 0s6 8 9 0' },
   {
     id: 'config',
     label: 'Settings',
-    icon: {
-      render: () =>
-        h(
-          'svg',
-          {
-            xmlns: 'http://www.w3.org/2000/svg',
-            class: 'w-4 h-4',
-            fill: 'none',
-            viewBox: '0 0 24 24',
-            stroke: 'currentColor',
-          },
-          [
-            h('path', {
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              'stroke-width': '2',
-              d: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
-            }),
-            h('path', {
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              'stroke-width': '2',
-              d: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-            }),
-          ]
-        ),
-    },
+    path: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
   },
-  {
-    id: 'lab',
-    label: 'Pulse Variability',
-    icon: {
-      render: () =>
-        h(
-          'svg',
-          {
-            xmlns: 'http://www.w3.org/2000/svg',
-            class: 'w-4 h-4',
-            fill: 'none',
-            viewBox: '0 0 24 24',
-            stroke: 'currentColor',
-          },
-          [
-            h('path', {
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              'stroke-width': '2',
-              d: 'M3 12h4l2-6 4 12 2-6h6',
-            }),
-          ]
-        ),
-    },
-  },
+  { id: 'lab', label: 'Pulse Variability', path: 'M3 12h4l2-6 4 12 2-6h6' },
   {
     id: 'techniques',
     label: 'Techniques',
-    icon: {
-      render: () =>
-        h(
-          'svg',
-          {
-            xmlns: 'http://www.w3.org/2000/svg',
-            class: 'w-4 h-4',
-            fill: 'none',
-            viewBox: '0 0 24 24',
-            stroke: 'currentColor',
-          },
-          [
-            h('path', {
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              'stroke-width': '2',
-              d: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z',
-            }),
-          ]
-        ),
-    },
+    path: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z',
   },
   {
     id: 'data',
     label: 'Data',
-    icon: {
-      render: () =>
-        h(
-          'svg',
-          {
-            xmlns: 'http://www.w3.org/2000/svg',
-            class: 'w-4 h-4',
-            fill: 'none',
-            viewBox: '0 0 24 24',
-            stroke: 'currentColor',
-          },
-          [
-            h('path', {
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              'stroke-width': '2',
-              d: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4',
-            }),
-          ]
-        ),
-    },
+    path: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4',
   },
   {
     id: 'tips',
     label: 'Tips',
-    icon: {
-      render: () =>
-        h(
-          'svg',
-          {
-            xmlns: 'http://www.w3.org/2000/svg',
-            class: 'w-4 h-4',
-            fill: 'none',
-            viewBox: '0 0 24 24',
-            stroke: 'currentColor',
-          },
-          [
-            h('path', {
-              'stroke-linecap': 'round',
-              'stroke-linejoin': 'round',
-              'stroke-width': '2',
-              d: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z',
-            }),
-          ]
-        ),
-    },
+    path: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z',
   },
 ];
 
@@ -781,47 +713,65 @@ defineExpose({ showHelp });
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../style.css";
+
 .help-trigger {
-  @apply flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-300;
+  @apply flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-lg px-[12px] py-[4px] text-muted hover:text-primary hover:bg-surface-raised transition-colors;
 }
 
 .help-modal-overlay {
-  @apply fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4;
+  @apply fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
 }
 
 .help-modal {
-  @apply bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-700/50;
+  @apply w-full min-w-0 max-w-2xl md:max-w-3xl max-h-[90dvh] flex flex-col overflow-hidden rounded-2xl border border-line-strong bg-surface-card shadow-2xl;
 }
 
 .help-header {
-  @apply flex items-center justify-between p-4 sm:p-6 border-b border-slate-700/50 flex-shrink-0;
+  @apply flex items-center justify-between gap-2 p-4 sm:p-6 border-b border-line-subtle shrink-0;
 }
 
 .help-close-btn {
-  @apply min-h-11 min-w-11 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all;
+  @apply min-h-11 min-w-11 shrink-0 p-2 rounded-lg text-muted hover:text-primary hover:bg-surface-raised transition-colors;
+}
+
+.help-tab-strip {
+  @apply relative flex shrink-0 items-center border-b border-line-subtle bg-surface-inset;
+}
+
+.help-tab-strip-overflow::after {
+  content: '';
+  @apply pointer-events-none absolute inset-y-0 right-0 w-10 max-sm:right-[48px] max-sm:w-[48px];
+  background: linear-gradient(to right, transparent, var(--surface-inset) 92%);
 }
 
 .help-tabs {
-  @apply flex gap-1 p-2 sm:p-3 border-b border-slate-700/50 overflow-x-auto flex-shrink-0 bg-slate-800/50;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  @apply flex min-w-0 flex-1 flex-nowrap gap-1 overflow-x-auto p-2 sm:px-3;
+  scroll-padding-inline: 0.5rem;
 }
 
-.help-tabs::-webkit-scrollbar {
-  display: none;
+.help-scroll-right {
+  @apply relative z-10 mr-[4px] grid shrink-0 place-items-center rounded-lg border border-line-strong bg-surface-raised text-sage hover:border-sage/60 hover:text-primary sm:hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .help-tabs {
+    scroll-behavior: smooth;
+  }
 }
 
 .help-tab {
-  @apply min-h-11 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-white/10 transition-all whitespace-nowrap;
+  @apply flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 lg:px-3 py-2 text-sm font-medium text-muted hover:text-primary hover:bg-surface-raised transition-colors;
+  outline-offset: -2px;
 }
 
 .help-tab-active {
-  @apply bg-blue-500/20 text-blue-400;
+  @apply bg-sage text-surface-page hover:bg-sage/90 hover:text-surface-page;
 }
 
 .help-content {
-  @apply flex-1 overflow-y-auto p-4 sm:p-6;
+  @apply min-h-0 flex-1 overflow-y-auto p-4 sm:p-6;
 }
 
 .help-section {
@@ -829,45 +779,28 @@ defineExpose({ showHelp });
 }
 
 .help-section-title {
-  @apply flex items-center gap-3 text-lg font-bold text-white mb-4;
+  @apply flex items-center gap-3 text-lg font-bold text-primary mb-4;
 }
 
 .help-section-icon {
-  @apply w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0;
-}
-
-.help-card {
-  @apply bg-slate-800/50 rounded-xl p-4 border border-slate-700/30;
-}
-
-.help-card-title {
-  @apply font-semibold text-white mb-2;
+  @apply w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised text-sage;
 }
 
 .help-list {
-  @apply space-y-2 text-sm text-slate-300;
+  @apply list-disc space-y-2 pl-5 text-sm text-secondary;
 }
 
-.help-list li {
-  @apply flex items-start gap-2;
-}
-
-.help-list li::before {
-  content: '•';
-  @apply text-slate-500 mt-0.5;
+.help-list li::marker {
+  color: var(--text-muted);
 }
 
 ol.help-list {
-  counter-reset: list-counter;
+  list-style-type: decimal;
 }
 
-ol.help-list li {
-  counter-increment: list-counter;
-}
-
-ol.help-list li::before {
-  content: counter(list-counter) '.';
-  @apply text-blue-400 font-medium;
+ol.help-list li::marker {
+  color: var(--accent-sage);
+  font-weight: 600;
 }
 
 .help-pattern {
@@ -875,15 +808,15 @@ ol.help-list li::before {
 }
 
 .help-tip {
-  @apply flex gap-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-sm text-slate-300;
+  @apply flex gap-3 p-4 bg-sage/8 border border-sage/20 rounded-xl text-sm text-secondary;
 }
 
 .help-tip.warning {
-  @apply bg-amber-500/10 border-amber-500/20;
+  @apply bg-clay/10 border-clay/25;
 }
 
 .help-footer {
-  @apply p-4 border-t border-slate-700/50 text-center flex-shrink-0;
+  @apply p-4 border-t border-line-subtle text-center shrink-0;
 }
 </style>
 

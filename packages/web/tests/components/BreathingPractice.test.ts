@@ -1,15 +1,25 @@
-import { enableAutoUnmount, flushPromises, mount, shallowMount } from '@vue/test-utils';
+import { DOMWrapper, enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { nextTick, ref } from 'vue';
+import { DEFAULT_BREATHING_CONFIG, type SoundTheme } from '@breath-in-flow/shared';
+import { LAST_CONFIG_STORAGE_KEY, SKIP_CHECK_INS_STORAGE_KEY } from '@/constants/storageKeys';
+import { soundService } from '@/services/soundService';
 import BreathingPractice from '@/components/BreathingPractice.vue';
 
-const { keepAwakeMock, allowSleepMock } = vi.hoisted(() => ({
+const { keepAwakeMock, allowSleepMock, addAppListener, removeAppListener, isNativePlatform } = vi.hoisted(() => ({
   keepAwakeMock: vi.fn(),
   allowSleepMock: vi.fn(),
+  addAppListener: vi.fn(),
+  removeAppListener: vi.fn(),
+  isNativePlatform: vi.fn(),
 }));
 
 vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: () => true },
+  Capacitor: { isNativePlatform },
+}));
+
+vi.mock('@capacitor/app', () => ({
+  App: { addListener: addAppListener },
 }));
 
 vi.mock('@capacitor-community/keep-awake', () => ({
@@ -46,7 +56,8 @@ const getSessionMock = vi.fn(() => ({
   id: 'test-session',
   sets: [] as Array<{ setNumber: number }>,
 }));
-const setSoundThemeMock = vi.fn();
+const soundTheme = ref<SoundTheme>('wood');
+const setSoundThemeMock = vi.fn((theme: SoundTheme) => { soundTheme.value = theme; });
 
 let speakMock: ReturnType<typeof vi.fn>;
 let stopTtsMock: ReturnType<typeof vi.fn>;
@@ -56,18 +67,7 @@ let setTtsEnabledMock: ReturnType<typeof vi.fn>;
 let hasNativeSupportMock: ReturnType<typeof vi.fn>;
 
 let lastTimerOptions: Record<string, unknown> | undefined;
-let lastLifecycleOptions:
-  { onInactive: () => void | Promise<void>; onActive: () => void | Promise<void> } | undefined;
-
-vi.mock('@/composables/useAppLifecycle', () => ({
-  useAppLifecycle: (options: {
-    onInactive: () => void | Promise<void>;
-    onActive: () => void | Promise<void>;
-  }) => {
-    lastLifecycleOptions = options;
-    return { dispose: vi.fn().mockResolvedValue(undefined) };
-  },
-}));
+let changeAppState: (state: { isActive: boolean }) => void;
 
 vi.mock('@/composables/useStorage', () => ({
   useStorage: () => ({
@@ -81,9 +81,10 @@ vi.mock('@/composables/useStorage', () => ({
     updateConfig: updateConfigMock,
     deleteConfig: deleteConfigMock,
     deleteSession: deleteSessionMock,
-    getSoundTheme: vi.fn(() => 'wood'),
+    getSoundTheme: () => soundTheme.value,
     setSoundTheme: setSoundThemeMock,
-    soundTheme: ref('wood'),
+    soundTheme,
+    practiceResetVersion: ref(0),
     getAllConfigs: getAllConfigsMock,
     getSession: getSessionMock,
   }),
@@ -107,6 +108,7 @@ vi.mock('@/composables/useBreathingTimer', () => {
       return {
         // component expects refs like `phase.value` etc.
         phase: timerPhase,
+        pausedPhase: ref(null),
         currentTime: timerCurrentTime,
         totalPhaseTime: timerTotalPhaseTime,
         isRunning,
@@ -156,6 +158,15 @@ vi.mock('@/services/ttsService', () => ({
   },
 }));
 
+const page = new DOMWrapper(document.body);
+const settingsSelector = '[aria-labelledby="configure-practice-title"]';
+
+function buttonWithText(root: Pick<DOMWrapper<Element>, 'findAll'>, label: string) {
+  const button = root.findAll('button').find((candidate) => candidate.text() === label);
+  expect(button, `Missing button "${label}"`).toBeDefined();
+  return button!;
+}
+
 describe('BreathingPractice.vue', () => {
   beforeEach(() => {
     window.alert = vi.fn();
@@ -169,7 +180,12 @@ describe('BreathingPractice.vue', () => {
     setTtsEnabledMock = vi.fn();
     hasNativeSupportMock = vi.fn().mockReturnValue(false);
     lastTimerOptions = undefined;
-    lastLifecycleOptions = undefined;
+    isNativePlatform.mockReturnValue(true);
+    removeAppListener.mockResolvedValue(undefined);
+    addAppListener.mockImplementation(async (_event, callback) => {
+      changeAppState = callback;
+      return { remove: removeAppListener };
+    });
     isRunning.value = false;
     timerIsPaused.value = false;
     pauseMock.mockImplementation(() => {
@@ -182,6 +198,8 @@ describe('BreathingPractice.vue', () => {
     timerCurrentTime.value = 0;
     timerTotalPhaseTime.value = 0;
     timerCurrentSet.value = 1;
+    soundTheme.value = 'wood';
+    setSoundThemeMock.mockImplementation((theme) => { soundTheme.value = theme; });
     getAllConfigsMock.mockReturnValue([]);
     getSessionMock.mockReturnValue({ id: 'test-session', sets: [] });
     keepAwakeMock.mockResolvedValue(undefined);
@@ -426,34 +444,23 @@ describe('BreathingPractice.vue', () => {
     expect(startMock).toHaveBeenCalled();
   });
 
-  it('toggles audio setting when clicking audio toggle', async () => {
-    isRunning.value = false;
-    const wrapper = mount(BreathingPractice, {
-      global: {
-        provide: {
-          selectedConfig: ref({}),
-          clearSelectedConfig: vi.fn(),
-        },
-      },
-      attachTo: document.body, // Required for Teleport support
-    });
+  it('exposes named toggle buttons with an updated pressed state', async () => {
+    mount(BreathingPractice, { props: { openSettings: true }, attachTo: document.body });
+    await flushPromises();
+    const settings = page.get(settingsSelector);
 
-    await nextTick(); // Wait for component to render with isRunning = false
-
-    // Open the configuration modal directly
-    const vm = wrapper.vm as unknown as Record<string, unknown>;
-    (vm as { showConfigModal?: boolean }).showConfigModal = true;
-    await nextTick(); // Wait for modal DOM to render
-
-    // Modal and toggles are in document.body (Teleported)
-    const audioToggle = document.body.querySelector('.toggle') as HTMLElement;
-    expect(audioToggle).toBeTruthy();
-    audioToggle.click();
-    await nextTick();
-
-    // After clicking, the toggle should have the enabled class
-    expect(audioToggle.classList.contains('toggle-enabled')).toBe(true);
-    wrapper.unmount();
+    for (const [label, initial] of [
+      ['Enable Extended Hold', false],
+      ['Second Extended Hold', false],
+      ['Metronome (Click on count)', true],
+      ['Voice guidance (TTS)', false],
+    ] as const) {
+      const toggle = settings.get(`button[type="button"][aria-label="${label}"]`);
+      expect(toggle.attributes('role')).toBeUndefined();
+      expect(toggle.attributes('aria-pressed')).toBe(String(initial));
+      await toggle.trigger('click');
+      expect(toggle.attributes('aria-pressed')).toBe(String(!initial));
+    }
   });
 
   it('calls pause when Pause button clicked', async () => {
@@ -472,8 +479,8 @@ describe('BreathingPractice.vue', () => {
 
     // The pause button is in the fullscreen modal teleported to body
     // Use a more specific selector to find the Pause button by its text content
-    const buttons = Array.from(document.querySelectorAll('button.btn-warning'));
-    const pauseBtn = buttons.find((btn) => btn.textContent?.includes('Pause')) as HTMLButtonElement;
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-testid="session-dialog"] button'));
+    const pauseBtn = buttons.find((btn) => btn.textContent?.trim() === 'Pause')!;
 
     expect(pauseBtn).toBeTruthy();
     stopTtsMock.mockClear();
@@ -486,6 +493,7 @@ describe('BreathingPractice.vue', () => {
   });
 
   it('pauses an active practice on backgrounding and preserves it for explicit resume', async () => {
+    const setSoundEnabled = vi.spyOn(soundService, 'setEnabled');
     const activeSession = { id: 'session-mobile', sets: [] };
     createSessionMock.mockReturnValueOnce(activeSession);
     const wrapper = mount(BreathingPractice, {
@@ -511,10 +519,15 @@ describe('BreathingPractice.vue', () => {
     isRunning.value = true;
     await nextTick();
 
-    await lastLifecycleOptions?.onInactive();
+    expect(addAppListener).toHaveBeenCalledExactlyOnceWith('appStateChange', expect.any(Function));
+    stopTtsMock.mockClear();
+    changeAppState({ isActive: false });
     await nextTick();
 
     expect(pauseMock).toHaveBeenCalledOnce();
+    expect(stopTtsMock).toHaveBeenCalled();
+    expect(setSoundEnabled).toHaveBeenLastCalledWith(false);
+    setSoundEnabled.mockRestore();
     expect(timerIsPaused.value).toBe(true);
     expect((wrapper.vm as unknown as { currentSession: unknown }).currentSession).toEqual(
       activeSession
@@ -523,8 +536,31 @@ describe('BreathingPractice.vue', () => {
     expect(completeSessionMock).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('Resume');
 
+    changeAppState({ isActive: true });
+    changeAppState({ isActive: false });
+    expect(pauseMock).toHaveBeenCalledOnce();
+    expect(resumeMock).not.toHaveBeenCalled();
+
     isRunning.value = false;
     wrapper.unmount();
+    await flushPromises();
+    expect(removeAppListener).toHaveBeenCalledOnce();
+  });
+
+  it('does not bind native app state events or pause on browser visibility changes', async () => {
+    isNativePlatform.mockReturnValue(false);
+    mount(BreathingPractice, { global: { stubs: ['BreathingVisualizer'] } });
+    isRunning.value = true;
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await nextTick();
+      expect(addAppListener).not.toHaveBeenCalled();
+      expect(pauseMock).not.toHaveBeenCalled();
+    } finally {
+      visibility.mockRestore();
+      isRunning.value = false;
+    }
   });
 
   it('reconciles to asleep when backgrounding occurs while keep-awake is still pending', async () => {
@@ -548,7 +584,7 @@ describe('BreathingPractice.vue', () => {
     await nextTick();
     expect(keepAwakeMock).toHaveBeenCalledOnce();
 
-    await lastLifecycleOptions?.onInactive();
+    changeAppState({ isActive: false });
     await nextTick();
     expect(timerIsPaused.value).toBe(true);
     expect(allowSleepMock).not.toHaveBeenCalled();
@@ -921,31 +957,21 @@ describe('BreathingPractice.vue', () => {
     expect(updatePayload).not.toHaveProperty('updatedAt');
   });
 
-  it('confirmExit does not stop session on cancel', async () => {
-    const wrapper = mount(BreathingPractice, {
-      global: {
-        provide: {
-          selectedConfig: ref({}),
-          clearSelectedConfig: vi.fn(),
-        },
-        stubs: ['BreathingVisualizer'],
-      },
-    });
-
-    // Set up a session
-    const vm = wrapper.vm as unknown as Record<string, unknown>;
-    vm.currentSession = { id: 'active-session', sets: [] };
-
-    const stopSpy = vi.spyOn((vm as { timer: unknown }).timer as { stop: () => void }, 'stop');
-
-    // Call confirmExit to show modal
-    ((vm as Record<string, unknown>).confirmExit as () => void)();
+  it('keeps practice active when the stop confirmation is cancelled', async () => {
+    isRunning.value = true;
+    timerPhase.value = 'INHALE';
+    mount(BreathingPractice, { attachTo: document.body, global: { stubs: ['BreathingVisualizer'] } });
     await nextTick();
 
-    // The modal should be shown - we just verify stop wasn't called yet
-    expect(stopSpy).not.toHaveBeenCalled();
+    const session = page.get('[data-testid="session-dialog"]');
+    await session.get('[data-testid="session-header-exit"]').trigger('click');
+    await page.get('[data-testid="cancel-stop"]').trigger('click');
+
+    expect(page.find('[data-testid="stop-confirmation"]').exists()).toBe(false);
+    expect(page.find('[data-testid="session-dialog"]').exists()).toBe(true);
+    expect(stopMock).not.toHaveBeenCalled();
     expect(cancelSessionMock).not.toHaveBeenCalled();
-    wrapper.unmount();
+    expect(deleteSessionMock).not.toHaveBeenCalled();
   });
 
   it('Start Next Set button calls timer.nextSet when in SET_COMPLETE', async () => {
@@ -1007,83 +1033,150 @@ describe('BreathingPractice.vue', () => {
     wrapper.unmount();
   });
 
-  it('Save Preset flow warns when name present', async () => {
-    isRunning.value = false;
-    const wrapper = mount(BreathingPractice, {
-      attachTo: document.body,
-    });
+  it('warns accessibly when the preset name is empty', async () => {
+    mount(BreathingPractice, { props: { openSettings: true }, attachTo: document.body });
+    await flushPromises();
 
-    await nextTick(); // Wait for component to render
+    await buttonWithText(page.get(settingsSelector), 'Save Preset').trigger('click');
 
-    // Open config modal directly
-    const vm = wrapper.vm as unknown as Record<string, unknown>;
-    (vm as { showConfigModal?: boolean }).showConfigModal = true;
-    await nextTick(); // Wait for modal DOM to render
-
-    // Set the config name
-    (vm as { configName?: string }).configName = 'My Preset';
-    await nextTick();
-
-    // Find Save Preset button in document.body (Teleported)
-    const buttons = document.body.querySelectorAll('button');
-    const saveBtn = Array.from(buttons).find((b) =>
-      b.textContent?.includes('Save Preset')
-    ) as HTMLElement;
-    expect(saveBtn).toBeTruthy();
-    saveBtn.click();
-    await nextTick();
-
-    // Should show success notification modal in document.body
-    expect(document.body.textContent).toContain('Configuration saved');
-    wrapper.unmount();
-  });
-
-  it('renders the component and has required UI elements', () => {
-    const wrapper = shallowMount(BreathingPractice, {
-      global: {
-        stubs: ['BreathingVisualizer'],
-      },
-    });
-
-    expect(wrapper.exists()).toBe(true);
-    // Component should render without errors
-  });
-
-  it('component mounts without errors', () => {
-    const wrapper = shallowMount(BreathingPractice, {
-      global: {
-        stubs: ['BreathingVisualizer'],
-      },
-    });
-
-    expect(wrapper.vm).toBeDefined();
-  });
-
-  it('saveConfig shows modal when configuration name is empty', async () => {
-    const wrapper = mount(BreathingPractice, {
-      global: {
-        stubs: ['BreathingVisualizer'],
-        provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
-      },
-      attachTo: document.body,
-    });
-
-    // Call saveConfig which should show modal since default configName is empty
-    const vm = wrapper.vm as unknown as Record<string, unknown>;
-    (vm as { saveConfig: () => void }).saveConfig();
-    await nextTick();
-    expect(document.body.textContent).toContain('Please enter a configuration name');
+    const alert = page.get('[role="alert"]');
+    expect(alert.text()).toContain('Please enter a preset name.');
+    expect(alert.get('svg').classes()).toContain('text-clay');
     expect(createConfigMock).not.toHaveBeenCalled();
-    wrapper.unmount();
   });
 
-  it('component renders and mounts without errors', () => {
-    const wrapper = shallowMount(BreathingPractice, {
-      global: { stubs: ['BreathingVisualizer'] },
-    });
+  it.each(['create', 'overwrite'])('reports a %s failure with error tone and keeps settings open for retry', async (operation) => {
+    const save = operation === 'create' ? createConfigMock : updateConfigMock;
+    save.mockImplementationOnce(() => { throw new Error('Storage full'); });
+    if (operation === 'overwrite') getAllConfigsMock.mockReturnValue([{ id: 'existing', name: 'Evening Reset' }]);
+    mount(BreathingPractice, { props: { openSettings: true }, attachTo: document.body });
+    await flushPromises();
 
-    expect(wrapper.exists()).toBe(true);
-    expect(wrapper.vm).toBeDefined();
+    const settings = page.get(settingsSelector);
+    await settings.get('input[aria-label="Preset name"]').setValue('Evening Reset');
+    await buttonWithText(settings, 'Save Preset').trigger('click');
+    if (operation === 'overwrite') {
+      await buttonWithText(page.get('[aria-labelledby="overwrite-preset-title"]'), 'Overwrite').trigger('click');
+    }
+
+    expect(save).toHaveBeenCalledOnce();
+    const alert = page.get('[role="alert"]');
+    expect(alert.text()).toContain('Your preset could not be saved.');
+    expect(alert.get('svg').classes()).toContain('text-danger');
+    expect(page.find('[role="status"]').exists()).toBe(false);
+
+    await buttonWithText(alert, 'OK').trigger('click');
+    await nextTick();
+    expect(page.get(settingsSelector).get('input[aria-label="Preset name"]').element).toHaveProperty('value', 'Evening Reset');
+  });
+
+  it('traps focus in the top confirmation and restores it when Escape closes each layer', async () => {
+    getAllConfigsMock.mockReturnValue([{ id: 'existing', name: 'Evening Reset' }]);
+    const wrapper = mount(BreathingPractice, { attachTo: document.body });
+    const trigger = wrapper.get<HTMLButtonElement>('button[aria-label="Configure practice"]');
+    trigger.element.focus();
+    await trigger.trigger('click');
+    await nextTick();
+    const settings = page.get(settingsSelector);
+    expect(document.activeElement).toBe(settings.get('[data-testid="close-practice-settings"]').element);
+    expect(trigger.element.closest('[inert]')).not.toBeNull();
+
+    await settings.get('input[aria-label="Preset name"]').setValue('Evening Reset');
+    const save = buttonWithText(settings, 'Save Preset');
+    save.element.focus();
+    await save.trigger('click');
+    await nextTick();
+
+    const confirmation = page.get('[aria-labelledby="overwrite-preset-title"]');
+    const cancel = buttonWithText(confirmation, 'Cancel');
+    const overwrite = buttonWithText(confirmation, 'Overwrite');
+    expect(document.activeElement).toBe(cancel.element);
+    expect(settings.attributes('inert')).toBeDefined();
+    await cancel.trigger('keydown', { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(overwrite.element);
+    await overwrite.trigger('keydown', { key: 'Escape' });
+    expect(page.find('[aria-labelledby="overwrite-preset-title"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(save.element);
+
+    await save.trigger('keydown', { key: 'Escape' });
+    expect(page.find(settingsSelector).exists()).toBe(false);
+    expect(document.activeElement).toBe(trigger.element);
+    expect(trigger.element.closest('[inert]')).toBeNull();
+    expect(updateConfigMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [' ', 'EXTENDED_EXHALE_HOLD'],
+    ['Enter', 'EXTENDED_INHALE_HOLD'],
+  ])('releases a tolerance hold with %j when the session dialog has focus', async (key, phase) => {
+    isRunning.value = true;
+    timerPhase.value = phase;
+    const wrapper = mount(BreathingPractice, { attachTo: document.body });
+    await flushPromises();
+    const dialog = page.get('[data-testid="session-dialog"]');
+    expect(document.activeElement).toBe(dialog.element);
+    expect(dialog.get('button[aria-label^="Release hold"]').text()).toContain('Release Hold');
+
+    const keyboard = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    dialog.element.dispatchEvent(keyboard);
+    expect(keyboard.defaultPrevented).toBe(true);
+    expect(endExtendedHoldMock).toHaveBeenCalledOnce();
+
+    const removeListener = vi.spyOn(window, 'removeEventListener');
+    wrapper.unmount();
+    expect(removeListener).toHaveBeenCalledWith('keydown', expect.any(Function));
+    removeListener.mockRestore();
+  });
+
+  it('leaves keys alone on interactive controls, while paused, or with a stop confirmation open', async () => {
+    isRunning.value = true;
+    timerPhase.value = 'EXTENDED_EXHALE_HOLD';
+    mount(BreathingPractice, { attachTo: document.body });
+    await flushPromises();
+    const dialog = page.get('[data-testid="session-dialog"]');
+    const release = dialog.get('button[aria-label^="Release hold"]');
+    const exit = dialog.get('[data-testid="session-header-exit"]');
+
+    await release.trigger('keydown', { key: 'Enter' });
+    await exit.trigger('keydown', { key: ' ' });
+    timerIsPaused.value = true;
+    await dialog.trigger('keydown', { key: 'Enter' });
+    timerIsPaused.value = false;
+
+    await exit.trigger('click');
+    await nextTick();
+    const stop = page.get('[data-testid="stop-confirmation"]');
+    expect(dialog.attributes('inert')).toBeDefined();
+    await stop.trigger('keydown', { key: 'Enter' });
+    expect(endExtendedHoldMock).not.toHaveBeenCalled();
+    await stop.get('[data-testid="cancel-stop"]').trigger('keydown', { key: 'Escape' });
+    expect(page.find('[data-testid="stop-confirmation"]').exists()).toBe(false);
+    expect(dialog.attributes('inert')).toBeUndefined();
+    await release.trigger('click');
+    expect(endExtendedHoldMock).toHaveBeenCalledOnce();
+  });
+
+  it('reports a discard failure and lets the active session be discarded on retry', async () => {
+    localStorage.setItem(SKIP_CHECK_INS_STORAGE_KEY, 'true');
+    createSessionMock.mockReturnValue({ id: 'active', sets: [] });
+    deleteSessionMock.mockImplementationOnce(() => { throw new Error('Storage full'); });
+    const wrapper = mount(BreathingPractice, { attachTo: document.body });
+    await buttonWithText(wrapper.get('[data-testid="practice-panel"]'), 'Start Practice').trigger('click');
+    isRunning.value = true;
+    timerPhase.value = 'INHALE';
+    await nextTick();
+    const dialog = page.get('[data-testid="session-dialog"]');
+
+    await dialog.get('[data-testid="session-header-exit"]').trigger('click');
+    await buttonWithText(page.get('[data-testid="stop-confirmation"]'), 'Exit').trigger('click');
+    const alert = page.get('[role="alert"]');
+    expect(alert.text()).toContain('This session could not be deleted.');
+    expect(stopMock).not.toHaveBeenCalled();
+    await buttonWithText(alert, 'OK').trigger('click');
+    await dialog.get('[data-testid="session-header-exit"]').trigger('click');
+    await buttonWithText(page.get('[data-testid="stop-confirmation"]'), 'Exit').trigger('click');
+    expect(deleteSessionMock.mock.calls).toEqual([['active'], ['active']]);
+    expect(stopMock).toHaveBeenCalledOnce();
   });
 
   describe('BreathingPractice TIMED extended hold and stopExercise', () => {
@@ -1196,53 +1289,88 @@ describe('BreathingPractice.vue', () => {
       expect(clearMock).toHaveBeenCalled();
     });
 
-    it('component renders with extended hold configuration', async () => {
-      const wrapper = mount(BreathingPractice, {
-        global: {
-          provide: { selectedConfig: ref(null), clearSelectedConfig: vi.fn() },
-          stubs: ['BreathingVisualizer'],
-        },
-      });
+    it('configures the second hold mode and saves a timed duration', async () => {
+      mount(BreathingPractice, { props: { openSettings: true }, attachTo: document.body });
+      await flushPromises();
+      const settings = page.get(settingsSelector);
+      expect(settings.find('#second-hold-mode').exists()).toBe(false);
 
-      // Verify component mounts and renders
-      expect(wrapper.exists()).toBe(true);
-      expect(wrapper.find('[class*="space-y"]').exists()).toBe(true);
+      await settings.get('button[aria-label="Enable Extended Hold"]').trigger('click');
+      await settings.get('button[aria-label="Second Extended Hold"]').trigger('click');
+      const mode = settings.get('#second-hold-mode');
+      expect(settings.get('label[for="second-hold-mode"]').text()).toBe('Second Hold Mode');
+      await mode.setValue('TOLERANCE');
+      expect(settings.find('#second-hold-duration').exists()).toBe(false);
+      await mode.setValue('TIMED');
+      const duration = settings.get('#second-hold-duration');
+      expect(settings.get('label[for="second-hold-duration"]').text()).toBe('Second Hold Duration (sec)');
+      expect(duration.attributes()).toMatchObject({ type: 'number', min: '1', max: '300' });
+      await duration.setValue('37');
+      await settings.get('input[aria-label="Preset name"]').setValue('Two holds');
+      await buttonWithText(settings, 'Save Preset').trigger('click');
+
+      expect(createConfigMock).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        name: 'Two holds',
+        secondExtendedHoldEnabled: true,
+        secondExtendedHoldMode: 'TIMED',
+        secondExtendedHoldDuration: 37,
+      }));
     });
 
-    it('saves configuration with custom name', async () => {
-      const createConfigMock = vi.fn();
-      (globalThis as Record<string, unknown>).createConfigMock = createConfigMock;
-
+    it('saves a trimmed custom preset name and the selected theme in both saved configurations', async () => {
+      const setTheme = vi.spyOn(soundService, 'setTheme');
+      const preset = { ...DEFAULT_BREATHING_CONFIG, name: 'Preset A', soundTheme: 'wind' as const };
       const wrapper = mount(BreathingPractice, {
-        global: {
-          provide: {
-            selectedConfig: ref(null),
-            clearSelectedConfig: vi.fn(),
-          },
-          stubs: ['BreathingVisualizer'],
-        },
+        props: { openSettings: true },
+        global: { provide: { selectedConfig: ref(preset) } },
+        attachTo: document.body,
       });
+      await flushPromises();
+      const settings = page.get(settingsSelector);
+      const theme = settings.get('#sound-theme');
+      expect(setSoundThemeMock).toHaveBeenCalledWith('wind');
+      expect(setTheme).toHaveBeenCalledWith('wind');
+      expect(theme.element).toHaveProperty('value', 'wind');
 
-      // Verify component mounts
-      expect(wrapper.exists()).toBe(true);
+      await theme.setValue('water');
+      await settings.get('input[aria-label="Preset name"]').setValue('  Evening Reset  ');
+      await buttonWithText(settings, 'Save Preset').trigger('click');
+
+      expect(createConfigMock).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        name: 'Evening Reset',
+        soundTheme: 'water',
+      }));
+      const status = page.get('[role="status"]');
+      expect(status.text()).toContain('Configuration saved!');
+      expect(status.get('svg').classes()).toContain('text-sage');
+
+      wrapper.unmount();
+      expect(JSON.parse(localStorage.getItem(LAST_CONFIG_STORAGE_KEY)!)).toMatchObject({ soundTheme: 'water' });
+      setTheme.mockRestore();
     });
 
-    it('saves session notes when completing a session', async () => {
-      const updateSessionMock = vi.fn();
-      (globalThis as Record<string, unknown>).updateSessionMock = updateSessionMock;
+    it('saves session notes from the completion dialog and supports retry after a write failure', async () => {
+      localStorage.setItem(SKIP_CHECK_INS_STORAGE_KEY, 'true');
+      createSessionMock.mockReturnValue({ id: 'with-notes', sets: [] });
+      updateSessionMock.mockImplementationOnce(() => { throw new Error('Storage full'); });
+      const wrapper = mount(BreathingPractice, { attachTo: document.body });
+      await buttonWithText(wrapper.get('[data-testid="practice-panel"]'), 'Start Practice').trigger('click');
+      timerPhase.value = 'SESSION_COMPLETE';
+      await nextTick();
 
-      const wrapper = mount(BreathingPractice, {
-        global: {
-          provide: {
-            selectedConfig: ref(null),
-            clearSelectedConfig: vi.fn(),
-          },
-          stubs: ['BreathingVisualizer'],
-        },
-      });
+      const dialog = page.get('[data-testid="session-dialog"]');
+      expect(page.findAll('#session-notes')).toHaveLength(1);
+      await dialog.get('#session-notes').setValue('The second set felt more comfortable.');
+      const save = buttonWithText(dialog, 'Save Notes');
+      await save.trigger('click');
+      const alert = page.get('[role="alert"]');
+      expect(alert.text()).toContain('Your session notes could not be saved.');
+      await buttonWithText(alert, 'OK').trigger('click');
+      await save.trigger('click');
 
-      // Verify component mounts and can access session notes feature
-      expect(wrapper.exists()).toBe(true);
+      const write = ['with-notes', { notes: 'The second set felt more comfortable.' }];
+      expect(updateSessionMock.mock.calls).toEqual([write, write]);
+      expect(page.get('[role="status"]').text()).toContain('Notes saved!');
     });
 
     it('announces phases when TTS enabled', async () => {

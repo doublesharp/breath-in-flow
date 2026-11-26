@@ -4,18 +4,19 @@
     <Teleport to="body">
       <div
         v-if="showDeleteConfirmation"
+        ref="deleteDialogRef"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="delete-preset-title"
         class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        @click.self="showDeleteConfirmation = false"
+        @click.self="cancelDelete"
       >
         <div class="card-solid max-w-md w-full animate-scale-in">
           <div class="flex items-start gap-4">
-            <div class="p-3 rounded-xl bg-red-500/10">
+            <div class="p-3 rounded-xl bg-terracotta/10">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                class="w-6 h-6 text-red-400"
+                class="w-6 h-6 text-danger"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -30,11 +31,11 @@
             </div>
             <div class="flex-1">
               <h3 id="delete-preset-title" class="text-xl font-bold text-white mb-2">Delete Configuration?</h3>
-              <p class="text-slate-300 mb-6">
+              <p class="text-secondary mb-6">
                 Are you sure you want to delete "{{ configToDelete?.name }}"? This action cannot be undone.
               </p>
               <div class="flex gap-3 justify-end">
-                <button @click="showDeleteConfirmation = false" class="btn-secondary">Cancel</button>
+                <button @click="cancelDelete" class="btn-secondary">Cancel</button>
                 <button @click="confirmDelete" class="btn-danger">Delete</button>
               </div>
             </div>
@@ -117,6 +118,14 @@
               Load routine <span aria-hidden="true">→</span>
             </button>
             <button
+              type="button"
+              :aria-label="'Edit ' + config.name"
+              class="btn-secondary min-h-11 min-w-11 !border-muted/65"
+              @click="emit('edit-config', config)"
+            >
+              Edit
+            </button>
+            <button
               @click="deleteConfig(config.id!)"
               :aria-label="'Delete ' + config.name"
               class="routine-delete"
@@ -172,21 +181,21 @@
           <section
             v-if="preset.guidance && expandedGuidanceId === preset.id"
             :id="`guidance-panel-${preset.id}`"
-            class="mt-5 space-y-4 border-t border-white/10 pt-5 text-sm text-slate-300"
+            class="mt-5 space-y-4 border-t border-white/10 pt-5 text-sm text-secondary"
             role="region"
             :aria-label="`${preset.config.name} guidance`"
           >
             <p>{{ preset.guidance.purpose }}</p>
 
             <div>
-              <h4 class="font-semibold text-white">Set up</h4>
+              <h5 class="font-semibold text-white">Set up</h5>
               <ul class="mt-2 list-disc space-y-1 pl-5">
                 <li v-for="item in preset.guidance.setup" :key="item">{{ item }}</li>
               </ul>
             </div>
 
             <div>
-              <h4 class="font-semibold text-white">Technique</h4>
+              <h5 class="font-semibold text-white">Technique</h5>
               <ol class="mt-2 list-decimal space-y-1 pl-5">
                 <li v-for="item in preset.guidance.steps" :key="item">{{ item }}</li>
               </ol>
@@ -194,17 +203,17 @@
 
             <div class="grid gap-3 sm:grid-cols-2">
               <div class="rounded-lg bg-white/5 p-3">
-                <h4 class="font-semibold text-teal-200">Endurance</h4>
+                <h5 class="font-semibold text-sage">Endurance</h5>
                 <p class="mt-1">{{ preset.guidance.progression.endurance }}</p>
               </div>
               <div class="rounded-lg bg-white/5 p-3">
-                <h4 class="font-semibold text-amber-200">Strengthening</h4>
+                <h5 class="font-semibold text-sand">Strengthening</h5>
                 <p class="mt-1">{{ preset.guidance.progression.strengthening }}</p>
               </div>
             </div>
 
-            <div class="rounded-lg border border-amber-400/20 bg-amber-500/10 p-3">
-              <h4 class="font-semibold text-amber-100">Precautions</h4>
+            <div class="rounded-lg border border-clay/25 bg-clay/10 p-3">
+              <h5 class="font-semibold text-sand">Precautions</h5>
               <ul class="mt-2 list-disc space-y-1 pl-5">
                 <li v-for="item in preset.guidance.precautions" :key="item">{{ item }}</li>
               </ul>
@@ -218,6 +227,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useModalIsolation } from '../composables/useModalIsolation';
 import { useStorage } from '../composables';
 import PatternSummary from './PatternSummary.vue';
 import type { BreathingConfig } from '@breath-in-flow/shared';
@@ -225,6 +235,7 @@ import { guidedPresets, presetConfig, type GuidedPreset } from '../data/guidedPr
 
 const emit = defineEmits<{
   (e: 'loadConfig', config: BreathingConfig): void;
+  (e: 'edit-config', config: BreathingConfig): void;
   (e: 'createConfig'): void;
 }>();
 
@@ -233,6 +244,8 @@ const configs = computed(() => storage.getAllConfigs());
 
 const showDeleteConfirmation = ref(false);
 const configToDelete = ref<BreathingConfig | null>(null);
+const deleteDialogRef = ref<HTMLElement | null>(null);
+useModalIsolation(deleteDialogRef, showDeleteConfirmation, { onEscape: cancelDelete });
 
 const search = ref('');
 const searchInput = ref<HTMLInputElement | null>(null);
@@ -262,7 +275,11 @@ function toggleGuidance(id: string) {
 
 function formatDate(date?: Date): string {
   if (!date) return '';
-  return new Date(date).toLocaleDateString();
+  return new Date(date).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function deleteConfig(id: string) {
@@ -277,6 +294,10 @@ function confirmDelete() {
   if (configToDelete.value?.id) {
     storage.deleteConfig(configToDelete.value.id);
   }
+  cancelDelete();
+}
+
+function cancelDelete() {
   showDeleteConfirmation.value = false;
   configToDelete.value = null;
 }

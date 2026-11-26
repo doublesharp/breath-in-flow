@@ -3,11 +3,12 @@
     <!-- Phase Label -->
     <div
       :class="[
-        'px-6 py-2.5 rounded-full text-sm font-bold uppercase tracking-wider mb-4 sm:mb-8 shadow-lg transition-all duration-500',
+        'mb-4 rounded-full phase-pill px-6 py-2.5 text-center text-sm font-bold tracking-wider shadow-lg transition-all duration-500 sm:mb-8',
+        { uppercase: phase !== 'PAUSED' },
         phaseColorClass,
       ]"
     >
-      {{ phaseInfo.label }}
+      {{ phaseLabel }}
     </div>
 
     <!-- Breathing Circle Container -->
@@ -19,11 +20,12 @@
       ></div>
 
       <!-- Background circle with pulse -->
-      <div class="absolute inset-8 rounded-full bg-slate-800/20" style="backface-visibility: hidden"></div>
+      <div class="absolute inset-8 rounded-full bg-surface-raised/30" style="backface-visibility: hidden"></div>
 
       <!-- Animated breathing circle -->
       <div
         class="breathing-circle w-full h-full flex items-center justify-center relative"
+        :class="{ 'breathing-circle-paused': phase === 'PAUSED' }"
         :style="{
           transform: `translateZ(0) scale(${visualScale})`,
           padding: '1rem',
@@ -39,7 +41,7 @@
           <svg
             v-if="phase === 'SESSION_COMPLETE'"
             data-testid="completion-mark"
-            class="mx-auto h-16 w-16 text-white drop-shadow-2xl"
+            class="mx-auto h-16 w-16 text-primary drop-shadow-2xl"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -50,11 +52,11 @@
           <div
             v-else
             data-testid="phase-time"
-            class="text-6xl sm:text-7xl font-mono font-bold text-white drop-shadow-2xl tabular-nums"
+            class="text-6xl sm:text-7xl font-mono font-bold text-primary drop-shadow-2xl tabular-nums"
           >
             {{ displayTime }}
           </div>
-          <div class="text-white/90 text-base sm:text-lg mt-3 font-medium tracking-wide">
+          <div class="text-primary text-base sm:text-lg mt-3 font-medium tracking-wide">
             {{ phaseInfo.instruction }}
           </div>
         </div>
@@ -71,22 +73,22 @@
         <defs>
           <!-- Solid gradient for inhale -->
           <linearGradient id="inhaleGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#d6eee4" stop-opacity="0.92" />
-            <stop offset="100%" stop-color="#9bcdbd" stop-opacity="0.92" />
+            <stop offset="0%" stop-color="#d6ead9" stop-opacity="0.92" />
+            <stop offset="100%" stop-color="#b1c8b5" stop-opacity="0.92" />
           </linearGradient>
           <!-- Solid gradient for exhale -->
           <linearGradient id="exhaleGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#b9ddd3" stop-opacity="0.88" />
-            <stop offset="100%" stop-color="#7eaea4" stop-opacity="0.88" />
+            <stop offset="0%" stop-color="#d8c6a2" stop-opacity="0.88" />
+            <stop offset="100%" stop-color="#a09c6b" stop-opacity="0.88" />
           </linearGradient>
           <!-- Hold gradients with accented tips -->
           <linearGradient id="inhaleHoldGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#d8dfca" stop-opacity="0.78" />
-            <stop offset="85%" stop-color="#d8dfca" stop-opacity="0.78" />
+            <stop offset="0%" stop-color="#d8c6a2" stop-opacity="0.78" />
+            <stop offset="85%" stop-color="#d8c6a2" stop-opacity="0.78" />
             <stop offset="100%" stop-color="#ead8b7" stop-opacity="0.9" />
           </linearGradient>
           <linearGradient id="exhaleHoldGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#d8dfca" stop-opacity="0.78" />
+            <stop offset="0%" stop-color="#d8c6a2" stop-opacity="0.78" />
             <stop offset="85%" stop-color="#e2cfab" stop-opacity="0.82" />
             <stop offset="100%" stop-color="#c99468" stop-opacity="0.92" />
           </linearGradient>
@@ -109,7 +111,7 @@
         </defs>
 
         <!-- Background circle -->
-        <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(214,238,228,0.14)" stroke-width="1" />
+        <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(229,220,197,0.20)" stroke-width="1" />
 
         <!-- Persistent ring elements - always in DOM, controlled by opacity -->
         <!-- Inhale ring -->
@@ -207,6 +209,7 @@ import BreathingPressureField from './BreathingPressureField.vue';
 
 const props = defineProps<{
   phase: BreathingPhase;
+  pausedPhase?: BreathingPhase | null;
   currentTime: number;
   totalTime: number;
   scale: number;
@@ -216,6 +219,17 @@ const props = defineProps<{
 
 const phaseInfo = computed(() => {
   return getPhaseInfo(props.phase, props.config);
+});
+const pausedPhaseLabels: Partial<Record<BreathingPhase, string>> = {
+  INHALE_HOLD: 'Inhale hold',
+  EXHALE_HOLD: 'Exhale hold',
+  EXTENDED_INHALE_HOLD: 'Extended inhale hold',
+  EXTENDED_EXHALE_HOLD: 'Extended exhale hold',
+};
+const phaseLabel = computed(() => {
+  if (props.phase !== 'PAUSED' || !props.pausedPhase) return phaseInfo.value.label;
+  const label = pausedPhaseLabels[props.pausedPhase] ?? getPhaseInfo(props.pausedPhase).label;
+  return `${label} · Paused`;
 });
 const displayTime = computed(() => formatTime(props.currentTime));
 const ringRadius = 47;
@@ -256,7 +270,7 @@ const fadingStartOpacity: Partial<Record<BreathingPhase, number>> = {};
 
 const phaseGlowStyle = computed(() => {
   return {
-    boxShadow: '0 0 32px 10px rgba(15, 23, 42, 0.22)',
+    boxShadow: '0 0 32px 10px rgba(32, 30, 26, 0.26)',
     transition: 'box-shadow 0s linear',
   };
 });
@@ -392,25 +406,21 @@ watch([() => props.phase, () => props.currentTime, () => props.totalTime], ([pha
 const phaseColorClass = computed(() => {
   switch (props.phase) {
     case 'INHALE':
-      return 'bg-gradient-to-r from-emerald-700 to-teal-700 text-white shadow-emerald-950/25';
-    case 'INHALE_HOLD':
-      return 'bg-gradient-to-r from-amber-700 to-orange-800 text-white shadow-amber-950/25';
-    case 'EXHALE':
-      return 'bg-gradient-to-r from-teal-700 to-cyan-800 text-white shadow-teal-950/25';
-    case 'EXHALE_HOLD':
-      return 'bg-gradient-to-r from-amber-700 to-orange-800 text-white shadow-amber-950/25';
-    case 'EXTENDED_INHALE_HOLD':
-    case 'EXTENDED_EXHALE_HOLD':
-      return 'bg-gradient-to-r from-orange-700 to-amber-800 text-white shadow-orange-950/25';
     case 'SET_COMPLETE':
     case 'SESSION_COMPLETE':
-      return 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-500/40';
+      return 'phase-pill-sage';
+    case 'INHALE_HOLD':
+    case 'EXHALE_HOLD':
+    case 'EXTENDED_INHALE_HOLD':
+    case 'EXTENDED_EXHALE_HOLD':
+      return 'phase-pill-clay';
+    case 'EXHALE':
     case 'SET_REST':
-      return 'bg-gradient-to-r from-teal-500 to-cyan-600 text-white shadow-teal-500/40';
+      return 'phase-pill-sand';
     case 'PAUSED':
-      return 'bg-gradient-to-r from-slate-500 to-slate-600 text-white shadow-slate-500/40';
+      return 'phase-pill-paused';
     default:
-      return 'bg-gradient-to-r from-slate-600 to-slate-700 text-white';
+      return '';
   }
 });
 </script>

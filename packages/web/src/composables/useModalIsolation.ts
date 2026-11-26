@@ -83,12 +83,10 @@ export function useModalIsolation(
 
   function handleKeydown(event: KeyboardEvent) {
     const dialog = dialogRef.value;
-    if (!openRef.value || !dialog) return;
+    // Only the top-most modal handles focus and Escape while dialogs are nested.
+    if (!openRef.value || !dialog || !isTopOfStack(stackId)) return;
 
     if (event.key === 'Escape') {
-      // Only the top-most open modal handles Escape; a nested dialog must
-      // cancel itself while leaving any parent modal open.
-      if (!isTopOfStack(stackId)) return;
       if (!options.onEscape || options.canEscape?.() === false) return;
       event.preventDefault();
       event.stopPropagation();

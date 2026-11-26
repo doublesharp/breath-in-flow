@@ -11,12 +11,11 @@ describe('GoalOnboarding', () => {
     expect(wrapper.find('#goal-onboarding-title').exists()).toBe(true);
     expect(wrapper.findAll('input[name="wellness-goal"]')).toHaveLength(4);
     expect(dialog.classes()).toContain('overflow-y-auto');
-    expect(wrapper.get('[data-testid="goal-onboarding-card"]').classes()).toEqual(
-      expect.arrayContaining(['max-h-[calc(100dvh-2rem)]', 'w-[calc(100vw-2rem)]', 'min-w-0'])
-    );
-    expect(wrapper.get('[data-testid="goal-onboarding-actions"]').classes()).toEqual(
-      expect.arrayContaining(['sticky', 'bottom-0', 'z-10'])
-    );
+    const actions = wrapper.get('[data-testid="goal-onboarding-actions"]');
+    expect(actions.classes()).toEqual(expect.arrayContaining(['sticky', 'bottom-0']));
+    expect(actions.element.previousElementSibling?.classList.contains('overflow-y-auto')).toBe(true);
+    expect(actions.get('button').attributes('disabled')).toBeDefined();
+    expect(actions.get('#goal-selection-hint').text()).toBe('Select a goal to continue');
   });
 
   it('renders nothing while closed', () => {
@@ -32,6 +31,7 @@ describe('GoalOnboarding', () => {
     expect(wrapper.emitted('select')).toBeUndefined();
 
     await wrapper.get('[data-testid="goal-relax"]').setValue();
+    expect(wrapper.find('#goal-selection-hint').exists()).toBe(false);
     await wrapper.get('[data-testid="save-goal"]').trigger('click');
 
     expect(wrapper.emitted('select')).toEqual([['RELAX']]);

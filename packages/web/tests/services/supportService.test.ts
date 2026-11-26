@@ -31,7 +31,7 @@ import {
 } from '../../src/services/supportService';
 
 const APP_INFO = {
-  name: 'Breath In Flow',
+  name: 'Breath in Flow',
   id: 'com.breathinflow.app',
   build: '42',
   version: '1.0.0',
@@ -69,7 +69,7 @@ describe('supportService', () => {
     it('includes app, build, platform, OS, and model when available', async () => {
       const message = await createSupportMessage();
 
-      expect(message).toContain('Breath In Flow');
+      expect(message).toContain('Breath in Flow');
       expect(message).toContain('1.0.0');
       expect(message).toContain('42'); // build
       expect(message).toContain('ios'); // platform / OS

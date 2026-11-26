@@ -46,6 +46,7 @@ vi.mock('@/composables/useStorage', async (importOriginal) => {
       getSoundTheme: vi.fn(() => 'wood'),
       setSoundTheme: vi.fn(),
       soundTheme: ref('wood'),
+      practiceResetVersion: ref(0),
       getAllConfigs: vi.fn(() => []),
       getSession: vi.fn(() => ({ id: 'test-session', sets: [] })),
       sessions: sessionsRef,
@@ -60,6 +61,7 @@ vi.mock('@/composables/useBreathingTimer', async (importOriginal) => {
     useBreathingTimer: (config: BreathingConfig, opts: Record<string, unknown>) => {
       if (useRealPracticeServices) return actual.useBreathingTimer(config, opts);
       const phase = ref('IDLE');
+      const pausedPhase = ref<string | null>(null);
       const isRunning = ref(false);
       const isPaused = ref(false);
       const currentSet = ref(1);
@@ -72,6 +74,7 @@ vi.mock('@/composables/useBreathingTimer', async (importOriginal) => {
 
       return {
         phase,
+        pausedPhase,
         isRunning,
         isPaused,
         currentSet,
@@ -86,6 +89,7 @@ vi.mock('@/composables/useBreathingTimer', async (importOriginal) => {
         },
         pause: () => {
           if (!isRunning.value || isPaused.value) return;
+          pausedPhase.value = phase.value;
           isPaused.value = true;
           phase.value = 'PAUSED';
         },
@@ -438,17 +442,17 @@ describe('BreathingPractice flows', () => {
     await nextTick();
 
     // Check that error modal appears in document.body
-    expect(document.body.textContent).toContain('Please enter a configuration name');
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toContain('Please enter a preset name.');
 
     // Close the error modal
-    const okBtn = document.body.querySelector('button.btn-primary') as HTMLElement;
+    const okBtn = document.body.querySelector('[role="alert"] button') as HTMLElement;
     expect(okBtn).toBeTruthy();
     okBtn.click();
     await nextTick();
 
     // Fill in a name and click again - find input in document.body
     const nameInput = document.body.querySelector(
-      'input[type="text"][placeholder*="name"]'
+      '#preset-name-input'
     ) as HTMLInputElement;
     expect(nameInput).toBeTruthy();
     nameInput.value = 'Morning';
@@ -479,10 +483,12 @@ describe('BreathingPractice flows', () => {
     await wrapper.get('button[title="Configure practice"]').trigger('click');
     await nextTick();
 
+    const body = document.querySelector('[data-testid="configure-practice-body"]');
     const header = document.querySelector('[data-testid="configure-practice-header"]');
-    const close = document.querySelector('[data-testid="close-practice-settings"]');
-    expect(header?.className).toContain('mb-6');
-    expect(header?.className).toContain('sm:mb-8');
+    const close = header?.querySelector('[data-testid="close-practice-settings"]');
+    expect(body?.classList.contains('overflow-y-auto')).toBe(true);
+    expect(body?.contains(header ?? null)).toBe(false);
+    expect(body?.nextElementSibling?.textContent).toContain('Use these settings');
     expect(close?.className).toContain('min-h-11');
     expect(close?.className).toContain('min-w-11');
     wrapper.unmount();
@@ -1016,9 +1022,7 @@ describe('BreathingPractice flows', () => {
 
     expect(document.body.querySelector('[data-testid="session-dialog"]')).toBeNull();
     expect(findByText(wrapper, 'start practice')).toBeTruthy();
-    expect(
-      document.body.querySelector<HTMLElement>('[data-testid="stop-confirmation"]')?.style.display
-    ).toBe('none');
+    expect(document.body.querySelector('[data-testid="stop-confirmation"]')).toBeNull();
   });
 
   it('makes the completed-session header exit obvious and returns directly to Practice', async () => {
@@ -1049,9 +1053,7 @@ describe('BreathingPractice flows', () => {
     await nextTick();
 
     expect(document.body.querySelector('[data-testid="session-dialog"]')).toBeNull();
-    expect(
-      document.body.querySelector<HTMLElement>('[data-testid="stop-confirmation"]')?.style.display
-    ).toBe('none');
+    expect(document.body.querySelector('[data-testid="stop-confirmation"]')).toBeNull();
   });
 });
 
@@ -1126,9 +1128,9 @@ describe('BreathingPractice with real timer and storage', () => {
   }
 
   function displayedCompletedSets() {
-    const card = [...document.body.querySelectorAll('[data-testid="session-dialog"] .stat-card')]
-      .find((item) => item.textContent?.includes('Completed'));
-    return card?.querySelector('div')?.textContent?.trim();
+    return document.body
+      .querySelector('[data-testid="session-dialog"] [data-testid="completed-set-count"]')
+      ?.textContent?.trim();
   }
 
   it.each([0, 1])('freezes a manual finish with %ss rest when completion cannot be saved, then retries', async (rest) => {
@@ -1159,7 +1161,7 @@ describe('BreathingPractice with real timer and storage', () => {
     expect(document.body.querySelector('[data-testid="session-dialog"]')?.textContent?.toLowerCase())
       .not.toContain('start next set');
     await clickCheckInControl('session-header-exit');
-    expect(document.body.querySelector<HTMLElement>('[data-testid="stop-confirmation"]')?.style.display).toBe('none');
+    expect(document.body.querySelector('[data-testid="stop-confirmation"]')).toBeNull();
     expect(vm.currentSession).not.toBeNull();
     await vi.advanceTimersByTimeAsync(2000);
     expect(vm.timer.currentSet.value).toBe(1);

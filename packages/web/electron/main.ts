@@ -33,7 +33,7 @@ async function createWindow() {
     height: Math.round(height * 0.67),
     minWidth: 400,
     minHeight: 600,
-    title: 'Breath In Flow',
+    title: 'Breath in Flow',
     icon: join(process.env.VITE_PUBLIC!, 'icon.png'),
     webPreferences: {
       preload,

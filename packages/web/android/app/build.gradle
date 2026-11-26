@@ -3,6 +3,23 @@ apply plugin: 'com.android.application'
 def appVersionCode = (project.findProperty("appVersionCode") ?: "5") as Integer
 def appVersionName = project.findProperty("appVersionName") ?: "0.0.5"
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (keystorePropertiesFile.isFile()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+def releaseSigning = [
+    storeFile: providers.environmentVariable('ANDROID_KEYSTORE_PATH').orNull,
+    storePassword: providers.environmentVariable('ANDROID_KEYSTORE_PASSWORD').orNull,
+    keyAlias: providers.environmentVariable('ANDROID_KEY_ALIAS').orNull,
+    keyPassword: providers.environmentVariable('ANDROID_KEY_PASSWORD').orNull,
+]
+if (!releaseSigning.values().every { it }) {
+    releaseSigning = releaseSigning.collectEntries { key, value -> [(key): keystoreProperties.getProperty(key)] }
+}
+def hasReleaseSigning = releaseSigning.values().every { it }
+
 android {
     namespace = "com.breathinflow.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -19,8 +36,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(releaseSigning.storeFile)
+                storePassword releaseSigning.storePassword
+                keyAlias releaseSigning.keyAlias
+                keyPassword releaseSigning.keyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

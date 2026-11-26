@@ -4,7 +4,8 @@
     <Teleport to="body">
       <!-- Stop Session Confirmation Modal -->
       <div
-        v-show="showStopConfirmation"
+        v-if="showStopConfirmation"
+        ref="stopConfirmationRef"
         data-testid="stop-confirmation"
         role="alertdialog"
         aria-modal="true"
@@ -15,10 +16,10 @@
       >
         <div class="card-solid max-w-md w-full animate-scale-in">
           <div class="flex items-start gap-4">
-            <div class="p-3 rounded-xl bg-red-500/10">
+            <div class="p-3 rounded-xl bg-terracotta/10">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                class="w-6 h-6 text-red-400"
+                class="w-6 h-6 text-danger"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -32,8 +33,8 @@
               </svg>
             </div>
             <div class="flex-1">
-              <h3 id="stop-session-title" class="text-xl font-bold text-white mb-2">Stop Session?</h3>
-              <p id="stop-session-description" class="text-slate-300 mb-6">
+              <h3 id="stop-session-title" class="text-xl font-bold text-primary mb-2">Stop Session?</h3>
+              <p id="stop-session-description" class="text-secondary mb-6">
                 Choose what to do with this in-progress session. You can keep going, save the incomplete progress, or
                 exit without saving.
               </p>
@@ -54,20 +55,20 @@
         </div>
       </div>
 
-      <!-- Success Notification Modal -->
       <div
-        v-show="showSuccessNotification"
-        role="status"
-        aria-live="polite"
+        v-if="showNotification"
+        ref="notificationRef"
+        :role="notificationTone === 'success' ? 'status' : 'alert'"
         class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        @click.self="showSuccessNotification = false"
+        @click.self="showNotification = false"
       >
         <div class="card-solid max-w-md w-full animate-scale-in">
           <div class="flex items-start gap-4">
-            <div class="p-3 rounded-xl bg-emerald-500/10">
+            <div :class="['p-3 rounded-xl', notificationStyle.background]">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                class="w-6 h-6 text-emerald-400"
+                :class="['w-6 h-6', notificationStyle.icon]"
+                aria-hidden="true"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -76,14 +77,16 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  :d="notificationTone === 'success'
+                    ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+                    : 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'"
                 />
               </svg>
             </div>
             <div class="flex-1">
-              <h3 class="text-xl font-bold text-white mb-2">{{ successMessage }}</h3>
+              <h3 class="text-xl font-bold text-primary mb-2">{{ notificationMessage }}</h3>
               <div class="flex gap-3 justify-end mt-4">
-                <button @click="showSuccessNotification = false" class="btn-primary">OK</button>
+                <button @click="showNotification = false" class="btn-primary">OK</button>
               </div>
             </div>
           </div>
@@ -92,7 +95,8 @@
 
       <!-- Overwrite Confirmation Modal -->
       <div
-        v-show="showOverwriteConfirmation"
+        v-if="showOverwriteConfirmation"
+        ref="overwriteConfirmationRef"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="overwrite-preset-title"
@@ -101,10 +105,10 @@
       >
         <div class="card-solid max-w-md w-full animate-scale-in">
           <div class="flex items-start gap-4">
-            <div class="p-3 rounded-xl bg-amber-500/10">
+            <div class="p-3 rounded-xl bg-clay/10">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                class="w-6 h-6 text-amber-400"
+                class="w-6 h-6 text-clay"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -118,8 +122,8 @@
               </svg>
             </div>
             <div class="flex-1">
-              <h3 id="overwrite-preset-title" class="text-xl font-bold text-white mb-2">Overwrite Preset?</h3>
-              <p class="text-slate-300 mb-6">
+              <h3 id="overwrite-preset-title" class="text-xl font-bold text-primary mb-2">Overwrite Preset?</h3>
+              <p class="text-secondary mb-6">
                 A preset named "{{ configName }}" already exists. Do you want to overwrite it?
               </p>
               <div class="flex gap-3 justify-end">
@@ -140,7 +144,7 @@
         aria-labelledby="session-dialog-title"
         tabindex="-1"
         class="fixed inset-0 z-50 overflow-y-auto safe-area-top safe-area-bottom"
-        style="background: linear-gradient(135deg, #1f1a15 0%, #2a241d 40%, #1f1a15 100%)"
+        style="background: radial-gradient(ellipse at top, var(--surface-raised), var(--surface-page) 70%)"
       >
         <div class="min-h-screen p-4 sm:p-6 lg:p-8">
           <!-- Exit Button -->
@@ -153,8 +157,8 @@
               :class="[
                 'min-h-11 rounded-xl transition-colors backdrop-blur-sm pointer-events-auto',
                 timer.phase.value === 'SESSION_COMPLETE'
-                  ? 'flex items-center gap-2 border border-emerald-400/40 bg-emerald-500/20 px-4 py-2.5 font-semibold text-emerald-50 shadow-lg shadow-emerald-950/30 hover:bg-emerald-500/30'
-                  : 'p-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white',
+                  ? 'btn-primary flex items-center gap-2 px-4 py-2.5 font-semibold'
+                  : 'min-w-11 border border-line-subtle bg-surface-card/90 p-2.5 text-secondary hover:bg-surface-raised hover:text-primary',
               ]"
             >
               <svg
@@ -187,6 +191,7 @@
               <h1 id="session-dialog-title" class="sr-only">Guided breathing session</h1>
               <BreathingVisualizer
                 :phase="timer.phase.value"
+                :paused-phase="timer.pausedPhase.value"
                 :current-time="timer.currentTime.value"
                 :total-time="timer.totalPhaseTime.value"
                 :scale="timer.breathingScale.value"
@@ -197,47 +202,47 @@
               <!-- Progress Stats (when running) -->
               <div class="mt-4 sm:mt-8">
                 <!-- Breathing Pattern Display -->
-                <div class="mb-6 text-center">
+                <div class="mb-4 text-center sm:mb-6">
                   <div
-                    class="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/50 rounded-xl text-slate-300 text-sm sm:text-base"
+                    class="inline-flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 rounded-xl border border-line-subtle bg-surface-raised px-3 py-2 text-sm text-secondary sm:gap-x-2 sm:text-base"
                   >
-                    <span class="text-emerald-400 font-semibold">{{ config.inhaleTime }}s</span>
-                    <span class="text-slate-500">→</span>
-                    <span v-if="config.inhaleHoldTime" class="text-amber-400 font-semibold"
+                    <span class="text-sage font-semibold">{{ config.inhaleTime }}s</span>
+                    <span class="text-muted">→</span>
+                    <span v-if="config.inhaleHoldTime" class="text-clay font-semibold"
                       >{{ config.inhaleHoldTime }}s</span
                     >
-                    <span v-if="config.inhaleHoldTime" class="text-slate-500">→</span>
-                    <span class="text-blue-400 font-semibold">{{ config.exhaleTime }}s</span>
-                    <span v-if="config.exhaleHoldTime" class="text-slate-500">→</span>
-                    <span v-if="config.exhaleHoldTime" class="text-amber-400 font-semibold"
+                    <span v-if="config.inhaleHoldTime" class="text-muted">→</span>
+                    <span class="text-sand font-semibold">{{ config.exhaleTime }}s</span>
+                    <span v-if="config.exhaleHoldTime" class="text-muted">→</span>
+                    <span v-if="config.exhaleHoldTime" class="text-clay font-semibold"
                       >{{ config.exhaleHoldTime }}s</span
                     >
-                    <span class="text-slate-500 ml-2">×</span>
-                    <span class="text-white font-semibold">{{ config.repetitions }} reps</span>
+                    <span class="text-muted ml-2">×</span>
+                    <span class="text-primary font-semibold">{{ config.repetitions }} reps</span>
                   </div>
                 </div>
 
                 <!-- Progress Stats Grid -->
-                <div class="grid grid-cols-3 gap-4">
-                  <div class="stat-card">
-                    <div class="text-3xl font-bold text-white">
+                <div class="grid grid-cols-3 gap-2 sm:gap-4">
+                  <div class="practice-stat">
+                    <div class="text-2xl font-semibold tabular-nums text-primary sm:text-3xl">
                       {{ timer.currentRepetition.value }}
-                      <span class="text-slate-500 text-lg">/ {{ config.repetitions }}</span>
+                      <span class="text-xs text-muted sm:text-lg">/ {{ config.repetitions }}</span>
                     </div>
-                    <div class="text-sm text-slate-400 mt-1">Repetitions</div>
+                    <div class="mt-1 text-xs text-muted sm:text-sm">Repetitions</div>
                   </div>
-                  <div class="stat-card">
-                    <div class="text-3xl font-bold text-white">
+                  <div class="practice-stat">
+                    <div class="text-2xl font-semibold tabular-nums text-primary sm:text-3xl">
                       {{ timer.currentSet.value }}
-                      <span class="text-slate-500 text-lg">/ {{ config.targetSets || '∞' }}</span>
+                      <span class="text-xs text-muted sm:text-lg" :aria-label="config.targetSets ? undefined : 'unlimited'">/ {{ config.targetSets || '∞' }}</span>
                     </div>
-                    <div class="text-sm text-slate-400 mt-1">Set</div>
+                    <div class="mt-1 text-xs text-muted sm:text-sm">Set</div>
                   </div>
-                  <div class="stat-card">
-                    <div class="text-3xl font-bold text-emerald-400">
+                  <div class="practice-stat">
+                    <div data-testid="completed-set-count" class="text-2xl font-semibold tabular-nums text-sage sm:text-3xl">
                       {{ currentSession?.completedSets || 0 }}
                     </div>
-                    <div class="text-sm text-slate-400 mt-1">Completed</div>
+                    <div class="mt-1 text-xs text-muted sm:text-sm">Completed</div>
                   </div>
                 </div>
               </div>
@@ -247,18 +252,16 @@
                 v-if="timer.phase.value === 'EXTENDED_INHALE_HOLD' || timer.phase.value === 'EXTENDED_EXHALE_HOLD'"
                 class="mt-8 text-center p-6 glass rounded-2xl animate-scale-in"
               >
-                <p class="text-slate-300 mb-3">
+                <p class="text-secondary mb-3">
                   {{ isToleranceExtendedHold ? 'Hold as long as comfortable' : 'Hold for the timer' }}
                 </p>
-                <p class="text-5xl font-mono font-bold text-indigo-400 animate-pulse-glow">
+                <p class="text-5xl font-mono font-bold text-clay animate-pulse-glow">
                   {{ formatTime(isToleranceExtendedHold ? timer.extendedHoldElapsed.value : timer.currentTime.value) }}
                 </p>
                 <button
                   @click="endExtendedHold"
-                  @keydown.space.prevent="endExtendedHold"
-                  @keydown.enter.prevent="endExtendedHold"
                   class="mt-6 btn-warning btn-action"
-                  aria-label="Release hold (Press Space or Enter)"
+                  :aria-label="isToleranceExtendedHold ? 'Release hold (Press Space or Enter)' : 'Release hold'"
                 >
                   <span class="flex items-center gap-2 justify-center">
                     <svg
@@ -277,7 +280,7 @@
                     </svg>
                     Release Hold
                   </span>
-                  <span class="text-xs text-slate-400 mt-2 block">Press Space or Enter</span>
+                  <span class="mt-2 block text-xs text-surface-page">Press Space or Enter</span>
                 </button>
               </div>
 
@@ -286,11 +289,11 @@
                 v-if="timer.phase.value === 'SET_REST'"
                 class="mt-8 text-center p-8 glass rounded-2xl animate-scale-in"
               >
-                <p class="text-xl font-semibold text-white">Rest between sets</p>
-                <p class="mt-2 text-5xl font-mono font-bold text-teal-300 tabular-nums">
+                <p class="text-xl font-semibold text-primary">Rest between sets</p>
+                <p class="mt-2 text-5xl font-mono font-bold text-sage tabular-nums">
                   {{ formatTime(timer.currentTime.value) }}
                 </p>
-                <p class="mt-2 text-sm text-slate-400">The next set starts automatically.</p>
+                <p class="mt-2 text-sm text-muted">The next set starts automatically.</p>
                 <div class="mt-6 flex flex-col sm:flex-row justify-center gap-4">
                   <button @click="startNextSet" class="btn-success btn-action">Start next set now</button>
                   <button @click="finishSession" class="btn-secondary btn-action">Finish session</button>
@@ -354,7 +357,7 @@
                 v-if="completionSaveFailed"
                 class="mt-8 text-center p-8 glass rounded-2xl"
               >
-                <p class="text-slate-300 mb-6">Your session has ended. Save it before leaving.</p>
+                <p class="text-secondary mb-6">Your session has ended. Save it before leaving.</p>
                 <button @click="finishSession" class="btn-primary btn-action">Retry saving session</button>
               </div>
 
@@ -368,7 +371,7 @@
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    class="w-10 h-10 text-white"
+                    class="w-10 h-10 text-primary"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -381,13 +384,14 @@
                     />
                   </svg>
                 </div>
-                <p class="text-3xl text-emerald-400 font-bold mb-2">Session Complete!</p>
-                <p class="text-slate-400 mb-6">Great job on completing your breathing practice!</p>
+                <p class="text-3xl text-sage font-bold mb-2">Session Complete!</p>
+                <p class="text-muted mb-6">Great job on completing your breathing practice!</p>
 
                 <!-- Session Notes -->
                 <div v-if="currentSession" class="mb-6 text-left">
-                  <label class="form-label text-left block mb-2">Session Notes</label>
+                  <label for="session-notes" class="form-label text-left block mb-2">Session Notes</label>
                   <textarea
+                    id="session-notes"
                     v-model="sessionNotes"
                     rows="3"
                     class="form-input resize-none w-full"
@@ -420,10 +424,10 @@
                   timer.phase.value !== 'SET_COMPLETE' &&
                   timer.phase.value !== 'SET_REST'
                 "
-                class="mt-4 sm:mt-8 flex flex-col sm:flex-row justify-center gap-4"
+                class="mt-4 flex flex-wrap justify-center gap-3 sm:mt-8"
               >
                 <template v-if="!timer.isPaused.value">
-                  <button @click="timer.pause()" class="btn-warning btn-action">
+                  <button @click="pauseSession" class="btn-primary btn-action min-h-12 flex-[2] sm:flex-none">
                     <span class="flex items-center gap-2 justify-center">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -444,7 +448,7 @@
                   </button>
                 </template>
                 <template v-else>
-                  <button @click="timer.resume()" class="btn-primary btn-action">
+                  <button @click="resumeSession" class="btn-primary btn-action min-h-12 flex-[2] sm:flex-none">
                     <span class="flex items-center gap-2 justify-center">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -471,7 +475,7 @@
                   </button>
                 </template>
 
-                <button @click="confirmExit" class="btn-danger btn-action">
+                <button @click="confirmExit" class="practice-stop flex-1 sm:flex-none">
                   <span class="flex items-center gap-2 justify-center">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -505,6 +509,7 @@
       <!-- Configuration Modal -->
       <div
         v-if="showConfigModal"
+        ref="configDialogRef"
         role="dialog"
         aria-modal="true"
         aria-labelledby="configure-practice-title"
@@ -512,18 +517,18 @@
         @click.self="showConfigModal = false"
       >
         <div
-          class="card-solid max-w-4xl w-full my-4 sm:my-8 animate-scale-in max-h-[95vh] sm:max-h-[90vh] overflow-y-auto !p-4 sm:!p-6"
+          class="card-solid grid max-h-[calc(100dvh-1rem)] w-full max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden !p-0 animate-scale-in sm:max-h-[90dvh]"
         >
           <!-- Modal Header -->
           <div
             data-testid="configure-practice-header"
-            class="configuration-header sticky top-0 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 py-4 sm:py-5 mb-6 sm:mb-8 border-b border-slate-700/50 flex items-center justify-between z-10"
+            class="flex items-center justify-between gap-3 border-b border-line-subtle bg-surface-card px-4 py-2 sm:px-6 sm:py-3"
           >
             <div class="flex items-center gap-3">
-              <div class="settings-icon w-10 h-10 rounded-xl flex items-center justify-center">
+              <div class="settings-icon w-10 h-10 shrink-0 rounded-xl flex items-center justify-center">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="w-5 h-5 text-white"
+                  class="w-5 h-5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -543,15 +548,15 @@
                 </svg>
               </div>
               <div>
-                <h2 id="configure-practice-title" class="text-xl font-bold text-white">Configure Practice</h2>
-                <p class="text-sm text-slate-400">Customize your breathing pattern</p>
+                <h2 id="configure-practice-title" class="text-xl font-bold text-primary">Configure Practice</h2>
+                <p class="text-sm text-muted">Customize your breathing pattern</p>
               </div>
             </div>
             <button
               data-testid="close-practice-settings"
               @click="showConfigModal = false"
               aria-label="Close practice settings"
-              class="min-h-11 min-w-11 p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
+              class="min-h-11 min-w-11 shrink-0 p-2 rounded-lg hover:bg-surface-raised text-muted hover:text-primary transition-colors"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -566,148 +571,14 @@
           </div>
 
           <!-- Configuration Content -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Basic Timing -->
-            <div class="space-y-5">
-              <h3 class="font-semibold text-slate-200 flex items-center gap-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="w-5 h-5 text-blue-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                Breathing Timing
-              </h3>
-
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="form-label">Inhale (sec)</label>
-                  <input v-model.number="config.inhaleTime" type="number" min="1" max="60" class="form-input" />
-                </div>
-                <div>
-                  <label class="form-label">Inhale Hold</label>
-                  <input v-model.number="config.inhaleHoldTime" type="number" min="0" max="60" class="form-input" />
-                </div>
-                <div>
-                  <label class="form-label">Exhale (sec)</label>
-                  <input v-model.number="config.exhaleTime" type="number" min="1" max="60" class="form-input" />
-                </div>
-                <div>
-                  <label class="form-label">Exhale Hold</label>
-                  <input v-model.number="config.exhaleHoldTime" type="number" min="0" max="60" class="form-input" />
-                </div>
-              </div>
-
-              <div>
-                <label class="form-label">Repetitions per Set</label>
-                <input v-model.number="config.repetitions" type="number" min="1" max="100" class="form-input" />
-              </div>
-            </div>
-
-            <!-- Extended Hold & Sets -->
-            <div class="space-y-5">
-              <h3 class="font-semibold text-slate-200 flex items-center gap-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="w-5 h-5 text-purple-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
-                Extended Hold
-              </h3>
-
-              <div class="flex items-center gap-3">
-                <button
-                  @click="config.extendedHoldEnabled = !config.extendedHoldEnabled"
-                  :class="['toggle', config.extendedHoldEnabled ? 'toggle-enabled' : 'toggle-disabled']"
-                >
-                  <span
-                    :class="[
-                      'toggle-knob',
-                      config.extendedHoldEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled',
-                    ]"
-                  />
-                </button>
-                <span class="text-slate-300">Enable Extended Hold</span>
-              </div>
-
-              <template v-if="config.extendedHoldEnabled">
-                <div class="grid grid-cols-2 gap-4">
-                  <div>
-                    <label class="form-label">Hold Type</label>
-                    <select v-model="config.extendedHoldType" class="form-select">
-                      <option value="INHALE">Inhale Hold</option>
-                      <option value="EXHALE">Exhale Hold</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="form-label">Mode</label>
-                    <select v-model="config.extendedHoldMode" class="form-select">
-                      <option value="TOLERANCE">Tolerance</option>
-                      <option value="TIMED">Timed</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div v-if="config.extendedHoldMode === 'TIMED'">
-                  <label class="form-label">Hold Duration (seconds)</label>
-                  <input
-                    v-model.number="config.extendedHoldDuration"
-                    type="number"
-                    min="1"
-                    max="300"
-                    class="form-input"
-                  />
-                </div>
-
-                <!-- Second Extended Hold -->
-                <div class="pt-4 border-t border-slate-700/50">
-                  <div class="flex items-center gap-3 mb-3">
-                    <button
-                      @click="config.secondExtendedHoldEnabled = !config.secondExtendedHoldEnabled"
-                      :class="['toggle', config.secondExtendedHoldEnabled ? 'toggle-enabled' : 'toggle-disabled']"
-                    >
-                      <span
-                        :class="[
-                          'toggle-knob',
-                          config.secondExtendedHoldEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled',
-                        ]"
-                      />
-                    </button>
-                    <span class="text-slate-300">Second Extended Hold</span>
-                  </div>
-
-                  <div v-if="config.secondExtendedHoldEnabled">
-                    <label class="form-label">Second Hold Type</label>
-                    <select v-model="config.secondExtendedHoldType" class="form-select">
-                      <option value="INHALE">Inhale Hold</option>
-                      <option value="EXHALE">Exhale Hold</option>
-                    </select>
-                  </div>
-                </div>
-              </template>
-
-              <div class="pt-4 border-t border-slate-700/50">
-                <h3 class="font-semibold text-slate-200 flex items-center gap-2 mb-4">
+          <div data-testid="configure-practice-body" class="min-h-0 overflow-y-auto overscroll-contain scroll-pb-24 px-4 pb-2 pt-4 sm:px-6 sm:pt-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <!-- Basic Timing -->
+              <div class="space-y-5">
+                <h3 class="font-semibold text-primary flex items-center gap-2">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    class="w-5 h-5 text-emerald-400"
+                    class="w-5 h-5 text-sand"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -716,185 +587,364 @@
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  Sets
+                  Breathing Timing
                 </h3>
-                <div class="space-y-4">
-                  <label class="form-label">Target Sets (0 = unlimited)</label>
-                  <input v-model.number="config.targetSets" type="number" min="0" max="20" class="form-input" />
+
+                <div class="grid grid-cols-2 gap-4">
                   <div>
-                    <label class="form-label" for="rest-between-sets">Rest between sets (seconds)</label>
-                    <input
-                      id="rest-between-sets"
-                      v-model.number="config.restBetweenSetsSeconds"
-                      name="restBetweenSetsSeconds"
-                      type="number"
-                      min="0"
-                      max="600"
-                      class="form-input"
-                    />
-                    <p class="mt-1 text-xs text-slate-400">0 waits for you to start the next set.</p>
+                    <label for="practice-inhale" class="form-label">Inhale (sec)</label>
+                    <input id="practice-inhale" v-model.number="config.inhaleTime" type="number" min="1" max="60" class="form-input" />
+                  </div>
+                  <div>
+                    <label for="practice-inhale-hold" class="form-label">Inhale Hold (sec)</label>
+                    <input id="practice-inhale-hold" v-model.number="config.inhaleHoldTime" type="number" min="0" max="60" class="form-input" />
+                  </div>
+                  <div>
+                    <label for="practice-exhale" class="form-label">Exhale (sec)</label>
+                    <input id="practice-exhale" v-model.number="config.exhaleTime" type="number" min="1" max="60" class="form-input" />
+                  </div>
+                  <div>
+                    <label for="practice-exhale-hold" class="form-label">Exhale Hold (sec)</label>
+                    <input id="practice-exhale-hold" v-model.number="config.exhaleHoldTime" type="number" min="0" max="60" class="form-input" />
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
 
-          <div class="mt-8 pt-6 border-t border-slate-700/50">
-            <label class="flex min-h-11 items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                data-testid="show-session-checkins"
-                class="h-4 w-4 accent-amber-400"
-                :checked="!skipEveryTime"
-                @change="setSkipEveryTime(!($event.target as HTMLInputElement).checked)"
-              />
-              <span class="font-semibold text-slate-200">Show session check-ins</span>
-            </label>
-            <p class="mt-2 text-sm text-slate-400">Ask how you feel before and after each practice.</p>
-            <p v-if="checkInPreferenceError" role="alert" class="mt-2 text-sm text-rose-100">{{ checkInPreferenceError }}</p>
-          </div>
-
-          <!-- Audio Settings -->
-          <div class="mt-8 pt-6 border-t border-slate-700/50 w-full">
-            <h3 class="font-semibold text-slate-200 flex items-center gap-2 mb-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="w-5 h-5 text-amber-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                />
-              </svg>
-              Audio
-            </h3>
-
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div class="flex items-center gap-3">
-                <button
-                  @click="config.soundEnabled = !config.soundEnabled"
-                  :class="['toggle', config.soundEnabled ? 'toggle-enabled' : 'toggle-disabled']"
-                >
-                  <span
-                    :class="['toggle-knob', config.soundEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled']"
-                  />
-                </button>
-                <span class="text-slate-300">Metronome (Click on count)</span>
-              </div>
-
-              <div class="w-full sm:w-auto">
-                <SoundThemeSelector :sound-enabled="config.soundEnabled" />
-              </div>
-            </div>
-
-            <div class="mt-4 space-y-3">
-              <div class="flex items-center gap-3">
-                <button
-                  @click="config.ttsEnabled = !config.ttsEnabled"
-                  :class="['toggle', config.ttsEnabled ? 'toggle-enabled' : 'toggle-disabled']"
-                >
-                  <span :class="['toggle-knob', config.ttsEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled']" />
-                </button>
-                <span class="text-slate-300">Voice guidance (TTS)</span>
-                <span v-if="!isTtsAvailable" class="text-xs text-slate-400">(not available)</span>
-              </div>
-
-              <div v-if="config.ttsEnabled" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label for="guidance-voice" class="form-label">Voice</label>
-                  <div class="relative">
-                    <select
-                      id="guidance-voice"
-                      v-model="config.ttsVoice"
-                      class="form-select"
-                      :disabled="!isTtsAvailable || loadingVoices"
-                    >
-                      <option v-if="loadingVoices" value="">Loading voices...</option>
-                      <option v-else v-for="voice in sortedVoices" :key="voice.voiceURI" :value="voice.voiceURI">
-                        {{ formatVoiceLabel(voice) }}
-                      </option>
-                    </select>
-                    <div v-if="loadingVoices" class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <svg
-                        class="animate-spin h-4 w-4 text-slate-400"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          class="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          stroke-width="4"
-                        ></circle>
-                        <path
-                          class="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                    </div>
-                  </div>
+                  <label for="practice-repetitions" class="form-label">Repetitions per Set</label>
+                  <input id="practice-repetitions" v-model.number="config.repetitions" type="number" min="1" max="100" class="form-input" />
+                </div>
+              </div>
+
+              <!-- Extended Hold & Sets -->
+              <div class="space-y-5">
+                <h3 class="font-semibold text-primary flex items-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-5 h-5 text-sand"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                  Extended Hold
+                </h3>
+
+                <div class="flex items-center gap-3">
                   <button
                     type="button"
-                    class="btn-secondary mt-2"
-                    :disabled="!isTtsAvailable || loadingVoices"
-                    @click="ttsService.speak('Full Breath In')"
+                    aria-label="Enable Extended Hold"
+                    :aria-pressed="config.extendedHoldEnabled"
+                    @click="config.extendedHoldEnabled = !config.extendedHoldEnabled"
+                    :class="['toggle', config.extendedHoldEnabled ? 'toggle-enabled' : 'toggle-disabled']"
                   >
-                    Preview voice
+                    <span
+                      :class="[
+                        'toggle-knob',
+                        config.extendedHoldEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled',
+                      ]"
+                    />
                   </button>
-                  <p v-if="!isTtsAvailable && !loadingVoices" class="text-xs text-slate-400 mt-2">
-                    Voice list unavailable on this platform.
-                  </p>
+                  <span class="text-secondary">Enable Extended Hold</span>
+                </div>
+
+                <template v-if="config.extendedHoldEnabled">
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="form-label">Hold Type</label>
+                      <select v-model="config.extendedHoldType" class="form-select">
+                        <option value="INHALE">Inhale Hold</option>
+                        <option value="EXHALE">Exhale Hold</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="form-label">Mode</label>
+                      <select v-model="config.extendedHoldMode" class="form-select">
+                        <option value="TOLERANCE">Tolerance</option>
+                        <option value="TIMED">Timed</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div v-if="config.extendedHoldMode === 'TIMED'">
+                    <label class="form-label">Hold Duration (sec)</label>
+                    <input
+                      v-model.number="config.extendedHoldDuration"
+                      type="number"
+                      min="1"
+                      max="300"
+                      class="form-input"
+                    />
+                  </div>
+
+                  <!-- Second Extended Hold -->
+                  <div class="pt-4 border-t border-line-subtle">
+                    <div class="flex items-center gap-3 mb-3">
+                      <button
+                        type="button"
+                        aria-label="Second Extended Hold"
+                        :aria-pressed="config.secondExtendedHoldEnabled"
+                        @click="config.secondExtendedHoldEnabled = !config.secondExtendedHoldEnabled"
+                        :class="['toggle', config.secondExtendedHoldEnabled ? 'toggle-enabled' : 'toggle-disabled']"
+                      >
+                        <span
+                          :class="[
+                            'toggle-knob',
+                            config.secondExtendedHoldEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled',
+                          ]"
+                        />
+                      </button>
+                      <span class="text-secondary">Second Extended Hold</span>
+                    </div>
+
+                    <template v-if="config.secondExtendedHoldEnabled">
+                      <div class="grid grid-cols-2 gap-4">
+                        <div>
+                          <label for="second-hold-type" class="form-label">Second Hold Type</label>
+                          <select id="second-hold-type" v-model="config.secondExtendedHoldType" class="form-select">
+                            <option value="INHALE">Inhale Hold</option>
+                            <option value="EXHALE">Exhale Hold</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label for="second-hold-mode" class="form-label">Second Hold Mode</label>
+                          <select id="second-hold-mode" v-model="config.secondExtendedHoldMode" class="form-select">
+                            <option value="TIMED">Timed</option>
+                            <option value="TOLERANCE">Tolerance</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div v-if="config.secondExtendedHoldMode === 'TIMED'" class="mt-4">
+                        <label for="second-hold-duration" class="form-label">Second Hold Duration (sec)</label>
+                        <input
+                          id="second-hold-duration"
+                          v-model.number="config.secondExtendedHoldDuration"
+                          type="number"
+                          min="1"
+                          max="300"
+                          class="form-input"
+                        />
+                      </div>
+                    </template>
+                  </div>
+                </template>
+
+                <div class="pt-4 border-t border-line-subtle">
+                  <h3 class="font-semibold text-primary flex items-center gap-2 mb-4">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-5 h-5 text-sage"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                      />
+                    </svg>
+                    Sets
+                  </h3>
+                  <div class="space-y-4">
+                    <label class="form-label">Target Sets (0 = unlimited)</label>
+                    <input v-model.number="config.targetSets" type="number" min="0" max="20" class="form-input" />
+                    <div>
+                      <label class="form-label" for="rest-between-sets">Rest between sets (sec)</label>
+                      <input
+                        id="rest-between-sets"
+                        v-model.number="config.restBetweenSetsSeconds"
+                        name="restBetweenSetsSeconds"
+                        type="number"
+                        min="0"
+                        max="600"
+                        class="form-input"
+                      />
+                      <p class="mt-1 text-xs text-muted">0 waits for you to start the next set.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
+
+            <div class="mt-8 pt-6 border-t border-line-subtle">
+              <label class="selectable-row flex min-h-12 items-center gap-3 rounded-xl border border-line-subtle bg-surface-inset px-3 py-2 hover:border-sage/45">
+                <input
+                  type="checkbox"
+                  data-testid="show-session-checkins"
+                  class="selectable-row-input"
+                  aria-describedby="practice-checkin-description"
+                  :checked="!skipEveryTime"
+                  @change="setSkipEveryTime(!($event.target as HTMLInputElement).checked)"
+                />
+                <span
+                  aria-hidden="true"
+                  :class="['toggle pointer-events-none shrink-0', !skipEveryTime ? 'toggle-enabled' : 'toggle-disabled']"
+                >
+                  <span :class="['toggle-knob', !skipEveryTime ? 'toggle-knob-enabled' : 'toggle-knob-disabled']" />
+                </span>
+                <span class="font-semibold text-primary">Show session check-ins</span>
+              </label>
+              <p id="practice-checkin-description" class="mt-2 text-sm text-muted">Ask how you feel before and after each practice.</p>
+              <p v-if="checkInPreferenceError" role="alert" class="mt-2 text-sm text-danger">{{ checkInPreferenceError }}</p>
+            </div>
+
+            <!-- Audio Settings -->
+            <div class="mt-8 pt-6 border-t border-line-subtle w-full">
+              <h3 class="font-semibold text-primary flex items-center gap-2 mb-4">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="w-5 h-5 text-clay"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                  />
+                </svg>
+                Audio
+              </h3>
+
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                  <button
+                    type="button"
+                    aria-label="Metronome (Click on count)"
+                    :aria-pressed="config.soundEnabled"
+                    @click="config.soundEnabled = !config.soundEnabled"
+                    :class="['toggle', config.soundEnabled ? 'toggle-enabled' : 'toggle-disabled']"
+                  >
+                    <span
+                      :class="['toggle-knob', config.soundEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled']"
+                    />
+                  </button>
+                  <span class="text-secondary">Metronome (Click on count)</span>
+                </div>
+
+                <div class="w-full sm:w-auto">
+                  <SoundThemeSelector :sound-enabled="config.soundEnabled" />
+                </div>
+              </div>
+
+              <div class="mt-4 space-y-3">
+                <div class="flex items-center gap-3">
+                  <button
+                    type="button"
+                    aria-label="Voice guidance (TTS)"
+                    :aria-pressed="config.ttsEnabled"
+                    @click="toggleVoiceGuidance"
+                    :class="['toggle', config.ttsEnabled ? 'toggle-enabled' : 'toggle-disabled']"
+                  >
+                    <span :class="['toggle-knob', config.ttsEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled']" />
+                  </button>
+                  <span class="text-secondary">Voice guidance (TTS)</span>
+                  <span v-if="!isTtsAvailable" class="text-xs text-muted">(not available)</span>
+                </div>
+
+                <div v-if="config.ttsEnabled" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label for="guidance-voice" class="form-label">Voice</label>
+                    <div class="relative">
+                      <select
+                        id="guidance-voice"
+                        v-model="config.ttsVoice"
+                        class="form-select"
+                        :disabled="!isTtsAvailable || loadingVoices"
+                      >
+                        <option v-if="loadingVoices" value="">Loading voices...</option>
+                        <option v-else v-for="voice in sortedVoices" :key="voice.voiceURI" :value="voice.voiceURI">
+                          {{ formatVoiceLabel(voice) }}
+                        </option>
+                      </select>
+                      <div v-if="loadingVoices" class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <svg
+                          class="animate-spin h-4 w-4 text-muted"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            class="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            stroke-width="4"
+                          ></circle>
+                          <path
+                            class="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn-secondary mt-2"
+                      :disabled="!isTtsAvailable || loadingVoices"
+                      @click="ttsService.speak('Full Breath In')"
+                    >
+                      Preview voice
+                    </button>
+                    <p v-if="!isTtsAvailable && !loadingVoices" class="text-xs text-muted mt-2">
+                      Voice list unavailable on this platform.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="canUseConfig" class="configuration-summary">
+              <PatternSummary :config="config" compact />
+            </div>
           </div>
 
-          <div v-if="canUseConfig" class="configuration-summary">
-            <PatternSummary :config="config" compact />
-          </div>
-
-          <!-- Action Buttons -->
-          <div class="mt-8 pt-6 border-t border-slate-700/50">
-            <div v-if="configSaveError" data-testid="config-save-error" role="alert" class="mb-4 text-sm text-amber-200">
+          <div class="sticky bottom-0 border-t border-line-subtle bg-surface-card px-4 py-2 shadow-[0_-12px_24px_-12px_rgba(16,15,12,0.85)] sm:px-6 sm:py-3">
+            <div v-if="configSaveError" data-testid="config-save-error" role="alert" class="mb-4 text-sm text-sand">
               {{ configSaveError }}
               <button data-testid="retry-config-save" class="btn-secondary mt-2" @click="persistCurrentConfig" :disabled="!canUseConfig">Retry saving settings</button>
             </div>
             <div
               v-if="configValidationError"
               data-testid="config-validation-error"
-              class="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+              class="mb-4 rounded-xl border border-clay/30 bg-clay/10 px-4 py-3 text-sm text-sand"
             >
               {{ configValidationError }}
             </div>
 
             <!-- Save Preset Section -->
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-              <div class="flex-1">
+            <div class="flex flex-wrap items-end gap-2">
+              <div class="w-full sm:min-w-40 sm:flex-1">
+                <label for="preset-name-input" class="mb-1 block text-xs font-medium text-[#b5b0a4]">
+                  Preset name
+                </label>
                 <input
+                  id="preset-name-input"
                   v-model="configName"
                   aria-label="Preset name"
                   type="text"
-                  placeholder="Enter a name to save this configuration..."
                   class="form-input"
                 />
               </div>
-              <button @click="saveConfig" class="btn-secondary whitespace-nowrap" :disabled="!canUseConfig">
+              <button @click="saveConfig" class="btn-secondary flex-1 px-2 sm:flex-none sm:px-4" :disabled="!canUseConfig">
                 <span class="flex items-center gap-2 justify-center">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    class="w-5 h-5"
+                    class="hidden size-5 shrink-0 sm:block"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -909,11 +959,11 @@
                   Save Preset
                 </span>
               </button>
-              <button @click="applyConfigAndClose" class="btn-primary whitespace-nowrap" :disabled="!canUseConfig">
+              <button @click="applyConfigAndClose" class="btn-primary flex-[1.3] px-2 sm:flex-none sm:px-4" :disabled="!canUseConfig">
                 <span class="flex items-center gap-2 justify-center">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    class="w-5 h-5"
+                    class="hidden size-5 shrink-0 sm:block"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -935,7 +985,7 @@
     </Teleport>
 
     <!-- Regular Configuration View (when not running) -->
-    <div class="space-y-4 sm:space-y-6">
+    <div class="space-y-4 sm:space-y-6 [@media(max-height:520px)]:space-y-2">
       <!-- Lab CTA (at bottom, after Start button) is rendered below -->
 
       <!-- Goal-based recommendation and repeat shortcuts -->
@@ -986,7 +1036,7 @@
             <p
               v-if="configValidationError"
               data-testid="quick-config-validation-error"
-              class="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+              class="rounded-xl border border-clay/30 bg-clay/10 px-4 py-3 text-sm text-sand"
             >
               {{ configValidationError }}
             </p>
@@ -1022,18 +1072,23 @@
       <!-- Lab CTA — compact, bottom placement -->
       <div
         v-if="showLabCta && !labCtaDismissed"
-        class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+        class="flex items-center justify-between rounded-xl border border-line-strong bg-surface-raised px-3"
       >
         <button
           @click="$emit('switch-tab', 'lab')"
-          class="text-xs text-white/40 hover:text-emerald-400 transition-colors"
+          class="min-h-11 text-left text-xs text-[#e5e0d5] transition-colors hover:text-sage"
         >
-          Explore <span class="font-medium text-white/60">Pulse Variability</span> →
+          Explore <span class="font-medium">Pulse Variability</span> →
         </button>
-        <button @click="dismissLabCta" class="text-white/20 hover:text-white/50 ml-3 shrink-0" aria-label="Dismiss">
+        <button
+          @click="dismissLabCta"
+          class="ml-2 grid min-h-[44px] min-w-[44px] shrink-0 place-items-center rounded-lg text-[#c9c4b8] transition-colors hover:bg-surface-card hover:text-[#f1eee5]"
+          aria-label="Dismiss"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="w-3.5 h-3.5"
+            aria-hidden="true"
+            class="size-4"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -1043,33 +1098,7 @@
         </button>
       </div>
 
-      <!-- Session Notes -->
-      <div v-if="currentSession && timer.phase.value === 'SESSION_COMPLETE'" class="card-solid animate-fade-in">
-        <h3 class="font-bold text-white mb-4 flex items-center gap-2">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-5 h-5 text-blue-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-            />
-          </svg>
-          Session Notes
-        </h3>
-        <textarea
-          v-model="sessionNotes"
-          rows="3"
-          class="form-input resize-none"
-          placeholder="Add any notes about this session..."
-        ></textarea>
-        <button @click="saveSessionNotes" class="mt-3 btn-secondary">Save Notes</button>
-      </div>
+
     </div>
 
     <Teleport to="body">
@@ -1107,8 +1136,13 @@ import PatternSummary from './PatternSummary.vue';
 import SoundThemeSelector from './SoundThemeSelector.vue';
 import RecommendedActions from './RecommendedActions.vue';
 import FeelingCheckIn from './FeelingCheckIn.vue';
-import { SKIP_CHECK_INS_STORAGE_KEY } from '@/constants/storageKeys';
+import {
+  LAB_CTA_DISMISSED_STORAGE_KEY,
+  LAST_CONFIG_STORAGE_KEY,
+  SKIP_CHECK_INS_STORAGE_KEY,
+} from '@/constants/storageKeys';
 import { useBreathingTimer, useStorage } from '../composables';
+import { useModalIsolation } from '../composables/useModalIsolation';
 import { useAppLifecycle } from '../composables/useAppLifecycle';
 import { useHrvStorage } from '../composables/useHrvStorage';
 import {
@@ -1125,9 +1159,8 @@ import {
   type TimerState,
   type UserGoal,
 } from '@breath-in-flow/shared';
+import { soundService } from '../services/soundService';
 import { ttsService } from '../services/ttsService';
-
-const LAST_CONFIG_KEY = 'herb_breathing_last_config';
 
 function readPreference(key: string): string | null {
   try {
@@ -1139,6 +1172,7 @@ function readPreference(key: string): string | null {
 }
 
 const storage = useStorage();
+const initialPracticeResetVersion = storage.practiceResetVersion.value;
 // Provide safe defaults for injected values to avoid test warnings when not provided
 const selectedConfig = inject<{ value: BreathingConfig | null } | null>('selectedConfig', null);
 // Provide a safe no-op default so tests that don't provide this injection won't warn
@@ -1147,17 +1181,56 @@ const clearSelectedConfig = inject('clearSelectedConfig', () => {}) as () => voi
 // UI state
 const showConfigModal = ref(false);
 const showStopConfirmation = ref(false);
-const showSuccessNotification = ref(false);
-const successMessage = ref('');
+const showNotification = ref(false);
+const notificationMessage = ref('');
+type NotificationTone = 'success' | 'error' | 'warning';
+const notificationTone = ref<NotificationTone>('success');
+const notificationStyles = {
+  success: { background: 'bg-sage/10', icon: 'text-sage' },
+  error: { background: 'bg-terracotta/10', icon: 'text-danger' },
+  warning: { background: 'bg-clay/10', icon: 'text-clay' },
+};
+const notificationStyle = computed(() => notificationStyles[notificationTone.value]);
+let notificationTimeout: ReturnType<typeof setTimeout> | undefined;
+
+function notify(message: string, tone: NotificationTone = 'success') {
+  clearTimeout(notificationTimeout);
+  notificationMessage.value = message;
+  notificationTone.value = tone;
+  showNotification.value = true;
+}
 const showOverwriteConfirmation = ref(false);
 const loadingVoices = ref(false);
 const sessionDialogRef = ref<HTMLElement | null>(null);
 const cancelStopButtonRef = ref<HTMLButtonElement | null>(null);
+const configDialogRef = ref<HTMLElement | null>(null);
+const stopConfirmationRef = ref<HTMLElement | null>(null);
+const overwriteConfirmationRef = ref<HTMLElement | null>(null);
+const notificationRef = ref<HTMLElement | null>(null);
+
+useModalIsolation(configDialogRef, showConfigModal, {
+  onEscape: () => { showConfigModal.value = false; },
+});
+useModalIsolation(stopConfirmationRef, showStopConfirmation, {
+  initialFocus: () => cancelStopButtonRef.value,
+  onEscape: () => { showStopConfirmation.value = false; },
+});
+useModalIsolation(overwriteConfirmationRef, showOverwriteConfirmation, {
+  onEscape: () => { showOverwriteConfirmation.value = false; },
+});
+useModalIsolation(notificationRef, showNotification, {
+  onEscape: () => { showNotification.value = false; },
+});
+
 // Lab CTA state
 const showLabCta = ref(false);
-const labCtaDismissed = ref(readPreference('lab-cta-dismissed') === 'true');
+const labCtaDismissed = ref(readPreference(LAB_CTA_DISMISSED_STORAGE_KEY) === 'true');
 
-const props = defineProps<{ goal?: UserGoal; openSettings?: boolean }>();
+const props = defineProps<{ goal?: UserGoal; openSettings?: boolean; editingPresetId?: string }>();
+const editingPresetId = ref(props.editingPresetId);
+watch(showConfigModal, (open) => {
+  if (!open) editingPresetId.value = undefined;
+});
 
 const emit = defineEmits<{
   'switch-tab': [tab: string];
@@ -1181,7 +1254,7 @@ function dismissLabCta() {
   showLabCta.value = false;
   labCtaDismissed.value = true;
   try {
-    localStorage.setItem('lab-cta-dismissed', 'true');
+    localStorage.setItem(LAB_CTA_DISMISSED_STORAGE_KEY, 'true');
   } catch (error) {
     console.warn('Unable to save the dismissed Lab suggestion:', error);
   }
@@ -1195,7 +1268,7 @@ const config = reactive<BreathingConfig>({
 const configName = ref('');
 
 // Restore persisted defaults before applying an explicit preset selection.
-const savedConfig = readPreference(LAST_CONFIG_KEY);
+const savedConfig = readPreference(LAST_CONFIG_STORAGE_KEY);
 if (savedConfig) {
   try {
     const parsed = JSON.parse(savedConfig, (key, value) =>
@@ -1314,7 +1387,7 @@ const afterCheckInError = ref('');
 
 // Register browser lifecycle and refresh voice availability on mount
 onMounted(async () => {
-  window.addEventListener('keydown', handleEscape);
+  window.addEventListener('keydown', handleKeydown);
 
   refreshVoices();
 
@@ -1337,10 +1410,11 @@ const configSaveError = ref('');
 function persistCurrentConfig() {
   if (saveConfigTimeout !== null) clearTimeout(saveConfigTimeout);
   saveConfigTimeout = null;
+  if (storage.practiceResetVersion.value !== initialPracticeResetVersion) return;
   const validConfig = getValidatedConfig();
   if (!validConfig) return;
   try {
-    localStorage.setItem(LAST_CONFIG_KEY, JSON.stringify(validConfig));
+    localStorage.setItem(LAST_CONFIG_STORAGE_KEY, JSON.stringify(validConfig));
     configSaveError.value = '';
   } catch {
     configSaveError.value = 'Your settings could not be saved. Free some device storage and try again.';
@@ -1414,8 +1488,7 @@ const timer = useBreathingTimer(config, {
       try {
         persistCompletedSets(currentSession.value.id!);
       } catch (error) {
-        successMessage.value = error instanceof Error ? error.message : 'This set could not be saved. Finish the session to retry.';
-        showSuccessNotification.value = true;
+        notify(error instanceof Error ? error.message : 'This set could not be saved. Finish the session to retry.', 'error');
       }
     }
   },
@@ -1515,9 +1588,10 @@ watch(
 );
 
 useAppLifecycle({
+  nativeOnly: true,
   onInactive: () => {
     if (timer.isRunning.value && !timer.isPaused.value) {
-      timer.pause();
+      pauseSession();
     }
   },
   onActive: () => {},
@@ -1525,7 +1599,8 @@ useAppLifecycle({
 
 // Cleanup watchers and services on unmount
 onUnmounted(() => {
-  window.removeEventListener('keydown', handleEscape);
+  window.removeEventListener('keydown', handleKeydown);
+  clearTimeout(notificationTimeout);
   document.body.style.overflow = bodyOverflowBeforeSession;
   void allowSleep();
   // Stop all TTS watchers
@@ -1535,6 +1610,11 @@ onUnmounted(() => {
   // Persist the final valid edit even when navigation beats the debounce.
   if (saveConfigTimeout !== null) persistCurrentConfig();
 });
+
+watch(storage.soundTheme, (theme) => {
+  config.soundTheme = theme;
+  soundService.setTheme(theme);
+}, { immediate: true, flush: 'sync' });
 
 // Watch for config changes from parent (when loading presets)
 watch(
@@ -1547,10 +1627,12 @@ watch(
         ttsVoice: newConfig.ttsVoice ?? config.ttsVoice,
       });
       configName.value = newConfig.name;
-      // Update sound theme in storage so the selector updates
-      if (newConfig.soundTheme) {
-        storage.setSoundTheme(newConfig.soundTheme);
+      try {
+        if (newConfig.soundTheme) storage.setSoundTheme(newConfig.soundTheme);
+      } catch {
+        notify('The preset’s sound theme could not be saved. Please try again.', 'error');
       }
+      config.soundTheme = storage.soundTheme.value;
       // Clear the selected config so it doesn't persist if user navigates away and back
       clearSelectedConfig?.();
     }
@@ -1593,30 +1675,29 @@ watch(
   { immediate: true }
 );
 
-watch(showStopConfirmation, async (visible) => {
-  if (visible) {
-    await nextTick();
-    cancelStopButtonRef.value?.focus();
-  } else if (isSessionVisible.value) {
-    await nextTick();
-    sessionDialogRef.value?.focus();
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    if (showBeforeCheckIn.value || showAfterCheckIn.value) return;
+    if (showOverwriteConfirmation.value || showNotification.value || showConfigModal.value || showStopConfirmation.value) {
+      handleSystemBack();
+    } else if (isSessionVisible.value && timer.phase.value !== 'SESSION_COMPLETE') {
+      confirmExit();
+    }
+    return;
   }
-});
 
-function handleEscape(event: KeyboardEvent) {
-  if (event.key !== 'Escape') return;
+  if (event.defaultPrevented || event.repeat || (event.key !== ' ' && event.key !== 'Enter')) return;
+  if (!isRunning.value || !isToleranceExtendedHold.value || timer.isPaused.value) return;
+  if (
+    showStopConfirmation.value || showOverwriteConfirmation.value || showConfigModal.value ||
+    showNotification.value || showBeforeCheckIn.value || showAfterCheckIn.value
+  ) return;
 
-  if (showStopConfirmation.value) {
-    showStopConfirmation.value = false;
-  } else if (showOverwriteConfirmation.value) {
-    showOverwriteConfirmation.value = false;
-  } else if (showSuccessNotification.value) {
-    showSuccessNotification.value = false;
-  } else if (showConfigModal.value) {
-    showConfigModal.value = false;
-  } else if (isSessionVisible.value && timer.phase.value !== 'SESSION_COMPLETE') {
-    confirmExit();
-  }
+  const target = event.target instanceof Element ? event.target : document.activeElement;
+  if (target?.closest('input, textarea, select, button, a[href], [role="button"], [contenteditable="true"]')) return;
+
+  event.preventDefault();
+  endExtendedHold();
 }
 
 function handleSystemBack(): boolean {
@@ -1628,8 +1709,8 @@ function handleSystemBack(): boolean {
     showOverwriteConfirmation.value = false;
     return true;
   }
-  if (showSuccessNotification.value) {
-    showSuccessNotification.value = false;
+  if (showNotification.value) {
+    showNotification.value = false;
     return true;
   }
   if (showConfigModal.value) {
@@ -1701,6 +1782,7 @@ function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScor
 function requestSessionStart(candidate: BreathingConfig) {
   pendingStartConfig.value = BreathingConfigSchema.parse({
     ...candidate,
+    soundTheme: storage.soundTheme.value,
     ttsVoice: candidate.ttsVoice ?? config.ttsVoice,
   });
   beforeCheckInError.value = '';
@@ -1769,9 +1851,7 @@ function finalizeCompletedSession(id: string): boolean {
     storage.completeSession(id);
   } catch (error) {
     completionSaveFailed.value = true;
-    successMessage.value =
-      error instanceof Error ? error.message : 'The completed session could not be saved. Please try again.';
-    showSuccessNotification.value = true;
+    notify(error instanceof Error ? error.message : 'The completed session could not be saved. Please try again.', 'error');
     return false;
   } finally {
     refreshCurrentSession(id);
@@ -1817,6 +1897,7 @@ function startExercise() {
 function handleRecommendedAdjust(sessionConfig: BreathingConfig) {
   Object.assign(config, {
     ...sessionConfig,
+    soundTheme: storage.soundTheme.value,
     ttsVoice: sessionConfig.ttsVoice ?? config.ttsVoice,
   });
   configName.value = sessionConfig.name;
@@ -1833,6 +1914,16 @@ function stopExercise() {
   currentSetData.value = null;
   sessionNotes.value = '';
   pendingCompletedSets.clear();
+}
+
+function pauseSession() {
+  soundService.setEnabled(false);
+  timer.pause();
+}
+
+function resumeSession() {
+  soundService.setEnabled(config.soundEnabled);
+  timer.resume();
 }
 
 function confirmExit() {
@@ -1852,7 +1943,12 @@ function exitWithoutSavingSession() {
   showStopConfirmation.value = false;
 
   if (currentSession.value?.id) {
-    storage.deleteSession(currentSession.value.id);
+    try {
+      storage.deleteSession(currentSession.value.id);
+    } catch {
+      notify('This session could not be deleted. Please try again.', 'error');
+      return;
+    }
   }
 
   stopExercise();
@@ -1868,18 +1964,16 @@ function saveIncompleteSession() {
       persistPartialSetProgress();
       storage.cancelSession(id);
     } catch (error) {
-      successMessage.value = error instanceof Error ? error.message : 'This session could not be saved. Please try again.';
-      showSuccessNotification.value = true;
+      notify(error instanceof Error ? error.message : 'This session could not be saved. Please try again.', 'error');
       return;
     } finally {
       refreshCurrentSession(id);
     }
 
     const setsCompleted = currentSession.value.completedSets || 0;
-    successMessage.value = `Session saved with ${setsCompleted} set${setsCompleted !== 1 ? 's' : ''} completed`;
-    showSuccessNotification.value = true;
-    setTimeout(() => {
-      showSuccessNotification.value = false;
+    notify(`Session saved with ${setsCompleted} set${setsCompleted !== 1 ? 's' : ''} completed`);
+    notificationTimeout = setTimeout(() => {
+      showNotification.value = false;
     }, 3000);
   }
 
@@ -1939,8 +2033,7 @@ function saveConfig() {
   if (!validatedConfig) return;
 
   if (!configName.value.trim()) {
-    successMessage.value = 'Please enter a configuration name';
-    showSuccessNotification.value = true;
+    notify('Please enter a preset name.', 'warning');
     return;
   }
 
@@ -1948,20 +2041,22 @@ function saveConfig() {
   const existingConfigs = storage.getAllConfigs();
   const existingConfig = existingConfigs?.find((c) => c.name.toLowerCase() === configName.value.trim().toLowerCase());
 
+  if (editingPresetId.value) {
+    if (existingConfig && existingConfig.id !== editingPresetId.value) {
+      notify('Another preset already uses this name. Choose a different name.', 'warning');
+      return;
+    }
+    savePreset(validatedConfig, editingPresetId.value);
+    return;
+  }
+
   if (existingConfig) {
     // Show confirmation modal to overwrite
     showOverwriteConfirmation.value = true;
     return;
   }
 
-  // Save the new config
-  storage.createConfig({
-    ...CreateBreathingConfigSchema.parse(validatedConfig),
-    name: configName.value.trim(),
-  });
-
-  successMessage.value = 'Configuration saved!';
-  showSuccessNotification.value = true;
+  savePreset(validatedConfig);
 }
 
 function confirmOverwrite() {
@@ -1978,26 +2073,40 @@ function confirmOverwrite() {
   // Preserve the preset identity so historical sessions keep their config link.
   const existingConfigs = storage.getAllConfigs();
   const existingConfig = existingConfigs?.find((c) => c.name.toLowerCase() === configName.value.trim().toLowerCase());
-  const updatedConfig = {
+  savePreset(validatedConfig, existingConfig?.id);
+}
+
+function savePreset(validatedConfig: BreathingConfig, existingId?: string) {
+  const input = {
     ...CreateBreathingConfigSchema.parse(validatedConfig),
     name: configName.value.trim(),
   };
-
-  if (existingConfig?.id) {
-    storage.updateConfig(existingConfig.id, updatedConfig);
-  } else {
-    storage.createConfig(updatedConfig);
+  try {
+    if (existingId) {
+      const updated = storage.updateConfig(existingId, input);
+      if (existingId === editingPresetId.value) {
+        if (!updated) {
+          notify('This preset no longer exists.', 'error');
+          return;
+        }
+        config.name = updated.name;
+      }
+    } else {
+      storage.createConfig(input);
+    }
+    notify('Configuration saved!');
+  } catch {
+    notify('Your preset could not be saved. Please try again.', 'error');
   }
-
-  successMessage.value = 'Configuration saved!';
-  showSuccessNotification.value = true;
 }
 
 function saveSessionNotes() {
-  if (currentSession.value) {
-    storage.updateSession(currentSession.value.id!, { notes: sessionNotes.value });
-    successMessage.value = 'Notes saved!';
-    showSuccessNotification.value = true;
+  if (!currentSession.value?.id) return;
+  try {
+    storage.updateSession(currentSession.value.id, { notes: sessionNotes.value });
+    notify('Notes saved!');
+  } catch {
+    notify('Your session notes could not be saved. Please try again.', 'error');
   }
 }
 
@@ -2011,10 +2120,7 @@ async function refreshVoices() {
     if (config.ttsVoice && hasDeviceVoices && !voices.some((v) => v.voiceURI === config.ttsVoice)) {
       config.ttsVoice = undefined;
     }
-    if (!config.ttsVoice && hasVoices) {
-      const preferred = voices.find((v) => v.lang?.toLowerCase().startsWith('en'))?.voiceURI ?? voices[0].voiceURI;
-      config.ttsVoice = preferred;
-    }
+    selectDefaultVoice();
     if (config.ttsVoice) {
       ttsService.setVoiceByUri(config.ttsVoice);
     } else if (!hasVoices) {
@@ -2023,6 +2129,17 @@ async function refreshVoices() {
   } finally {
     loadingVoices.value = false;
   }
+}
+
+function selectDefaultVoice() {
+  if (!config.ttsEnabled || config.ttsVoice) return;
+  const voices = ttsVoices.value;
+  config.ttsVoice = (voices.find((voice) => voice.lang?.toLowerCase().startsWith('en')) ?? voices[0])?.voiceURI;
+}
+
+function toggleVoiceGuidance() {
+  config.ttsEnabled = !config.ttsEnabled;
+  selectDefaultVoice();
 }
 
 function getPhaseDurationSeconds(phase: BreathingPhase, state: TimerState): number {

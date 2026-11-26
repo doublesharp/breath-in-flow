@@ -61,6 +61,25 @@ async function assertMobileCompliance(page: Page, surface: string) {
       }
       return document.documentElement.scrollHeight > document.documentElement.clientHeight;
     };
+    const canScrollIntoViewHorizontally = (element: HTMLElement, rect: DOMRect) => {
+      let parent = element.parentElement;
+      while (parent) {
+        const bounds = parent.getBoundingClientRect();
+        if (
+          /^(auto|scroll)$/.test(getComputedStyle(parent).overflowX) &&
+          parent.scrollWidth > parent.clientWidth &&
+          bounds.left >= -1 &&
+          bounds.right <= window.innerWidth + 1 &&
+          rect.width <= parent.clientWidth &&
+          rect.left >= bounds.left - parent.scrollLeft - 1 &&
+          rect.right <= bounds.left - parent.scrollLeft + parent.scrollWidth + 1
+        ) {
+          return true;
+        }
+        parent = parent.parentElement;
+      }
+      return false;
+    };
 
     for (const element of candidates) {
       const style = getComputedStyle(element);
@@ -110,7 +129,10 @@ async function assertMobileCompliance(page: Page, surface: string) {
         .trim()
         .replace(/\s+/g, ' ')
         .slice(0, 80);
-      if (effectiveRect.left < -1 || effectiveRect.right > window.innerWidth + 1) {
+      if (
+        (effectiveRect.left < -1 || effectiveRect.right > window.innerWidth + 1) &&
+        !canScrollIntoViewHorizontally(element, effectiveRect)
+      ) {
         violations.push({
           element: element.tagName.toLowerCase(),
           height: Math.round(effectiveRect.height),
@@ -179,6 +201,70 @@ test('practice starts above the fold and the routine library opens settings dire
   await page.getByRole('button', { name: 'Practice breathing exercises' }).click();
   await expect(page.getByTestId('practice-panel')).toBeVisible();
   await expect(configuration).not.toBeVisible();
+});
+
+test('preset editing and local data erasure stay usable on a narrow phone', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'android-phone', 'Phone-only compliance path');
+  await page.setViewportSize({ width: 360, height: 740 });
+  await completeOnboarding(page);
+
+  const configuration = page.getByRole('dialog', { name: 'Configure Practice' });
+  const name = configuration.getByRole('textbox', { name: 'Preset name' });
+  await page.getByRole('button', { name: 'Configure practice' }).click();
+  await name.fill('Evening reset');
+  await configuration.getByRole('button', { name: 'Save Preset' }).click();
+  await page.getByRole('button', { name: 'OK', exact: true }).click();
+  await configuration.getByRole('button', { name: 'Close practice settings' }).click();
+
+  const checkTarget = async (target: ReturnType<Page['locator']>) => {
+    await expect(target).toBeVisible();
+    await expect.poll(() => target.evaluate((element) => {
+      const { width, height } = element.getBoundingClientRect();
+      return Math.min(width, height);
+    })).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+  };
+
+  await page.getByRole('button', { name: 'Manage breathing presets' }).click();
+  const edit = page.getByRole('button', { name: 'Edit Evening reset' });
+  await checkTarget(edit);
+  await edit.click();
+  await expect(name).toHaveValue('Evening reset');
+  await configuration.getByRole('button', { name: 'Close practice settings' }).click();
+
+  await page.getByRole('button', { name: 'Open help' }).click();
+  const help = page.getByRole('dialog', { name: 'Help & Guide' });
+  await help.getByRole('button', { name: 'Data', exact: true }).click();
+  const policy = help.getByRole('link', { name: 'Read the privacy policy' });
+  await checkTarget(policy);
+  const [policyPage] = await Promise.all([page.waitForEvent('popup'), policy.click()]);
+  await expect(policyPage.getByRole('heading', { name: 'Privacy Policy & Wellness Safety' })).toBeVisible();
+  await policyPage.close();
+
+  const erase = help.getByTestId('erase-all-data');
+  await checkTarget(erase);
+  await erase.click();
+  const confirmation = help.getByRole('alertdialog', { name: 'Erase all local data?' });
+  const cancel = confirmation.getByRole('button', { name: 'Cancel' });
+  await expect(cancel).toBeFocused();
+  await checkTarget(cancel);
+  await page.keyboard.press('Escape');
+  await expect(confirmation).toBeHidden();
+  await expect(help).toBeVisible();
+  await expect(erase).toBeFocused();
+  await erase.click();
+  const confirm = confirmation.getByRole('button', { name: 'Erase data' });
+  await checkTarget(confirm);
+  await confirm.click();
+  await expect(help.getByRole('status')).toHaveText('All local data was erased.');
+  await help.getByRole('button', { name: 'Close help' }).click();
+
+  const onboarding = page.getByRole('dialog', { name: 'What brings you here?' });
+  await expect(onboarding).toBeVisible();
+  await onboarding.getByTestId('goal-relax').check();
+  await onboarding.getByTestId('save-goal').click();
+  await page.getByRole('button', { name: 'Manage breathing presets' }).click();
+  await expect(page.getByText('No saved configurations yet.')).toBeVisible();
 });
 
 test('gradient follows breathing pressure and freezes on pause or reduced motion', async ({
@@ -264,8 +350,20 @@ test('primary phone surfaces meet the mobile interaction contract', async ({ pag
   await assertMobileCompliance(page, 'Analytics');
 
   await page.getByRole('button', { name: 'Open help' }).click();
-  await expect(page.getByRole('dialog', { name: 'Help & Guide' })).toBeVisible();
+  const help = page.getByRole('dialog', { name: 'Help & Guide' });
+  await expect(help).toBeVisible();
   await assertMobileCompliance(page, 'Help');
+  await expect(help.locator('.help-tab-strip')).toHaveClass(/help-tab-strip-overflow/);
+  const scrollRight = help.getByRole('button', { name: 'Scroll help topics right' });
+  await expect(scrollRight).toBeVisible();
+  await scrollRight.click();
+  await expect.poll(() => help.locator('.help-tabs').evaluate((strip) => strip.scrollLeft)).toBeGreaterThan(0);
+  const tips = help.getByRole('button', { name: 'Tips', exact: true });
+  await tips.focus();
+  await expect(tips).toBeInViewport({ ratio: 1 });
+  await expect(scrollRight).toBeHidden();
+  await tips.click();
+  await expect(help.getByRole('heading', { name: 'Building Your Practice' })).toBeVisible();
 });
 
 test('wide header and Configure Practice spacing remain responsive', async ({ page }, testInfo) => {
@@ -292,5 +390,30 @@ test('Configure Practice remains usable in landscape with enlarged text', async 
   await expect(
     configuration.getByRole('button', { name: 'Close practice settings' })
   ).toBeInViewport();
+  await expect(configuration.getByRole('button', { name: 'Use these settings' })).toBeInViewport({
+    ratio: 1,
+  });
   await assertMobileCompliance(page, 'Landscape Configure Practice');
+});
+
+test('Help tabs fit in one row on tablet and desktop', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium', 'Tablet and desktop widths');
+  await completeOnboarding(page);
+  await page.getByRole('button', { name: 'Open help' }).click();
+  const help = page.getByRole('dialog', { name: 'Help & Guide' });
+  const tabs = help.locator('.help-tabs');
+  await expect(tabs.getByRole('button')).toHaveCount(7);
+
+  for (const width of [768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() => tabs.evaluate((strip) => strip.scrollWidth - strip.clientWidth))
+      .toBe(0);
+    await expect(tabs.getByRole('button', { name: 'Data', exact: true })).toBeInViewport({
+      ratio: 1,
+    });
+    await expect(tabs.getByRole('button', { name: 'Tips', exact: true })).toBeInViewport({
+      ratio: 1,
+    });
+  }
 });

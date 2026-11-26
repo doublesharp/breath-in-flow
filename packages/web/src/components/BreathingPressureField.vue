@@ -9,14 +9,14 @@
   >
     <defs>
       <radialGradient :id="backdropId" cx="46%" cy="43%" r="62%">
-        <stop offset="0%" stop-color="#24413c" />
-        <stop offset="55%" stop-color="#142d2a" />
-        <stop offset="100%" stop-color="#091a19" />
+        <stop offset="0%" stop-color="#374538" />
+        <stop offset="55%" stop-color="#29352a" />
+        <stop offset="100%" stop-color="#21261f" />
       </radialGradient>
       <radialGradient :id="tealId" cx="34%" cy="30%" r="68%">
-        <stop offset="0%" stop-color="#b8ead8" stop-opacity="0.92" />
-        <stop offset="48%" stop-color="#65b9a4" stop-opacity="0.58" />
-        <stop offset="100%" stop-color="#205c55" stop-opacity="0" />
+        <stop offset="0%" stop-color="#c5d9c0" stop-opacity="0.92" />
+        <stop offset="48%" stop-color="#8ca78b" stop-opacity="0.58" />
+        <stop offset="100%" stop-color="#586b50" stop-opacity="0" />
       </radialGradient>
       <radialGradient :id="warmId" cx="68%" cy="70%" r="64%">
         <stop offset="0%" stop-color="#f0d5a7" stop-opacity="0.88" />
@@ -24,9 +24,9 @@
         <stop offset="100%" stop-color="#623f35" stop-opacity="0" />
       </radialGradient>
       <radialGradient :id="centerVeilId" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#102725" stop-opacity="0.9" />
-        <stop offset="58%" stop-color="#102725" stop-opacity="0.54" />
-        <stop offset="100%" stop-color="#102725" stop-opacity="0" />
+        <stop offset="0%" stop-color="#272b22" stop-opacity="0.9" />
+        <stop offset="58%" stop-color="#272b22" stop-opacity="0.54" />
+        <stop offset="100%" stop-color="#272b22" stop-opacity="0" />
       </radialGradient>
       <filter :id="warpId" x="-25%" y="-25%" width="150%" height="150%">
         <feTurbulence type="fractalNoise" baseFrequency="0.018 0.026" numOctaves="2" seed="11" result="texture" />
