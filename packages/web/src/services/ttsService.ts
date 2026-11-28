@@ -10,6 +10,12 @@ const kokoroVoices: SpeechSynthesisVoice[] = kokoroCues.voices.map((voice) => ({
   default: voice.id === kokoroCues.defaultVoice,
 }));
 
+// The measured speech range includes a small margin around the spoken words.
+const playbackTimings: Record<
+  string,
+  Partial<Record<string, { start: number; end: number }>>
+> = kokoroCues.playbackTimings;
+
 type SpeakOptions = {
   targetDurationSeconds?: number;
 };
@@ -229,6 +235,15 @@ class TtsService {
       };
       audio.onerror = fallback;
       try {
+        const timing = playbackTimings[voice.id]?.[cue.id];
+        if (timing) {
+          audio.currentTime = timing.start;
+          if (duration && duration > 0) {
+            // Finish speaking slightly before the timer can replace the cue.
+            const speechRate = (timing.end - timing.start) / (duration * 0.95);
+            audio.playbackRate = Math.min(1.5, Math.max(1, speechRate));
+          }
+        }
         await audio.play();
       } catch {
         fallback();

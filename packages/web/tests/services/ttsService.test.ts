@@ -58,6 +58,7 @@ let audioInstances: Array<{
   play: ReturnType<typeof vi.fn>;
   pause: ReturnType<typeof vi.fn>;
   currentTime: number;
+  playbackRate: number;
   onerror: (() => void) | null;
 }>;
 const speakMock = vi.fn();
@@ -129,6 +130,7 @@ describe('ttsService', () => {
           play: vi.fn().mockResolvedValue(undefined),
           pause: vi.fn(),
           currentTime: 0,
+          playbackRate: 1,
           onerror: null,
         };
         audioInstances.push(audio);
@@ -326,6 +328,16 @@ describe('ttsService', () => {
     expect(audioInstances[0].src).toBe('/audio/kokoro/af_heart/inhale.mp3');
     expect(audioInstances[0].play).toHaveBeenCalledOnce();
     expect(speakMock).not.toHaveBeenCalled();
+  });
+
+  it('skips leading silence and fits the spoken direction into a one-second phase', async () => {
+    ttsService.setEnabled(true);
+    ttsService.setVoiceByUri('kokoro:am_michael');
+    await ttsService.speak('Full Breath In', { targetDurationSeconds: 1 });
+    const [audio] = audioInstances;
+    expect(audio.currentTime).toBeCloseTo(0.36);
+    expect((1.45 - audio.currentTime) / audio.playbackRate).toBeLessThan(1);
+    expect(audio.play).toHaveBeenCalledOnce();
   });
 
   it.each(['af_heart', 'af_bella', 'am_michael', 'bf_emma'])(

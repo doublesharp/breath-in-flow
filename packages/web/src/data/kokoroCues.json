@@ -1,5 +1,31 @@
 {
   "defaultVoice": "af_heart",
+  "playbackTimings": {
+    "af_heart": {
+      "inhale": { "start": 0.34, "end": 1.3 },
+      "exhale": { "start": 0.34, "end": 1.35 },
+      "hold": { "start": 0.38, "end": 0.96 },
+      "rest": { "start": 0.35, "end": 1.34 }
+    },
+    "af_bella": {
+      "inhale": { "start": 0.38, "end": 1.27 },
+      "exhale": { "start": 0.39, "end": 1.35 },
+      "hold": { "start": 0.39, "end": 0.95 },
+      "rest": { "start": 0.4, "end": 1.36 }
+    },
+    "am_michael": {
+      "inhale": { "start": 0.36, "end": 1.45 },
+      "exhale": { "start": 0.37, "end": 1.43 },
+      "hold": { "start": 0.35, "end": 1 },
+      "rest": { "start": 0.38, "end": 1.43 }
+    },
+    "bf_emma": {
+      "inhale": { "start": 0.21, "end": 1.36 },
+      "exhale": { "start": 0.2, "end": 1.37 },
+      "hold": { "start": 0.2, "end": 0.87 },
+      "rest": { "start": 0.22, "end": 1.44 }
+    }
+  },
   "voices": [
     {
       "id": "af_heart",
