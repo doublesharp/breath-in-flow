@@ -1133,6 +1133,79 @@ describe('BreathingPractice with real timer and storage', () => {
       ?.textContent?.trim();
   }
 
+  it('holds progress in the stop dialog and resumes only a running session', async () => {
+    const vm = await startRealPractice({ targetSets: 1 });
+    await vi.advanceTimersByTimeAsync(500);
+    await clickCheckInControl('session-header-exit');
+    expect(vm.timer.isPaused.value).toBe(true);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(persistedSession().status).toBe('IN_PROGRESS');
+    expect(persistedSession().sets).toHaveLength(0);
+
+    await clickCheckInControl('cancel-stop');
+    expect(vm.timer.isPaused.value).toBe(false);
+    await clickBodyButton('Pause');
+    await clickCheckInControl('session-header-exit');
+    await clickCheckInControl('cancel-stop');
+    expect(vm.timer.isPaused.value).toBe(true);
+  });
+
+  it('mutes each cue separately for the current session and keeps the choices across pause', async () => {
+    const vm = await startRealPractice({ inhaleTime: 4, exhaleTime: 4 });
+    const setMetronomeEnabled = vi.spyOn(soundService, 'setEnabled');
+    const metronome = () => document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="session-dialog"] [aria-label="Metronome"]'
+    )!;
+    const voice = () => document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="session-dialog"] [aria-label="Voice guidance"]'
+    )!;
+    expect(metronome()?.getAttribute('aria-pressed')).toBe('true');
+    expect(voice()?.getAttribute('aria-pressed')).toBe('true');
+    await clickBodyButton('Metronome On');
+    expect(setMetronomeEnabled).toHaveBeenLastCalledWith(false);
+    expect(voice().getAttribute('aria-pressed')).toBe('true');
+
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(speakMock).toHaveBeenLastCalledWith('Full Breath Out', expect.any(Object));
+    speakMock.mockClear();
+    await clickBodyButton('Voice guidance On');
+    expect(setTtsEnabledMock).toHaveBeenLastCalledWith(false);
+    await clickBodyButton('Pause');
+    await clickBodyButton('Resume');
+    expect(setMetronomeEnabled).toHaveBeenLastCalledWith(false);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(speakMock).not.toHaveBeenCalled();
+
+    await clickBodyButton('Metronome Off');
+    expect(setMetronomeEnabled).toHaveBeenLastCalledWith(true);
+    expect(voice().getAttribute('aria-pressed')).toBe('false');
+    expect(vm.timer.isRunning.value).toBe(true);
+    expect(persistedSession().configSnapshot).toMatchObject({ soundEnabled: true, ttsEnabled: true });
+    expect(JSON.parse(localStorage.getItem(LAST_CONFIG_STORAGE_KEY)!)).toMatchObject({
+      soundEnabled: true, ttsEnabled: true,
+    });
+  });
+
+  it('keeps the current audio settings when starting a recommended routine', async () => {
+    localStorage.setItem(LAST_CONFIG_STORAGE_KEY, JSON.stringify({
+      ...fullConfig('Muted practice'),
+      soundEnabled: false,
+      ttsEnabled: false,
+    }));
+    wrapper = mount(BreathingPractice, {
+      props: { goal: 'BUILD_CONSISTENCY' },
+      global: { stubs: ['BreathingVisualizer'] },
+    });
+    await flushPromises();
+    await wrapper.get('[data-testid="start-recommended"]').trigger('click');
+    expect(persistedSession().configSnapshot).toMatchObject({
+      name: 'Coherent Breathing',
+      soundEnabled: false,
+      ttsEnabled: false,
+    });
+    expect(speakMock).not.toHaveBeenCalled();
+  });
+
   it.each([0, 1])('freezes a manual finish with %ss rest when completion cannot be saved, then retries', async (rest) => {
     const vm = await startRealPractice({ restBetweenSetsSeconds: rest });
     await vi.advanceTimersByTimeAsync(2000);
@@ -1192,6 +1265,8 @@ describe('BreathingPractice with real timer and storage', () => {
     expect(persistedSession().sets[0].completedAt).toBeUndefined();
     write.mockRestore();
     await clickBodyButton('OK');
+    expect(vm.timer.isPaused.value).toBe(true);
+    await clickBodyButton('Resume');
 
     await vi.advanceTimersByTimeAsync(2000);
     expect(vm.timer.phase.value).toBe('SESSION_COMPLETE');
@@ -1215,6 +1290,7 @@ describe('BreathingPractice with real timer and storage', () => {
     await clickBodyButton('Save Session');
     expect(persistedSession().sets[0].completedRepetitions).toBe(1);
     await clickBodyButton('OK');
+    await clickBodyButton('Resume');
 
     await vi.advanceTimersByTimeAsync(2000);
     write.mockRestore();
@@ -1240,6 +1316,7 @@ describe('BreathingPractice with real timer and storage', () => {
     await clickBodyButton('OK');
     cancelWrite.mockRestore();
     const completedWrite = rejectSessionWrites((session) => session.sets.some((set) => !!set.completedAt));
+    await clickBodyButton('Resume');
 
     await vi.advanceTimersByTimeAsync(2000);
     expect(vm.timer.phase.value).toBe('SESSION_COMPLETE');
@@ -1318,6 +1395,7 @@ describe('BreathingPractice with real timer and storage', () => {
     expect(persistedSession().sets[0].extendedHolds).toHaveLength(1);
     write.mockRestore();
     await clickBodyButton('OK');
+    await clickBodyButton('Resume');
 
     await vi.advanceTimersByTimeAsync(2000);
     expect(vm.timer.phase.value).toBe('SESSION_COMPLETE');

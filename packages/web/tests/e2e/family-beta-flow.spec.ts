@@ -73,6 +73,15 @@ test('first recommended session completes, saves its check-in, and returns to Pr
   await beforeCheckIn.getByTestId('checkin-submit').click();
 
   const session = page.getByTestId('session-dialog');
+  const audio = session.getByRole('group', { name: 'Session audio' });
+  await expect(audio.getByRole('button', { name: 'Metronome' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(audio.getByRole('button', { name: 'Voice guidance' })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  );
   await expect(session).toBeVisible();
   await expect(session).toContainText('5s');
   await expect(session).toContainText('6 reps');
@@ -262,25 +271,44 @@ test('Kokoro cues decode locally and real guidance stops when practice pauses', 
         return clips.map((clip) => ({
           file: new URL(clip.src).pathname,
           playing: !clip.paused && clip.currentTime > 0,
-          time: clip.currentTime,
+          pastLeadIn: clip.currentTime >= 0.21,
           error: clip.error?.message,
         }));
       })
     )
     .toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ file: '/audio/kokoro/bf_emma/inhale.mp3', playing: true }),
+        expect.objectContaining({
+          file: '/audio/kokoro/bf_emma/inhale.mp3',
+          playing: true,
+          pastLeadIn: true,
+        }),
       ])
     );
   const session = page.getByTestId('session-dialog');
-  await session.getByRole('button', { name: /pause/i }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const clips = (window as unknown as { guidanceClips: HTMLAudioElement[] }).guidanceClips;
-        return clips.every((clip) => clip.paused);
-      })
-    )
-    .toBe(true);
+  await page.setViewportSize({ width: 320, height: 640 });
+  const metronome = session.getByRole('button', { name: 'Metronome' });
+  const voice = session.getByRole('button', { name: 'Voice guidance' });
+  for (const control of [metronome, voice]) {
+    await expect(control).toBeInViewport({ ratio: 1 });
+    expect((await control.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  }
+  await voice.click();
+  await expect(voice).toHaveAttribute('aria-pressed', 'false');
+  await expect(metronome).toHaveAttribute('aria-pressed', 'true');
+  const guidanceIsQuiet = () =>
+    page.evaluate(() =>
+      (window as unknown as { guidanceClips: HTMLAudioElement[] }).guidanceClips.every(
+        (clip) => clip.paused
+      )
+    );
+  await expect.poll(guidanceIsQuiet).toBe(true);
+  await expect(session.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+
+  await voice.click();
+  await page.clock.fastForward(5_000);
+  await expect.poll(guidanceIsQuiet).toBe(false);
+  await session.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect.poll(guidanceIsQuiet).toBe(true);
   await expect(session).toContainText('Paused');
 });

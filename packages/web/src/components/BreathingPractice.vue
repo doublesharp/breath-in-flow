@@ -12,7 +12,7 @@
         aria-labelledby="stop-session-title"
         aria-describedby="stop-session-description"
         class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        @click.self="showStopConfirmation = false"
+        @click.self="dismissStopConfirmation"
       >
         <div class="card-solid max-w-md w-full animate-scale-in">
           <div class="flex items-start gap-4">
@@ -42,7 +42,7 @@
                 <button
                   ref="cancelStopButtonRef"
                   data-testid="cancel-stop"
-                  @click="showStopConfirmation = false"
+                  @click="dismissStopConfirmation"
                   class="btn-secondary"
                 >
                   Cancel
@@ -148,14 +148,36 @@
       >
         <div class="min-h-screen p-4 sm:p-6 lg:p-8">
           <!-- Exit Button -->
-          <div class="sticky top-3 z-20 mb-3 flex justify-end pointer-events-none">
+          <div class="sticky top-3 z-20 mb-3 flex items-center justify-between gap-2 pointer-events-none">
+            <div
+              v-if="timer.isRunning.value && !completionSaveFailed"
+              role="group"
+              aria-label="Session audio"
+              class="flex flex-wrap gap-1.5 pointer-events-auto"
+            >
+              <button
+                v-for="control in sessionAudioControls"
+                :key="control.label"
+                type="button"
+                class="min-h-11 rounded-xl border px-2 py-1 text-xs font-semibold backdrop-blur-sm transition-colors"
+                :class="control.enabled
+                  ? 'border-sage/35 bg-surface-card/95 text-sage'
+                  : 'border-line-subtle bg-surface-card/95 text-secondary'"
+                :aria-label="control.label"
+                :aria-pressed="control.enabled"
+                @click="control.toggle"
+              >
+                {{ control.label }}
+                <span aria-hidden="true" class="ml-0.5 font-normal">{{ control.enabled ? 'On' : 'Off' }}</span>
+              </button>
+            </div>
             <button
               data-testid="session-header-exit"
               @click="timer.phase.value === 'SESSION_COMPLETE' ? resetExercise() : confirmExit()"
               :aria-label="timer.phase.value === 'SESSION_COMPLETE' ? 'Back to Practice' : 'Exit breathing session'"
               :title="timer.phase.value === 'SESSION_COMPLETE' ? 'Back to Practice' : 'Exit session'"
               :class="[
-                'min-h-11 rounded-xl transition-colors backdrop-blur-sm pointer-events-auto',
+                'ml-auto min-h-11 shrink-0 rounded-xl transition-colors backdrop-blur-sm pointer-events-auto',
                 timer.phase.value === 'SESSION_COMPLETE'
                   ? 'btn-primary flex items-center gap-2 px-4 py-2.5 font-semibold'
                   : 'min-w-11 border border-line-subtle bg-surface-card/90 p-2.5 text-secondary hover:bg-surface-raised hover:text-primary',
@@ -822,7 +844,7 @@
                 <div class="flex items-center gap-3">
                   <button
                     type="button"
-                    aria-label="Metronome (Click on count)"
+                    aria-label="Metronome"
                     :aria-pressed="config.soundEnabled"
                     @click="config.soundEnabled = !config.soundEnabled"
                     :class="['toggle', config.soundEnabled ? 'toggle-enabled' : 'toggle-disabled']"
@@ -831,7 +853,7 @@
                       :class="['toggle-knob', config.soundEnabled ? 'toggle-knob-enabled' : 'toggle-knob-disabled']"
                     />
                   </button>
-                  <span class="text-secondary">Metronome (Click on count)</span>
+                  <span class="text-secondary">Metronome</span>
                 </div>
 
                 <div class="w-full sm:w-auto">
@@ -993,7 +1015,7 @@
         v-if="goal && !isRunning"
         :goal="goal"
         :last-session="lastSession"
-        @start="requestSessionStart"
+        @start="startRecommendedSession"
         @adjust="handleRecommendedAdjust"
         @repeat="requestSessionStart"
         @open-lab="handleOpenLab"
@@ -1181,6 +1203,7 @@ const clearSelectedConfig = inject('clearSelectedConfig', () => {}) as () => voi
 // UI state
 const showConfigModal = ref(false);
 const showStopConfirmation = ref(false);
+let resumeAfterStopConfirmation = false;
 const showNotification = ref(false);
 const notificationMessage = ref('');
 type NotificationTone = 'success' | 'error' | 'warning';
@@ -1213,7 +1236,7 @@ useModalIsolation(configDialogRef, showConfigModal, {
 });
 useModalIsolation(stopConfirmationRef, showStopConfirmation, {
   initialFocus: () => cancelStopButtonRef.value,
-  onEscape: () => { showStopConfirmation.value = false; },
+  onEscape: dismissStopConfirmation,
 });
 useModalIsolation(overwriteConfirmationRef, showOverwriteConfirmation, {
   onEscape: () => { showOverwriteConfirmation.value = false; },
@@ -1352,6 +1375,13 @@ const sortedVoices = computed(() => {
 
 // Session state
 const currentSession = ref<Session | null>(null);
+const sessionMetronomeEnabled = ref(config.soundEnabled);
+const sessionVoiceEnabled = ref(config.ttsEnabled);
+const voiceGuidanceEnabled = computed(() => currentSession.value ? sessionVoiceEnabled.value : config.ttsEnabled);
+const sessionAudioControls = computed(() => [
+  { label: 'Metronome', enabled: sessionMetronomeEnabled.value, toggle: toggleSessionMetronome },
+  { label: 'Voice guidance', enabled: sessionVoiceEnabled.value, toggle: toggleSessionVoice },
+]);
 const currentSetData = ref<SessionSet | null>(null);
 const pendingCompletedSets = new Map<number, SessionSet>();
 const sessionNotes = ref('');
@@ -1437,7 +1467,7 @@ const ttsWatchStopHandles: (() => void)[] = [];
 
 ttsWatchStopHandles.push(
   watch(
-    () => config.ttsEnabled,
+    voiceGuidanceEnabled,
     (enabled) => {
       ttsService.setEnabled(enabled);
     },
@@ -1590,6 +1620,7 @@ watch(
 useAppLifecycle({
   nativeOnly: true,
   onInactive: () => {
+    resumeAfterStopConfirmation = false;
     if (timer.isRunning.value && !timer.isPaused.value) {
       pauseSession();
     }
@@ -1605,6 +1636,7 @@ onUnmounted(() => {
   void allowSleep();
   // Stop all TTS watchers
   ttsWatchStopHandles.forEach((stop) => stop());
+  soundService.setEnabled(false);
   // Reset TTS service
   ttsService.setEnabled(false);
   // Persist the final valid edit even when navigation beats the debounce.
@@ -1702,7 +1734,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 function handleSystemBack(): boolean {
   if (showStopConfirmation.value) {
-    showStopConfirmation.value = false;
+    dismissStopConfirmation();
     return true;
   }
   if (showOverwriteConfirmation.value) {
@@ -1758,6 +1790,8 @@ function startValidatedExercise(candidate: BreathingConfig, before?: FeelingScor
     beforeCheckInError.value = 'This session could not be saved. Please try again.';
     return false;
   }
+  sessionMetronomeEnabled.value = candidate.soundEnabled;
+  sessionVoiceEnabled.value = candidate.ttsEnabled;
   currentSession.value = session;
   completionSaveFailed.value = false;
   pendingCompletedSets.clear();
@@ -1894,9 +1928,19 @@ function startExercise() {
   requestSessionStart(validatedConfig);
 }
 
+function startRecommendedSession(sessionConfig: BreathingConfig) {
+  requestSessionStart({
+    ...sessionConfig,
+    soundEnabled: config.soundEnabled,
+    ttsEnabled: config.ttsEnabled,
+  });
+}
+
 function handleRecommendedAdjust(sessionConfig: BreathingConfig) {
   Object.assign(config, {
     ...sessionConfig,
+    soundEnabled: config.soundEnabled,
+    ttsEnabled: config.ttsEnabled,
     soundTheme: storage.soundTheme.value,
     ttsVoice: sessionConfig.ttsVoice ?? config.ttsVoice,
   });
@@ -1909,6 +1953,7 @@ function handleOpenLab() {
 }
 
 function stopExercise() {
+  soundService.setEnabled(false);
   timer.stop();
   currentSession.value = null;
   currentSetData.value = null;
@@ -1922,8 +1967,17 @@ function pauseSession() {
 }
 
 function resumeSession() {
-  soundService.setEnabled(config.soundEnabled);
+  soundService.setEnabled(sessionMetronomeEnabled.value);
   timer.resume();
+}
+
+function toggleSessionMetronome() {
+  sessionMetronomeEnabled.value = !sessionMetronomeEnabled.value;
+  if (!timer.isPaused.value) soundService.setEnabled(sessionMetronomeEnabled.value);
+}
+
+function toggleSessionVoice() {
+  sessionVoiceEnabled.value = !sessionVoiceEnabled.value;
 }
 
 function confirmExit() {
@@ -1931,7 +1985,16 @@ function confirmExit() {
     finishSession();
     return;
   }
+  resumeAfterStopConfirmation =
+    timer.isRunning.value && !timer.isPaused.value && timer.phase.value !== 'SET_COMPLETE';
+  if (resumeAfterStopConfirmation) pauseSession();
   showStopConfirmation.value = true;
+}
+
+function dismissStopConfirmation() {
+  showStopConfirmation.value = false;
+  if (resumeAfterStopConfirmation) resumeSession();
+  resumeAfterStopConfirmation = false;
 }
 
 function persistPartialSetProgress() {
@@ -1940,6 +2003,7 @@ function persistPartialSetProgress() {
 }
 
 function exitWithoutSavingSession() {
+  resumeAfterStopConfirmation = false;
   showStopConfirmation.value = false;
 
   if (currentSession.value?.id) {
@@ -1955,6 +2019,7 @@ function exitWithoutSavingSession() {
 }
 
 function saveIncompleteSession() {
+  resumeAfterStopConfirmation = false;
   showStopConfirmation.value = false;
 
   if (currentSession.value?.id) {
@@ -2142,25 +2207,6 @@ function toggleVoiceGuidance() {
   selectDefaultVoice();
 }
 
-function getPhaseDurationSeconds(phase: BreathingPhase, state: TimerState): number {
-  switch (phase) {
-    case 'INHALE':
-      return config.inhaleTime;
-    case 'EXHALE':
-      return config.exhaleTime;
-    case 'INHALE_HOLD':
-      return config.inhaleHoldTime;
-    case 'EXHALE_HOLD':
-      return config.exhaleHoldTime;
-    case 'EXTENDED_INHALE_HOLD':
-      return state.isFirstExtendedHold ? config.extendedHoldDuration : config.secondExtendedHoldDuration;
-    case 'EXTENDED_EXHALE_HOLD':
-      return state.isFirstExtendedHold ? config.extendedHoldDuration : config.secondExtendedHoldDuration;
-    default:
-      return 0;
-  }
-}
-
 function formatVoiceLabel(voice: SpeechSynthesisVoice): string {
   const parts: string[] = [];
   if (voice.name) parts.push(voice.name);
@@ -2171,9 +2217,9 @@ function formatVoiceLabel(voice: SpeechSynthesisVoice): string {
 }
 
 function announcePhase(phase: BreathingPhase, state: TimerState) {
-  if (!config.ttsEnabled) return;
+  if (!voiceGuidanceEnabled.value) return;
 
-  const durationSeconds = getPhaseDurationSeconds(phase, state);
+  const durationSeconds = state.totalPhaseTime > 0 ? state.currentTime : undefined;
   const phrases: Partial<Record<BreathingPhase, string>> = {
     INHALE: 'Full Breath In',
     EXHALE: 'Full Breath Out',

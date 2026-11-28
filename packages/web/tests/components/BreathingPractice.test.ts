@@ -452,7 +452,7 @@ describe('BreathingPractice.vue', () => {
     for (const [label, initial] of [
       ['Enable Extended Hold', false],
       ['Second Extended Hold', false],
-      ['Metronome (Click on count)', true],
+      ['Metronome', true],
       ['Voice guidance (TTS)', false],
     ] as const) {
       const toggle = settings.get(`button[type="button"][aria-label="${label}"]`);
@@ -1389,8 +1389,8 @@ describe('BreathingPractice.vue', () => {
       const onPhaseChange = lastTimerOptions?.onPhaseChange as
         ((phase: string, state: unknown) => void) | undefined;
       expect(onPhaseChange).toBeDefined();
-      onPhaseChange?.('INHALE', { totalPhaseTime: 4 });
-      expect(speakMock).toHaveBeenCalledWith('Full Breath In', { targetDurationSeconds: 4 });
+      onPhaseChange?.('INHALE', { currentTime: 2, totalPhaseTime: 4 });
+      expect(speakMock).toHaveBeenCalledWith('Full Breath In', { targetDurationSeconds: 2 });
 
       wrapper.unmount();
     });
