@@ -7,6 +7,17 @@ import { BreathingPhase, PHASE_INFO, DEFAULT_BREATHING_CONFIG } from '@breath-in
 afterEach(() => vi.unstubAllGlobals());
 
 describe('BreathingVisualizer', () => {
+  it('announces the phase without announcing each countdown change', async () => {
+    const wrapper = mount(BreathingVisualizer, {
+      props: { phase: 'INHALE', currentTime: 2, totalTime: 2, scale: 0.6, isRunning: true },
+    });
+    const announcement = wrapper.get('[role="status"]');
+    expect(announcement.text()).toBe('Inhale');
+    await wrapper.setProps({ currentTime: 1 });
+    expect(announcement.text()).toBe('Inhale');
+    await wrapper.setProps({ phase: 'EXHALE' });
+    expect(announcement.text()).toBe('Exhale');
+  });
   it('should render with correct phase label', () => {
     const wrapper = mount(BreathingVisualizer, {
       props: {
@@ -62,7 +73,12 @@ describe('BreathingVisualizer', () => {
     const circle = wrapper.get('.breathing-circle');
     const activeTransform = circle.attributes('style');
 
-    await wrapper.setProps({ phase: 'PAUSED', pausedPhase: 'EXHALE', scale: 0.8, isRunning: false });
+    await wrapper.setProps({
+      phase: 'PAUSED',
+      pausedPhase: 'EXHALE',
+      scale: 0.8,
+      isRunning: false,
+    });
     expect(circle.attributes('style')).toBe(activeTransform);
     expect(circle.classes()).toContain('breathing-circle-paused');
     expect(wrapper.get('.phase-pill').text()).toBe('Exhale · Paused');

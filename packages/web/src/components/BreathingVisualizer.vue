@@ -2,6 +2,8 @@
   <div class="flex flex-col items-center py-4 sm:py-8">
     <!-- Phase Label -->
     <div
+      role="status"
+      aria-atomic="true"
       :class="[
         'mb-4 rounded-full phase-pill px-6 py-2.5 text-center text-sm font-bold tracking-wider shadow-lg transition-all duration-500 sm:mb-8',
         { uppercase: phase !== 'PAUSED' },
