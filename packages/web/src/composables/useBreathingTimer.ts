@@ -24,7 +24,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
   let intervalId: ReturnType<typeof setInterval> | null = null;
   let phaseStartTime = 0; // Timestamp when current phase started
   let pausedElapsedMs = 0; // Preserve elapsed time, including any unsampled phase overflow
-  let lastSoundedSecond = -1; // Track last second we played a sound for
+  let nextBeatAt = 0;
 
   const phase = computed(() => state.value.phase);
   const currentTime = computed(() => state.value.currentTime);
@@ -123,20 +123,17 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
   function tick() {
     const now = performance.now();
-    let sounded = false;
+    // The metronome follows elapsed session time independently of the countdown.
+    // If a callback is delayed, play one beat and advance past missed beats.
+    if (hasActivePhase() && now >= nextBeatAt) {
+      nextBeatAt += (Math.floor((now - nextBeatAt) / 1000) + 1) * 1000;
+      if (!isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)) {
+        soundService.playClick();
+      }
+    }
     while (hasActivePhase()) {
       updateTime(now);
       if (isToleranceExtendedHold(state.value.phase, state.value.isFirstExtendedHold)) return;
-
-      const currentSecond = Math.ceil(state.value.currentTime);
-      if (currentSecond !== lastSoundedSecond) {
-        lastSoundedSecond = currentSecond;
-        if (!sounded) {
-          soundService.playClick();
-          sounded = true;
-        }
-      }
-
       if (state.value.currentTime > 0) return;
       // Carry the scheduled deadline forward, so fractional durations and late
       // callbacks do not add delay to every subsequent breathing phase.
@@ -308,8 +305,12 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
 
     // Set timestamp AFTER updating state
     phaseStartTime = startedAt;
-    // Initialize lastSoundedSecond to prevent immediate tick
-    lastSoundedSecond = Math.ceil(duration);
+    if (
+      startedAt + duration * 1000 > performance.now() ||
+      isToleranceExtendedHold(newPhase, state.value.isFirstExtendedHold)
+    ) {
+      soundService.playPhaseCue();
+    }
 
     options.onPhaseChange?.(newPhase, state.value);
   }
@@ -330,7 +331,9 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     };
 
     // Use setPhase to properly initialize phaseStartTime
-    setPhase('INHALE', config.inhaleTime);
+    const startedAt = performance.now();
+    nextBeatAt = startedAt + 1000;
+    setPhase('INHALE', config.inhaleTime, startedAt);
 
     // Start interval - it will handle all ticks automatically
     startInterval();
@@ -354,7 +357,9 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     state.value = { ...state.value, isPaused: false, phase: pausedPhase.value };
     pausedPhase.value = null;
 
-    phaseStartTime = performance.now() - pausedElapsedMs;
+    const resumedAt = performance.now() - pausedElapsedMs;
+    nextBeatAt += resumedAt - phaseStartTime;
+    phaseStartTime = resumedAt;
 
     if (hasActivePhase()) startInterval();
     options.onPhaseChange?.(state.value.phase, state.value);
@@ -366,7 +371,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
     pausedPhase.value = null;
     phaseStartTime = 0;
     pausedElapsedMs = 0;
-    lastSoundedSecond = -1;
+    nextBeatAt = 0;
     options.onPhaseChange?.('IDLE', state.value);
   }
 
@@ -387,6 +392,7 @@ export function useBreathingTimer(config: BreathingConfig, options: UseBreathing
   }
 
   function startNextSet(startedAt = performance.now()) {
+    if (state.value.phase === 'SET_COMPLETE') nextBeatAt = startedAt + 1000;
     state.value = {
       ...state.value,
       currentSet: state.value.currentSet + 1,

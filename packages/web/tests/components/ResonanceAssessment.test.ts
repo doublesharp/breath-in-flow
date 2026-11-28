@@ -56,7 +56,7 @@ vi.mock('../../src/services/permissionService', () => ({
 }));
 
 vi.mock('../../src/services/soundService', () => ({
-  soundService: { playClick: vi.fn(), setEnabled: vi.fn(), setTheme: vi.fn() },
+  soundService: { playClick: vi.fn(), playPhaseCue: vi.fn(), setEnabled: vi.fn(), setTheme: vi.fn() },
 }));
 
 vi.mock('../../src/services/ppgService', () => ({
@@ -153,6 +153,9 @@ describe('ResonanceAssessment', () => {
     expect(soundService.setTheme).toHaveBeenLastCalledWith('water');
 
     await wrapper.get('select').setValue('60');
+    await wrapper.get('[data-testid="assessment-audio-check"]').trigger('click');
+    expect(ttsService.speak).toHaveBeenLastCalledWith('Full Breath In');
+    vi.mocked(ttsService.speak).mockClear();
     vi.mocked(ttsService.setEnabled).mockClear();
     await wrapper.get('[data-testid="start-btn"]').trigger('click');
     await flushPromises();
@@ -161,15 +164,19 @@ describe('ResonanceAssessment', () => {
     const trial = ASSESSMENT_TRIALS[0];
     vi.mocked(ttsService.speak).mockClear();
     vi.mocked(soundService.playClick).mockClear();
+    vi.mocked(soundService.playPhaseCue).mockClear();
     vi.advanceTimersByTime(60_000);
     await flushPromises();
     expect(wrapper.text()).toContain('Follow the audio breathing cues');
     expect(wrapper.find('[data-testid="breathing-visualizer"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="sensor-breathing-phase"]').text()).toBe('Inhale');
     expect(ttsService.speak).toHaveBeenLastCalledWith('Full Breath In', { targetDurationSeconds: trial.inhaleTime });
     const clicksAtTrialStart = vi.mocked(soundService.playClick).mock.calls.length;
-    expect(clicksAtTrialStart).toBeGreaterThan(0);
+    expect(soundService.playPhaseCue).toHaveBeenCalled();
 
     vi.advanceTimersByTime(trial.inhaleTime * 1_000 + 100);
+    await flushPromises();
+    expect(wrapper.get('[data-testid="sensor-breathing-phase"]').text()).toBe('Exhale');
     expect(ttsService.speak).toHaveBeenLastCalledWith('Full Breath Out', { targetDurationSeconds: trial.exhaleTime });
     expect(vi.mocked(soundService.playClick).mock.calls.length).toBeGreaterThan(clicksAtTrialStart);
 
@@ -183,6 +190,7 @@ describe('ResonanceAssessment', () => {
     expect(ttsService.speak).not.toHaveBeenCalled();
 
     await wrapper.setProps({ ttsEnabled: true });
+    vi.mocked(ttsService.stop).mockClear();
     wrapper.unmount();
     expect(ttsService.stop).toHaveBeenCalledOnce();
     expect(ttsService.setEnabled).toHaveBeenLastCalledWith(false);

@@ -24,6 +24,22 @@
             </p>
           </div>
 
+          <div
+            v-if="timerConfig.ttsEnabled || timerConfig.soundEnabled"
+            class="mb-6 flex flex-wrap items-center gap-3"
+          >
+            <button
+              type="button"
+              data-testid="assessment-audio-check"
+              class="btn-secondary min-h-11"
+              :disabled="isAssessmentStartPending"
+              @click="previewAssessmentAudio"
+            >
+              Test audio
+            </button>
+            <p class="text-sm text-muted">Make sure you can hear the cue before positioning your phone.</p>
+          </div>
+
           <!-- Protocol Summary -->
           <div class="mb-6">
             <h3 class="font-semibold text-primary mb-2">Protocol</h3>
@@ -145,6 +161,14 @@
               {{ sensorInstructions }}
             </div>
             <div class="text-sm text-muted">Follow the audio breathing cues</div>
+            <div
+              data-testid="sensor-breathing-phase"
+              role="status"
+              aria-atomic="true"
+              class="text-xl font-semibold text-primary"
+            >
+              {{ timer.isRunning.value ? timer.phaseInfo.value.label : 'Getting ready' }}
+            </div>
             <div class="text-2xl font-mono text-primary">{{ formatTime(timer.currentTime.value) }}</div>
           </div>
 
@@ -688,18 +712,19 @@ function syncAudioPreferences() {
 onMounted(syncAudioPreferences);
 watch(() => [props.soundEnabled, props.soundTheme, props.ttsEnabled, props.ttsVoice], syncAudioPreferences);
 
+function previewAssessmentAudio() {
+  if (timerConfig.ttsEnabled) void ttsService.speak('Full Breath In');
+  else soundService.playPhaseCue();
+}
+
 const timer = useBreathingTimer(timerConfig, {
   onPhaseChange: (breathingPhase, state) => {
     if (phase.value !== 'WARMUP' && phase.value !== 'TRIAL_BREATHING') return;
     if (breathingPhase !== 'INHALE' && breathingPhase !== 'EXHALE') return;
 
-    // The timer ticks at phase boundaries after this first cue.
-    if (timerConfig.soundEnabled && breathingPhase === 'INHALE' && state.currentRepetition === 1) {
-      soundService.playClick();
-    }
     if (timerConfig.ttsEnabled) {
       const phrase = breathingPhase === 'INHALE' ? 'Full Breath In' : 'Full Breath Out';
-      void ttsService.speak(phrase, { targetDurationSeconds: state.totalPhaseTime });
+      void ttsService.speak(phrase, { targetDurationSeconds: state.currentTime });
     }
   },
   onSessionComplete: () => handlePhaseComplete(),
@@ -971,6 +996,7 @@ async function startAssessment() {
   isAssessmentStartPending.value = true;
 
   try {
+    ttsService.stop();
     sensorStatusMessage.value = '';
     if (selectedSensorMode.value !== 'none') {
       const permissions = await requestSensorPermissions(selectedSensorMode.value);

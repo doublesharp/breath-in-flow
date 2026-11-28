@@ -946,17 +946,24 @@ describe('useBreathingTimer', () => {
       expect(click).toHaveBeenCalledTimes(3);
     });
 
-    it('does not repeat clicks within the same displayed second', () => {
+    it('keeps one-second clicks through fractional phase changes and marks the boundary separately', () => {
       const click = vi.spyOn(soundService, 'playClick').mockImplementation(() => {});
-      const timer = useBreathingTimer({ ...config, inhaleTime: 2.5 });
+      const cue = vi.spyOn(soundService, 'playPhaseCue').mockImplementation(() => {});
+      const phaseTimes: number[] = [];
+      const start = performance.now();
+      const timer = useBreathingTimer(
+        { ...config, inhaleTime: 2.5, inhaleHoldTime: 0 },
+        { onPhaseChange: () => phaseTimes.push(performance.now() - start) }
+      );
       timer.start();
-      vi.advanceTimersByTime(400);
+      vi.advanceTimersByTime(999);
       expect(click).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(100);
-      expect(timer.displayTime.value).toBe('2');
-      expect(click).toHaveBeenCalledTimes(1);
-      vi.advanceTimersByTime(900);
-      expect(click).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1501);
+      expect(click).toHaveBeenCalledTimes(2);
+      expect(phaseTimes).toEqual([0, 2500]);
+      expect(cue).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(500);
+      expect(click).toHaveBeenCalledTimes(3);
     });
   });
 

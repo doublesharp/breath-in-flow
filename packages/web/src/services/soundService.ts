@@ -101,10 +101,22 @@ class SoundService {
   // ------------------------------------------------------------
 
   public playClick() {
+    this.playCue('beat');
+  }
+
+  public playPhaseCue() {
+    this.playCue('phase');
+  }
+
+  private playCue(cue: 'beat' | 'phase') {
     if (!this.isEnabled) return;
     const ctx = this.getContext();
     if (!ctx) return;
     const generation = ++this.playbackGeneration;
+    const play = () => {
+      if (cue === 'beat') this.playTick(ctx, 1.0);
+      else this.playPhaseTone(ctx);
+    };
 
     // Ensure context is running (important for Electron)
     if (ctx.state === 'suspended') {
@@ -112,15 +124,30 @@ class SoundService {
         .resume()
         .then(() => {
           if (this.isEnabled && generation === this.playbackGeneration) {
-            this.playTick(ctx, 1.0);
+            play();
           }
         })
         .catch(() => {
           // Silently fail - audio context couldn't resume
         });
     } else {
-      this.playTick(ctx, 1.0);
+      play();
     }
+  }
+
+  private playPhaseTone(ctx: AudioContext) {
+    const time = ctx.currentTime;
+    const tone = ctx.createOscillator();
+    tone.frequency.value = 880;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(0.22, time + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+    tone.connect(gain);
+    gain.connect(ctx.destination);
+    this.releaseOnEnd(tone, gain);
+    tone.start(time);
+    tone.stop(time + 0.15);
   }
 
   /**

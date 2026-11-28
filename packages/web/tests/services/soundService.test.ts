@@ -306,6 +306,20 @@ describe('soundService', () => {
     );
   });
 
+  it('plays a distinct phase tone only when the metronome is enabled', () => {
+    soundService.playPhaseCue();
+    expect(FakeAudioContext.instances).toHaveLength(0);
+    soundService.setEnabled(true);
+    soundService.playClick();
+    soundService.playPhaseCue();
+    const ctx = FakeAudioContext.instances[0];
+    const [beat, phase] = ctx._started;
+    expect(phase.frequency.value).toBeGreaterThan(beat.frequency.value);
+    expect(phase.onended).toBeTypeOf('function');
+    phase.onended!();
+    expect(phase.disconnect).toHaveBeenCalledOnce();
+  });
+
   it.each(['wood', 'water', 'wind', 'chimes'] as const)(
     'mixes the %s beat directly into the output alongside the quieter reverb',
     (theme) => {
