@@ -15,11 +15,14 @@ class SoundService {
     const feedback = ctx.createGain();
     const lp = ctx.createBiquadFilter();
 
+    // Play the beat immediately and leave headroom for the delayed reflections.
+    input.gain.value = 0.7;
     delay.delayTime.value = 0.12;
     feedback.gain.value = 0.06;
     lp.type = 'lowpass';
     lp.frequency.value = 1800;
 
+    input.connect(ctx.destination);
     input.connect(delay);
     delay.connect(feedback);
     feedback.connect(lp);

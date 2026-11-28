@@ -34,6 +34,7 @@ class FakeOscillator {
 class FakeGain {
   public disconnect = vi.fn();
   public gain = {
+    value: 1,
     setValueAtTime: vi.fn(),
     linearRampToValueAtTime: vi.fn(),
     exponentialRampToValueAtTime: vi.fn(),
@@ -304,6 +305,21 @@ describe('soundService', () => {
       envelope.exponentialRampToValueAtTime.mock.calls[0][1]
     );
   });
+
+  it.each(['wood', 'water', 'wind', 'chimes'] as const)(
+    'mixes the %s beat directly into the output alongside the quieter reverb',
+    (theme) => {
+      soundService.setTheme(theme);
+      soundService.setEnabled(true);
+      soundService.playClick();
+
+      const ctx = FakeAudioContext.instances[0];
+      const outputs = ctx._gains.filter((node) => node.connects.includes(ctx.destination));
+      expect(outputs).toHaveLength(2);
+      const [direct, reverb] = outputs;
+      expect(direct.gain.value).toBeGreaterThan(reverb.gain.value);
+    }
+  );
 
   it('cancels a pending click when sound is disabled and re-enabled', async () => {
     soundService.setEnabled(true);
