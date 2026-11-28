@@ -120,9 +120,9 @@ The app stores routines and sessions in localStorage, and measurements in Indexe
 | `pnpm build:win`     | Installer and portable EXE in `dist/win/`      |
 | `pnpm build:linux`   | AppImage and DEB in `dist/linux/`              |
 
-Desktop packaging uses the native tooling for the target platform. GitHub's [Build & Release workflow](.github/workflows/release.yml) builds desktop packages and Android APKs. Run it manually for development artifacts; pushing a `v*` tag also creates a draft release for review.
+Desktop packaging uses the native tooling for the target platform. GitHub's [Build & Release workflow](.github/workflows/release.yml) builds desktop packages and Android APKs. Run it manually for development artifacts. Pushing a `v*` tag builds and publishes a GitHub release.
 
-For a release, align the app version in the root and web `package.json`, `packages/shared/src/config.ts`, Android's `app/build.gradle`, and both configurations in the iOS Xcode project. Native build numbers use `major * 10000 + minor * 100 + patch`, with minor and patch at most 99. Shared and database package versions are independent. Check metadata with `bash scripts/tests/build-script.test.sh version` before tagging.
+For a release, align the app version in the root and web `package.json`, `packages/shared/src/config.ts`, Android's `app/build.gradle`, and both configurations in the iOS Xcode project. Native build numbers use `major * 10000 + minor * 100 + patch`, with minor and patch at most 99. Shared and database package versions are independent. Record user-facing changes in [CHANGELOG.md](CHANGELOG.md) and check metadata with `bash scripts/tests/build-script.test.sh version` before tagging.
 
 ## Brand and voice assets
 

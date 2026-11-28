@@ -8,6 +8,7 @@
 <p align="center">
   <a href="#get-started">Get started</a> ·
   <a href="#install-on-your-phone">Install on your phone</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
   <a href="#app-store-and-privacy">Privacy &amp; store readiness</a> ·
   <a href="#develop-and-contribute">Contribute</a>
 </p>
@@ -28,7 +29,7 @@ Take a structured breathing break while Breath in Flow handles the pace, holds, 
 ## What it does
 
 - **Start quickly with guided routines.** Built-in presets cover Box Breathing, Coherent Breathing, 4-7-8 Relaxation, Altitude Adapted 3-5-7, Stress Relief, and Diaphragm Resistance Training. Save, edit, and repeat custom presets from the Routine Library.
-- **Follow visual, sound, and voice cues.** An expanding breathing guide, five synthesized Web Audio themes, and bundled offline voice cues lead each phase. Active sessions pause automatically if you switch away on iOS or Android.
+- **Follow visual, sound, and voice cues.** An expanding breathing guide, five metronome themes, and offline voice guidance help you follow each phase. Screen readers announce phase changes. Active sessions pause automatically if you switch away on iOS or Android.
 - **Customize every phase and hold.** Adjust inhale, hold, exhale, and rest timings, configure timed or tolerance-based extended holds (including a second hold phase), and set target sets.
 - **Track progress locally.** Session History records completed sets, full breathing patterns, extended holds, notes, and optional before-and-after feeling check-ins. Analytics charts weekly sessions and hold-time trends across completed sessions.
 - **Explore Pulse Variability (optional).** Measure seated pulse variability using your phone's camera or chest motion sensors, or run a five-rate breathing response assessment to suggest a comfortable practice cadence.
@@ -39,6 +40,9 @@ Take a structured breathing break while Breath in Flow handles the pace, holds, 
 1. Choose a starting goal during onboarding and open **Practice**.
 2. Start the recommended routine, load a preset from **Presets**, or open **Configure** to customize timings and audio cues.
 3. Tap **Start Practice** and follow the guide. Press **Space** or **Enter** on desktop to release an active tolerance hold.
+4. Use **Metronome** and **Voice guidance** at the top of the active session to turn either cue on or off for that session. Tap **Stop** to pause while you decide whether to continue, save your progress, or exit.
+
+When starting a breathing response assessment in **Pulse Variability**, tap **Test audio** before positioning your phone. The trial screen shows the current breathing phase.
 
 Review past sessions in **History**, trends in **Analytics**, and backup, restore, privacy, and data-erasure tools under **Help → Data**.
 

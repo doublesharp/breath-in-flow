@@ -225,7 +225,14 @@
                   <ul class="help-list">
                     <li><strong>Start Practice:</strong> Begin the active breathing routine.</li>
                     <li><strong>Pause / Resume:</strong> Hold the timer and audio cues, then pick up where you left off.</li>
-                    <li><strong>Stop:</strong> End the session early with a confirmation prompt.</li>
+                    <li>
+                      Use <strong>Metronome</strong> and <strong>Voice guidance</strong> at the top of the session to
+                      turn each cue on or off for that session.
+                    </li>
+                    <li>
+                      <strong>Stop</strong> pauses the session while you decide whether to continue, save your progress,
+                      or exit.
+                    </li>
                     <li>
                       <strong>Release Hold:</strong> End an active extended hold (or press Space or Enter on desktop).
                     </li>
